@@ -1,0 +1,7 @@
+<h1 class="mb-4">Welcome to Vintique</h1>
+
+{{#if user}}
+  <p>Hello, {{user.username}}! You are logged in as <strong>{{user.role}}</strong>.</p>
+{{else}}
+  <p>Please <a href="/login">login here</a> to access your account.</p>
+{{/if}}
