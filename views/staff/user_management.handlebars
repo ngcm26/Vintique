@@ -1,0 +1,21 @@
+<h1>Staff: Manage Users</h1>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Email</th>
+      <th>Phone Number</th>
+      <th>Role</th>
+      <th>Date Joined</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each users}}
+      <tr>
+        <td>{{this.email}}</td>
+        <td>{{this.phone_number}}</td>
+        <td>{{this.role}}</td>
+        <td>{{this.date_joined}}</td>
+      </tr>
+    {{/each}}
+  </tbody>
+</table> 

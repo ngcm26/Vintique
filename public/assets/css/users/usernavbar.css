@@ -1,0 +1,193 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-yellow: #FFD700;
+    --light-cream: #FFF8DC;
+    --dark-gray: #333;
+    --light-gray: #666;
+    --border-gray: #e9ecef;
+}
+
+body {
+    font-family: 'Calibri', sans-serif;
+    line-height: 1.6;
+    background-color: #fafafa;
+    padding-top: 120px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.navbar {
+    background-color: var(--primary-yellow) !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    margin-bottom: 0 !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1050 !important;
+    width: 100% !important;
+    height: 110px !important;
+    min-height: 110px !important;
+    box-sizing: border-box !important;
+}
+
+/* Fix the navbar container to prevent shifting */
+.navbar .container-fluid {
+    height: 100%;
+    align-items: center;
+}
+
+/* Ensure the main navbar content wrapper maintains consistent layout */
+.navbar .d-flex.w-100 {
+    height: 100%;
+    align-items: center;
+}
+
+/* Fix navbar brand positioning */
+.navbar-brand {
+    flex-shrink: 0;
+    margin-right: auto;
+}
+
+/* Fix navbar collapse positioning */
+.navbar .navbar-collapse {
+    flex-grow: 1;
+    justify-content: flex-end !important;
+}
+
+/* Align the navbar nav items to the right */
+.navbar-nav {
+    align-items: center;
+    margin-left: auto;
+}
+
+/* Fix navbar toggler positioning */
+.navbar-toggler {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.nav-link {
+    font-size: 1.1rem !important;
+    margin-left: 1rem;
+    margin-right: 1rem;
+    color: var(--dark-gray) !important;
+    transition: color 0.3s ease;
+    white-space: nowrap; /* Prevent text wrapping */
+}
+
+.nav-link:hover {
+    color: #000 !important;
+}
+
+.nav-link.active {
+    color: #000 !important;
+    font-weight: 600;
+}
+
+.logo-img {
+    height: 90px;
+    margin-left: 0;
+}
+
+/* Fix dropdown positioning */
+.dropdown-menu {
+    margin-top: 0.5rem;
+}
+
+/* Ensure consistent spacing for nav items */
+.nav-item {
+    display: flex;
+    align-items: center;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 991.98px) {
+    .navbar .navbar-collapse {
+        justify-content: flex-start !important;
+    }
+    
+    .navbar-nav {
+        margin-left: 0;
+    }
+    
+    .nav-link {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 0.5rem 1rem;
+    }
+}
+
+/* Custom Account Dropdown Styles */
+.dropdown-menu {
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  border: 1px solid var(--border-gray);
+  min-width: 150px; /* was 200px */
+  max-width: 220px; /* prevent overflow */
+  width: auto;
+  padding: 0.5rem 0;
+  background: #fff8dc;
+}
+
+.dropdown-item {
+  font-size: 1rem;
+  padding: 0.75rem 1.5rem;
+  color: var(--dark-gray);
+  transition: background 0.2s, color 0.2s;
+}
+
+.dropdown-item:hover, .dropdown-item:focus {
+  background: #fff3cd;
+  color: #fd79a8;
+}
+
+.dropdown-divider {
+  margin: 0.25rem 0;
+}
+
+.btn-signup {
+  background: transparent !important;
+  color: #222 !important;
+  border: 2px solid #222 !important;
+  border-radius: 8px !important;
+  padding: 0.35rem 1.5rem !important;
+  font-size: 1.1rem !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  line-height: 1.2 !important;
+  transition: background 0.2s, color 0.2s, border 0.2s;
+}
+.btn-signup:hover, .btn-signup:focus {
+  background: transparent !important;
+  color: #000 !important;
+  border-color: #000 !important;
+}
+
+.btn-login {
+  background: #222 !important;
+  color: #fff !important;
+  border: 2px solid #222 !important;
+  border-radius: 8px !important;
+  padding: 0.35rem 1.5rem !important;
+  font-size: 1.1rem !important;
+  font-weight: 500 !important;
+  margin-left: 0.5rem !important;
+  box-shadow: none !important;
+  outline: none !important;
+  line-height: 1.2 !important;
+  transition: background 0.2s, color 0.2s, border 0.2s;
+}
+.btn-login:hover, .btn-login:focus {
+  background: #111 !important;
+  color: #fff !important;
+  border-color: #111 !important;
+}
