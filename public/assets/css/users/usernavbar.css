@@ -13,7 +13,7 @@
 }
 
 body {
-    font-family: 'DM Sans', 'Calibri', sans-serif;
+    font-family: 'DM Sans', sans-serif;
     line-height: 1.6;
     background-color: #fafafa;
     padding-top: 120px;
@@ -89,7 +89,7 @@ body {
 
 .nav-link.active {
     color: #000 !important;
-    font-weight: 600;
+    text-decoration: underline;
 }
 
 .logo-img {

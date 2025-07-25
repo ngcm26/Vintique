@@ -1,0 +1,544 @@
+{{!-- Use the user layout and reference the separated CSS --}}
+{{!< user}}
+<link rel="stylesheet" href="/assets/css/users/post_product.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+.field-error {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    display: none;
+}
+
+.field-error.show {
+    display: block;
+}
+
+.form-control.error {
+    border-color: #dc3545;
+}
+
+.category-option.error,
+.condition-option.error {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.image-upload-area.error {
+    border-color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.05);
+}
+</style>
+
+<!-- Hero Section -->
+<section class="hero-section">
+    <div class="hero-content">
+        <h1 class="hero-title">List Your Items</h1>
+        <p class="hero-subtitle">Find a new home for your preloved clothes</p>
+        <div class="hero-buttons">
+        </div>
+    </div>
+</section>
+
+<!-- Main Content -->
+<div class="container">
+    <div class="row">
+        <!-- Form Column -->
+        <div class="col-lg-8">
+            <form class="product-form" id="productForm" action="/post_product" method="POST" enctype="multipart/form-data">
+                <!-- Basic Information Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-info-circle"></i>
+                        Basic Information
+                    </h3>
+                    <div class="mb-3">
+                        <label for="productTitle" class="form-label">Product Title *</label>
+                        <input type="text" class="form-control" id="productTitle" name="title" placeholder="e.g., Vintage Denim Jacket - Size M" required>
+                        <div class="form-text">Write a clear, descriptive title that buyers will search for</div>
+                        <div class="field-error" id="titleError">Product title is required</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="productDescription" class="form-label">Description *</label>
+                        <textarea class="form-control" id="productDescription" name="description" rows="5" placeholder="Describe the item's condition, size, brand, measurements, and any unique features..." required></textarea>
+                        <div class="form-text">Be honest and detailed to help buyers make informed decisions</div>
+                        <div class="field-error" id="descriptionError">Product description is required</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="productBrand" class="form-label">Brand</label>
+                            <input type="text" class="form-control" id="productBrand" name="brand" placeholder="e.g., Levi's, H&M, Vintage">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="productSize" class="form-label">Size</label>
+                            <select class="form-select" id="productSize" name="size">
+                                <option value="">Select Size</option>
+                                <option value="XS">XS</option>
+                                <option value="S">S</option>
+                                <option value="M">M</option>
+                                <option value="L">L</option>
+                                <option value="XL">XL</option>
+                                <option value="XXL">XXL</option>
+                                <option value="One Size">One Size</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <!-- Category Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-tags"></i>
+                        Category *
+                    </h3>
+                    <div class="category-grid">
+                        <div class="category-option" data-category="clothing">
+                            <i class="fas fa-tshirt"></i>
+                            <div class="category-name">Clothing</div>
+                        </div>
+                        <div class="category-option" data-category="shoes">
+                            <i class="fas fa-shoe-prints"></i>
+                            <div class="category-name">Shoes</div>
+                        </div>
+                        <div class="category-option" data-category="accessories">
+                            <i class="fas fa-gem"></i>
+                            <div class="category-name">Accessories</div>
+                        </div>
+                        <div class="category-option" data-category="bags">
+                            <i class="fas fa-shopping-bag"></i>
+                            <div class="category-name">Bags</div>
+                        </div>
+                        <div class="category-option" data-category="designers">
+                            <i class="fas fa-crown"></i>
+                            <div class="category-name">Designers</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="selectedCategory" name="category" required>
+                    <div class="field-error" id="categoryError">Please select a category</div>
+                </div>
+                <!-- Condition Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-star"></i>
+                        Condition *
+                    </h3>
+                    <div class="condition-selector">
+                        <div class="condition-option" data-condition="like-new">
+                            <div class="condition-name">Like New</div>
+                            <div class="condition-desc">Barely worn, no flaws</div>
+                        </div>
+                        <div class="condition-option" data-condition="excellent">
+                            <div class="condition-name">Excellent</div>
+                            <div class="condition-desc">Gently used, minor wear</div>
+                        </div>
+                        <div class="condition-option" data-condition="good">
+                            <div class="condition-name">Good</div>
+                            <div class="condition-desc">Used with obvious wear</div>
+                        </div>
+                        <div class="condition-option" data-condition="fair">
+                            <div class="condition-name">Fair</div>
+                            <div class="condition-desc">Well-used, some flaws</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="selectedCondition" name="condition" required>
+                    <div class="field-error" id="conditionError">Please select a condition</div>
+                </div>
+                <!-- Images Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-camera"></i>
+                        Product Images *
+                    </h3>
+                    <div class="image-upload-area" id="imageUploadArea">
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <div class="upload-text">Drag & drop images here or click to browse</div>
+                        <div class="upload-subtext">Upload up to 5 images. First image will be the main photo.</div>
+                        <input type="file" id="imageInput" name="images" multiple accept="image/*" style="display: none;">
+                    </div>
+                    <div class="image-preview-container" id="imagePreviewContainer"></div>
+                    <div class="field-error" id="imageError">Please upload at least one image</div>
+                </div>
+                <!-- Pricing Section -->
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-dollar-sign"></i>
+                        Pricing
+                    </h3>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="productPrice" class="form-label">Selling Price (SGD) *</label>
+                            <div>
+                                <input type="number" class="form-control" id="productPrice" name="price" placeholder="0.00" step="0.01" min="0" required style="padding-left: 12px;">
+                            </div>
+                            <div class="form-text">Set a competitive price for your item</div>
+                            <div class="field-error" id="priceError">Please enter a valid price</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Submit Button -->
+                <button type="submit" class="btn submit-btn">
+                    <i class="fas fa-plus-circle me-2"></i>
+                    Post Product
+                </button>
+            </form>
+        </div>
+        <!-- Preview Column -->
+        <div class="col-lg-4">
+            <div class="product-preview">
+                <div class="preview-header">
+                    <h5><i class="fas fa-eye me-2"></i>Preview</h5>
+                    <small class="text-muted">How your listing will appear</small>
+                </div>
+                <div class="preview-content">
+                    <div class="preview-image" id="previewImage">
+                        <i class="fas fa-image"></i>
+                    </div>
+                    <div class="preview-title" id="previewTitle">Product Title</div>
+                    <div class="preview-price" id="previewPrice">$0.00</div>
+                    <div class="preview-description" id="previewDescription">Product description will appear here...</div>
+                    <hr>
+                    <small class="text-muted">
+                        <i class="fas fa-tag me-1"></i><span id="previewCategory">Category</span><br>
+                        <i class="fas fa-star me-1"></i><span id="previewCondition">Condition</span><br>
+                        <i class="fas fa-ruler me-1"></i><span id="previewSize">Size</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Alert Section for Errors and Success -->
+<div id="formAlertContainer">
+    {{#if error}}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert" id="formErrorAlert">
+        {{error}}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {{/if}}
+    {{#if success}}
+    <div class="alert alert-success alert-dismissible fade show" role="alert" id="formSuccessAlert">
+        {{success}}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {{/if}}
+</div>
+<!-- Success Modal and scripts will be added in a later step -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+<script>
+let selectedCategory = '';
+let selectedCondition = '';
+let uploadedImages = [];
+
+// --- VALIDATION HELPERS ---
+function validateField(fieldId, errorId, customValidator = null) {
+    const field = document.getElementById(fieldId);
+    const errorElement = document.getElementById(errorId);
+
+    if (!field || !errorElement) return true;
+
+    let isValid = true;
+    let errorMessage = '';
+
+    // Check required fields
+    if (field.hasAttribute('required') && field.value.trim() === '') {
+        isValid = false;
+        errorMessage = 'This field is required';
+    }
+
+    // Run custom validator if present
+    if (isValid && customValidator) {
+        isValid = customValidator(field);
+        if (!isValid) errorMessage = 'Invalid input';
+    }
+
+    // Show or hide error
+    if (isValid) {
+        field.classList.remove('error');
+        errorElement.classList.remove('show');
+        errorElement.textContent = '';
+    } else {
+        field.classList.add('error');
+        errorElement.textContent = errorMessage;
+        errorElement.classList.add('show');
+        console.log(`Validation failed for ${fieldId}: ${errorMessage}`);
+    }
+
+    return isValid;
+}
+
+function validateCategory() {
+    const errorElement = document.getElementById('categoryError');
+    const categoryOptions = document.querySelectorAll('.category-option');
+
+    if (selectedCategory) {
+        categoryOptions.forEach(opt => opt.classList.remove('error'));
+        errorElement.classList.remove('show');
+        errorElement.textContent = '';
+        return true;
+    } else {
+        categoryOptions.forEach(opt => opt.classList.add('error'));
+        errorElement.textContent = 'Please select a category';
+        errorElement.classList.add('show');
+        return false;
+    }
+}
+
+function validateCondition() {
+    const errorElement = document.getElementById('conditionError');
+    const conditionOptions = document.querySelectorAll('.condition-option');
+
+    if (selectedCondition) {
+        conditionOptions.forEach(opt => opt.classList.remove('error'));
+        errorElement.classList.remove('show');
+        errorElement.textContent = '';
+        return true;
+    } else {
+        conditionOptions.forEach(opt => opt.classList.add('error'));
+        errorElement.textContent = 'Please select a condition';
+        errorElement.classList.add('show');
+        return false;
+    }
+}
+
+function validateImages() {
+    const errorElement = document.getElementById('imageError');
+    const uploadArea = document.getElementById('imageUploadArea');
+
+    if (uploadedImages.length > 0) {
+        uploadArea.classList.remove('error');
+        errorElement.classList.remove('show');
+        errorElement.textContent = '';
+        return true;
+    } else {
+        uploadArea.classList.add('error');
+        errorElement.textContent = 'Please upload at least one image';
+        errorElement.classList.add('show');
+        return false;
+    }
+}
+
+// Real-time validation
+document.getElementById('productTitle').addEventListener('input', function() {
+    validateField('productTitle', 'titleError');
+    updatePreview();
+});
+
+document.getElementById('productDescription').addEventListener('input', function() {
+    validateField('productDescription', 'descriptionError');
+    updatePreview();
+});
+
+document.getElementById('productPrice').addEventListener('input', function() {
+    validateField('productPrice', 'priceError', (field) => {
+        const value = parseFloat(field.value);
+        return !isNaN(value) && value > 0;
+    });
+    updatePreview();
+});
+
+// Category Selection
+if (document.querySelectorAll('.category-option')) {
+    document.querySelectorAll('.category-option').forEach(option => {
+        option.addEventListener('click', function() {
+            document.querySelectorAll('.category-option').forEach(opt => opt.classList.remove('selected'));
+            this.classList.add('selected');
+            selectedCategory = this.dataset.category;
+            document.getElementById('selectedCategory').value = selectedCategory;
+            validateCategory();
+            updatePreview();
+        });
+    });
+}
+
+// Condition Selection
+if (document.querySelectorAll('.condition-option')) {
+    document.querySelectorAll('.condition-option').forEach(option => {
+        option.addEventListener('click', function() {
+            document.querySelectorAll('.condition-option').forEach(opt => opt.classList.remove('selected'));
+            this.classList.add('selected');
+            selectedCondition = this.dataset.condition;
+            document.getElementById('selectedCondition').value = selectedCondition;
+            validateCondition();
+            updatePreview();
+        });
+    });
+}
+
+// Image Upload
+const imageUploadArea = document.getElementById('imageUploadArea');
+const imageInput = document.getElementById('imageInput');
+const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+
+if (imageUploadArea && imageInput && imagePreviewContainer) {
+    imageUploadArea.addEventListener('click', () => imageInput.click());
+
+    imageUploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        imageUploadArea.classList.add('dragover');
+    });
+
+    imageUploadArea.addEventListener('dragleave', () => {
+        imageUploadArea.classList.remove('dragover');
+    });
+
+    imageUploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        imageUploadArea.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    imageInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+    });
+}
+
+function handleFiles(files) {
+    const maxFiles = 5;
+    const remainingSlots = maxFiles - uploadedImages.length;
+    const filesToProcess = Math.min(files.length, remainingSlots);
+
+    for (let i = 0; i < filesToProcess; i++) {
+        const file = files[i];
+        if (file.type.startsWith('image/')) {
+            uploadedImages.push(file);
+            createImagePreview(file, uploadedImages.length - 1);
+        }
+    }
+    validateImages();
+    updatePreview();
+}
+
+function createImagePreview(file, index) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const previewDiv = document.createElement('div');
+        previewDiv.className = 'image-preview';
+        previewDiv.innerHTML = `
+            <img src="${e.target.result}" alt="Preview">
+            <button type="button" class="remove-image" onclick="removeImage(${index})">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        imagePreviewContainer.appendChild(previewDiv);
+    };
+    reader.readAsDataURL(file);
+}
+
+window.removeImage = function(index) {
+    uploadedImages.splice(index, 1);
+    imagePreviewContainer.innerHTML = '';
+    uploadedImages.forEach((file, newIndex) => {
+        createImagePreview(file, newIndex);
+    });
+    validateImages();
+    updatePreview();
+}
+
+// Size selection
+if (document.getElementById('productSize'))
+    document.getElementById('productSize').addEventListener('change', updatePreview);
+
+function updatePreview() {
+    const title = document.getElementById('productTitle')?.value || 'Product Title';
+    const description = document.getElementById('productDescription')?.value || 'Product description will appear here...';
+    const price = document.getElementById('productPrice')?.value || '0.00';
+    const size = document.getElementById('productSize')?.value || 'Size';
+
+    if (document.getElementById('previewTitle'))
+        document.getElementById('previewTitle').textContent = title;
+    if (document.getElementById('previewDescription'))
+        document.getElementById('previewDescription').textContent = description.substring(0, 100) + (description.length > 100 ? '...' : '');
+    if (document.getElementById('previewPrice'))
+        document.getElementById('previewPrice').textContent = `$${price}`;
+    if (document.getElementById('previewCategory'))
+        document.getElementById('previewCategory').textContent = selectedCategory ? selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1) : 'Category';
+    if (document.getElementById('previewCondition'))
+        document.getElementById('previewCondition').textContent = selectedCondition ? selectedCondition.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Condition';
+    if (document.getElementById('previewSize'))
+        document.getElementById('previewSize').textContent = size;
+
+    // Update preview image
+    const previewImage = document.getElementById('previewImage');
+    if (uploadedImages.length > 0 && previewImage) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImage.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
+        };
+        reader.readAsDataURL(uploadedImages[0]);
+    } else if (previewImage) {
+        previewImage.innerHTML = '<i class="fas fa-image"></i>';
+    }
+}
+
+// --- ALERT HANDLING ---
+function showFormAlert(type, message) {
+    const container = document.getElementById('formAlertContainer');
+    if (!container) return;
+    container.innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+    if (type === 'success') {
+        setTimeout(() => {
+            const alert = container.querySelector('.alert');
+            if (alert) {
+                alert.classList.remove('show');
+                setTimeout(() => { container.innerHTML = ''; }, 500);
+            }
+        }, 3500);
+    }
+}
+
+// --- SUBMIT HANDLER ---
+const productForm = document.getElementById('productForm');
+if (productForm) {
+    productForm.addEventListener('submit', function (e) {
+        e.preventDefault(); // prevent form from submitting until validated
+
+        const validations = [
+            validateField('productTitle', 'titleError'),
+            validateField('productDescription', 'descriptionError'),
+            validateField('productPrice', 'priceError', (field) => {
+                const value = parseFloat(field.value);
+                return !isNaN(value) && value > 0;
+            }),
+            validateCategory(),
+            validateCondition(),
+            validateImages()
+        ];
+
+        const isFormValid = validations.every(valid => valid === true);
+
+        if (!isFormValid) {
+            showFormAlert('danger', 'Please fill in all required fields correctly');
+            const firstError = document.querySelector('.field-error.show, .form-control.error, .category-option.error, .condition-option.error, .image-upload-area.error');
+            if (firstError) {
+                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+
+        // If everything is valid, submit the form
+        productForm.submit();
+    });
+}
+
+// --- Auto-dismiss backend success alert ---
+document.addEventListener('DOMContentLoaded', function() {
+    const successAlert = document.getElementById('formSuccessAlert');
+    if (successAlert) {
+        setTimeout(() => {
+            successAlert.classList.remove('show');
+            setTimeout(() => { successAlert.remove(); }, 500);
+        }, 3500);
+    }
+});
+
+// Initialize preview
+updatePreview();
+</script>

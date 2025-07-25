@@ -14,15 +14,22 @@
   "dependencies": {
     "dotenv": "^17.1.0",
     "express": "^5.1.0",
-    "express-handlebars": {
-      "defaultLayout": "user"
-    },
+    "express-handlebars": "^8.0.2",
     "express-session": "^1.18.1",
+    "multer": "^2.0.2",
     "mysql2": "^3.14.1",
     "sequelize": "^6.37.7"
   },
   "devDependencies": {
     "@ljharb/tsconfig": "^0.3.2",
     "nodemon": "^3.1.10"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ngcm26/Vintique.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ngcm26/Vintique/issues"
+  },
+  "homepage": "https://github.com/ngcm26/Vintique#readme"
 }

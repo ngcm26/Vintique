@@ -7,7 +7,7 @@
 } */
 
 body {
-    font-family: 'DM Sans', 'Calibri', sans-serif;
+    font-family: 'DM Sans', sans-serif;
     line-height: 1.6;
     overflow-x: hidden;
 }
@@ -32,12 +32,12 @@ body {
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    padding: 100px 0 60px;
+    padding: 60px 0 40px;
     margin-top: -100px;
     margin-bottom: 3rem;
-    overflow: hidden;
+    /* overflow: hidden;  Remove this to allow icons to show */
     /* Ensure content is not hidden under navbar */
-    padding-top: 180px;
+    padding-top: 100px;
 }
 
 .hero-section::before {
@@ -95,7 +95,7 @@ body {
 .hero-title::before {
     content: '🌸';
     position: absolute;
-    left: -60px;
+    left: -30px;
     top: 10px;
     font-size: 2rem;
     animation: bounce 2s ease-in-out infinite;
@@ -104,7 +104,7 @@ body {
 .hero-title::after {
     content: '🌸';
     position: absolute;
-    right: -60px;
+    right: -30px;
     top: 10px;
     font-size: 2rem;
     animation: bounce 2s ease-in-out infinite 1s;
@@ -583,5 +583,13 @@ body {
     }
     .category-overlay h3 {
         font-size: 1.5rem;
+    }
+    .hero-title::before {
+        left: -12px;
+        font-size: 1.2rem;
+    }
+    .hero-title::after {
+        right: -12px;
+        font-size: 1.2rem;
     }
 } 
