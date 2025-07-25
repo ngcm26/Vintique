@@ -7,7 +7,7 @@
 } */
 
 body {
-    font-family: 'Calibri', sans-serif;
+    font-family: 'DM Sans', 'Calibri', sans-serif;
     line-height: 1.6;
     overflow-x: hidden;
 }
@@ -517,13 +517,13 @@ body {
 }
 
 /* Enforce navbar link consistency in case of override */
-.nav-link {
+/* .nav-link {
     font-size: 1.1rem !important;
     color: var(--dark-gray) !important;
     margin-left: 1rem !important;
     margin-right: 1rem !important;
-    font-family: 'Calibri', sans-serif !important;
-}
+    font-family: 'DM Sans', 'Calibri', sans-serif !important;
+} */
 
 @media (max-width: 991px) {
     .hero-title {

@@ -13,10 +13,10 @@ app.use(session({
   saveUninitialized: true
 }));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // ✅ For form POSTs
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// ✅ Make user data available in all templates
+// Make user data available in all templates
 app.use((req, res, next) => {
   res.locals.user = req.session.user;
   next();
@@ -55,16 +55,39 @@ app.get('/', (req, res) => {
   }
 });
 
-// Users route
-app.get('/users', requireStaff, (req, res) => {
-  const sql = 'SELECT * FROM users';
+// Staff User Management route - FIXED QUERY
+app.get('/staff/user_management', requireStaff, (req, res) => {
+  const sql = `SELECT u.user_id, ui.username, u.email, u.phone_number as phone, 
+               COALESCE(ui.status, 'active') as status, u.role
+               FROM users u
+               LEFT JOIN user_information ui ON u.user_id = ui.user_id
+               WHERE u.role = 'user'`;
+  
   connection.query(sql, (err, results) => {
     if (err) {
-      console.error(err);
+      console.error('Database error:', err);
       return res.status(500).send('Database error');
     }
-    res.render('staff/user_management', { layout: 'staff', users: results });
+    
+    // Map DB status to isBanned for template
+    const users = results.map(u => ({
+      ...u,
+      isBanned: u.status === 'suspended'
+    }));
+    
+    console.log('Users data:', users); // Debug log
+    res.render('staff/user_management', { layout: 'staff', users });
   });
+});
+
+// Legacy users route (keeping for compatibility)
+app.get('/users', requireStaff, (req, res) => {
+  res.redirect('/staff/user_management');
+});
+
+// Staff Management route
+app.get('/staff/staff_management', requireStaff, (req, res) => {
+  res.render('staff/staff_management', { layout: 'staff' });
 });
 
 // Login
@@ -89,7 +112,7 @@ app.post('/register', (req, res) => {
     return res.render('register', { layout: 'user', activePage: 'register', error: 'Passwords do not match.' });
   }
 
-  // Check for unique username, email, and phone number in user_information
+  // Check for unique username, email, and phone number
   const checkSql = 'SELECT * FROM user_information WHERE username = ? OR email = ? OR phone_number = ?';
   connection.query(checkSql, [username, email, phone], (err, results) => {
     if (err) {
@@ -150,13 +173,13 @@ app.post('/register', (req, res) => {
   });
 });
 
-// Fixed login handler
+// FIXED Login handler (removed duplicate)
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
 
-  // Join with user_information to get username
+  // Join with user_information to get username and status
   const sql = `
-    SELECT u.user_id, u.email, u.role, ui.username 
+    SELECT u.user_id, u.email, u.role, ui.username, COALESCE(ui.status, 'active') as status
     FROM users u 
     LEFT JOIN user_information ui ON u.user_id = ui.user_id 
     WHERE u.email = ? AND u.password = ?
@@ -164,46 +187,30 @@ app.post('/login', (req, res) => {
   
   connection.query(sql, [email, password], (err, results) => {
     if (err) {
-      console.error(err);
-      return res.status(500).send('DB error');
+      console.error('Login error:', err);
+      return res.status(500).send('Database error');
     }
 
     if (results.length > 0) {
+      const user = results[0];
+      
+      // Check if user is suspended
+      if (user.status === 'suspended') {
+        return res.render('login', { 
+          layout: 'user', 
+          activePage: 'login', 
+          error: 'Your account has been suspended. Please contact support.' 
+        });
+      }
+
       req.session.user = {
-        id: results[0].user_id,  // Fixed: use user_id instead of id
-        username: results[0].username,
-        role: results[0].role
+        id: user.user_id,
+        username: user.username,
+        role: user.role
       };
       
-      if (results[0].role === 'staff') {
-        res.redirect('/users');
-      } else {
+      if (user.role === 'staff') {
         res.redirect('/');
-      }
-    } else {
-      res.render('login', { layout: 'user', activePage: 'login', error: 'Invalid email or password.' });
-    }
-  });
-});
-
-app.post('/login', (req, res) => {
-  const { email, password } = req.body;
-
-  const sql = 'SELECT * FROM users WHERE email = ? AND password = ?';
-  connection.query(sql, [email, password], (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('DB error');
-    }
-
-    if (results.length > 0) {
-      req.session.user = {
-        id: results[0].id,
-        username: results[0].username,
-        role: results[0].role
-      };
-      if (results[0].role === 'staff') {
-        res.redirect('/users');
       } else {
         res.redirect('/');
       }
@@ -219,6 +226,147 @@ app.get('/logout', (req, res) => {
   res.redirect('/');
 });
 
+// --- STAFF USER MANAGEMENT API ENDPOINTS ---
+
+// Edit user (username, email, phone, status) - Fixed
+app.patch('/users/:id', requireStaff, (req, res) => {
+  const userId = req.params.id;
+  const { username, email, phone, status } = req.body;
+
+  // Basic validation
+  if (!username || !email || !phone || !status) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  if (!['active', 'suspended'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status value.' });
+  }
+
+  // Check for duplicate username/email/phone across both tables
+  const checkSql = `
+    SELECT u.user_id 
+    FROM vintiquedb.users u
+    LEFT JOIN vintiquedb.user_information ui ON u.user_id = ui.user_id
+    WHERE (ui.username = ? OR u.email = ? OR u.phone_number = ?) 
+      AND u.user_id != ?
+  `;
+
+  connection.query(checkSql, [username, email, phone, userId], (err, results) => {
+    if (err) {
+      console.error('Check duplicate error:', err);
+      return res.status(500).json({ error: 'Database error during validation.' });
+    }
+
+    if (results.length > 0) {
+      return res.status(400).json({ error: 'Username, email, or phone number already exists.' });
+    }
+
+    // Begin transaction
+    connection.beginTransaction(err => {
+      if (err) {
+        console.error('Transaction start error:', err);
+        return res.status(500).json({ error: 'Database transaction error.' });
+      }
+
+      const updateUsers = `
+        UPDATE vintiquedb.users 
+        SET email = ?, phone_number = ? 
+        WHERE user_id = ?
+      `;
+
+      connection.query(updateUsers, [email, phone, userId], err => {
+        if (err) {
+          console.error('Update users error:', err);
+          return connection.rollback(() => res.status(500).json({ error: 'Error updating users table.' }));
+        }
+
+        const updateInfo = `
+          UPDATE vintiquedb.user_information
+          SET username = ?, email = ?, phone_number = ?, status = ?
+          WHERE user_id = ?
+        `;
+
+        connection.query(updateInfo, [username, email, phone, status, userId], err => {
+          if (err) {
+            console.error('Update user_information error:', err);
+            return connection.rollback(() => res.status(500).json({ error: 'Error updating user_information table.' }));
+          }
+
+          connection.commit(err => {
+            if (err) {
+              console.error('Transaction commit error:', err);
+              return connection.rollback(() => res.status(500).json({ error: 'Transaction commit error.' }));
+            }
+            res.json({ success: true });
+          });
+        });
+      });
+    });
+  });
+});
+
+
+// Delete user
+app.delete('/users/:id', requireStaff, (req, res) => {
+  const userId = req.params.id;
+  
+  // Make sure we're not deleting a staff user
+  const checkRoleSql = 'SELECT role FROM users WHERE user_id = ?';
+  connection.query(checkRoleSql, [userId], (err, results) => {
+    if (err) {
+      console.error('Check role error:', err);
+      return res.status(500).json({ error: 'Database error.' });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    
+    if (results[0].role === 'staff') {
+      return res.status(403).json({ error: 'Cannot delete staff users.' });
+    }
+
+    const deleteSql = 'DELETE FROM users WHERE user_id = ?';
+    connection.query(deleteSql, [userId], (err, result) => {
+      if (err) {
+        console.error('Delete user error:', err);
+        return res.status(500).json({ error: 'Database error during deletion.' });
+      }
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'User not found.' });
+      }
+      
+      res.json({ success: true });
+    });
+  });
+});
+
+// Change user status (active/suspended)
+app.patch('/users/:id/status', requireStaff, (req, res) => {
+  const userId = req.params.id;
+  const { status } = req.body;
+  
+  if (!['active', 'suspended'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status. Must be "active" or "suspended".' });
+  }
+
+  const updateStatusSql = 'UPDATE user_information SET status = ? WHERE user_id = ?';
+  connection.query(updateStatusSql, [status, userId], (err, result) => {
+    if (err) {
+      console.error('Update status error:', err);
+      return res.status(500).json({ error: 'Database error updating status.' });
+    }
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    
+    res.json({ success: true });
+  });
+});
+
+// Configure Handlebars
 app.engine('handlebars', exphbs.engine({
   defaultLayout: 'user',
   helpers: {
@@ -226,6 +374,8 @@ app.engine('handlebars', exphbs.engine({
       switch (operator) {
         case '==':
           return (v1 == v2) ? options.fn(this) : options.inverse(this);
+        case '!=':
+          return (v1 != v2) ? options.fn(this) : options.inverse(this);
         default:
           return options.inverse(this);
       }
@@ -233,7 +383,6 @@ app.engine('handlebars', exphbs.engine({
     eq: function(a, b) { return a === b; }
   }
 }));
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
