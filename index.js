@@ -147,6 +147,229 @@ app.post('/post_product', upload.array('images', 5), (req, res) => {
   });
 });
 
+// My Listing GET
+app.get('/my_listing', (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.redirect('/login');
+  }
+  const userId = req.session.user.id;
+  const sql = `
+    SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.created_at, l.brand, l.size,
+          (
+            SELECT image_url FROM listing_images img2
+            WHERE img2.listing_id = l.listing_id
+            ORDER BY img2.image_id DESC
+            LIMIT 1
+          ) as image_url
+    FROM listings l
+    WHERE l.user_id = ?
+    ORDER BY l.created_at DESC`;
+  connection.query(sql, [userId], (err, listings) => {
+    if (err) return res.status(500).send('Database error');
+    res.render('users/my_listing', {
+      layout: 'user',
+      activePage: 'mylistings',
+      listings
+    });
+  });
+});
+
+// Edit Listing GET
+app.get('/edit_listing/:id', (req, res) => {
+  if (!req.session.user) return res.redirect('/login');
+  const listingId = req.params.id;
+  const sql = `SELECT * FROM listings WHERE listing_id = ?`;
+  connection.query(sql, [listingId], (err, results) => {
+    if (err || results.length === 0) return res.status(404).send('Listing not found');
+    const listing = results[0];
+    if (listing.user_id !== req.session.user.id) return res.status(403).send('Forbidden');
+    // Fetch images
+    const imgSql = 'SELECT image_url FROM listing_images WHERE listing_id = ? ORDER BY image_id DESC';
+    connection.query(imgSql, [listingId], (err2, imgResults) => {
+      listing.images = imgResults ? imgResults.map(img => img.image_url) : [];
+      res.render('users/edit_listing', { layout: 'user', listing });
+    });
+  });
+});
+
+// Edit Listing POST
+app.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
+  if (!req.session.user) return res.redirect('/login');
+  const listingId = req.params.id;
+  const { title, description, brand, size, category, item_condition, price, delete_images } = req.body;
+  // Only allow update if user owns the listing
+  const checkSql = 'SELECT user_id FROM listings WHERE listing_id = ?';
+  connection.query(checkSql, [listingId], (err, results) => {
+    if (err || results.length === 0) return res.status(404).send('Listing not found');
+    if (results[0].user_id !== req.session.user.id) return res.status(403).send('Forbidden');
+    const updateSql = `UPDATE listings SET title=?, description=?, brand=?, size=?, category=?, item_condition=?, price=? WHERE listing_id=?`;
+    connection.query(updateSql, [title, description, brand, size, category, item_condition, price, listingId], (err2) => {
+      if (err2) return res.status(500).send('Database error');
+      // Handle deleted images (legacy, if you still submit the form)
+      if (delete_images) {
+        let imgsToDelete = [];
+        try { imgsToDelete = JSON.parse(delete_images); } catch {}
+        if (imgsToDelete.length > 0) {
+          const delImgSql = 'DELETE FROM listing_images WHERE listing_id = ? AND image_url IN (?)';
+          connection.query(delImgSql, [listingId, imgsToDelete], () => {});
+          // Delete files from filesystem
+          imgsToDelete.forEach(imgUrl => {
+            if (imgUrl.startsWith('/uploads/')) {
+              const filePath = path.join(__dirname, 'public', imgUrl);
+              fs.unlink(filePath, err => { if (err) console.error('Failed to delete file:', filePath, err); });
+            }
+          });
+        }
+      }
+      // Handle new images if uploaded
+      if (req.files && req.files.length > 0) {
+        const imageSql = `INSERT INTO listing_images (listing_id, image_url, is_main) VALUES ?`;
+        const imageValues = req.files.map((img, idx) => [listingId, '/uploads/' + img.filename, idx === req.files.length - 1]);
+        connection.query(imageSql, [imageValues], () => {
+          res.redirect('/my_listing');
+        });
+      } else {
+        res.redirect('/my_listing');
+      }
+    });
+  });
+});
+
+/**
+ *  🔥 NEW: Delete image immediately (AJAX)
+ */
+app.post('/delete_image', (req, res) => {
+  const { imgUrl, listingId } = req.body;
+  if (!req.session.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Verify listing ownership
+  const checkSql = 'SELECT user_id FROM listings WHERE listing_id = ?';
+  connection.query(checkSql, [listingId], (err, results) => {
+    if (err || results.length === 0) return res.status(404).json({ error: 'Listing not found' });
+    if (results[0].user_id !== req.session.user.id) return res.status(403).json({ error: 'Forbidden' });
+
+    const delImgSql = 'DELETE FROM listing_images WHERE listing_id = ? AND image_url = ?';
+    connection.query(delImgSql, [listingId, imgUrl], err2 => {
+      if (err2) return res.status(500).json({ error: 'Database error' });
+
+      // Delete file from filesystem
+      if (imgUrl && imgUrl.startsWith('/uploads/')) {
+        const filePath = path.join(__dirname, 'public', imgUrl);
+        fs.unlink(filePath, err3 => { if (err3) console.error('File deletion error:', err3); });
+      }
+      res.json({ success: true });
+    });
+  });
+});
+
+// Add after other user routes
+app.get('/account-settings', (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.redirect('/login');
+  }
+  res.render('users/account_setting', {
+    layout: 'user',
+    activePage: 'account',
+    user: req.session.user
+  });
+});
+
+// API: Get user info for account settings (now includes all address fields)
+app.get('/account-settings/api', (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const userId = req.session.user.id;
+  const sql = `SELECT username, first_name, last_name, email, phone_number, profile_image_url,
+    address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
+    address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
+    address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
+    default_address_index
+    FROM user_information WHERE user_id = ?`;
+  connection.query(sql, [userId], (err, results) => {
+    if (err || results.length === 0) return res.status(500).json({ error: 'Database error or user not found' });
+    res.json(results[0]);
+  });
+});
+
+// API: Update user info for account settings (all address fields)
+app.post('/account-settings/api', upload.single('profile_image'), (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const userId = req.session.user.id;
+  let {
+    first_name, last_name, email, phone_number,
+    address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
+    address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
+    address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
+    default_address_index
+  } = req.body;
+
+  // Convert empty strings to null for address fields
+  [
+    'address_name', 'address_street', 'address_city', 'address_state', 'address_country', 'address_postal_code', 'address_phone',
+    'address_name_2', 'address_street_2', 'address_city_2', 'address_state_2', 'address_country_2', 'address_postal_code_2', 'address_phone_2',
+    'address_name_3', 'address_street_3', 'address_city_3', 'address_state_3', 'address_country_3', 'address_postal_code_3', 'address_phone_3'
+  ].forEach(field => {
+    if (req.body[field] === '') req.body[field] = null;
+  });
+
+  // Validate default_address_index
+  let defaultIndex = parseInt(default_address_index, 10);
+  if (![1, 2, 3].includes(defaultIndex)) defaultIndex = 1;
+
+  let profile_image_url = req.body.current_profile_image_url;
+  if (req.file) {
+    profile_image_url = '/uploads/' + req.file.filename;
+  }
+  const sql = `UPDATE user_information SET first_name=?, last_name=?, email=?, phone_number=?, profile_image_url=?,
+    address_name=?, address_street=?, address_city=?, address_state=?, address_country=?, address_postal_code=?, address_phone=?,
+    address_name_2=?, address_street_2=?, address_city_2=?, address_state_2=?, address_country_2=?, address_postal_code_2=?, address_phone_2=?,
+    address_name_3=?, address_street_3=?, address_city_3=?, address_state_3=?, address_country_3=?, address_postal_code_3=?, address_phone_3=?,
+    default_address_index=?
+    WHERE user_id=?`;
+  connection.query(sql, [
+    first_name, last_name, email, phone_number, profile_image_url,
+    req.body.address_name, req.body.address_street, req.body.address_city, req.body.address_state, req.body.address_country, req.body.address_postal_code, req.body.address_phone,
+    req.body.address_name_2, req.body.address_street_2, req.body.address_city_2, req.body.address_state_2, req.body.address_country_2, req.body.address_postal_code_2, req.body.address_phone_2,
+    req.body.address_name_3, req.body.address_street_3, req.body.address_city_3, req.body.address_state_3, req.body.address_country_3, req.body.address_postal_code_3, req.body.address_phone_3,
+    defaultIndex, userId
+  ], (err, result) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json({ success: true, profile_image_url });
+  });
+});
+
+// API: Change user password
+app.post('/account-settings/password', (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const userId = req.session.user.id;
+  const { current_password, new_password, confirm_password } = req.body;
+  if (!current_password || !new_password || !confirm_password) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+  if (new_password !== confirm_password) {
+    return res.status(400).json({ error: 'New passwords do not match.' });
+  }
+  // Check current password
+  const sql = 'SELECT password FROM users WHERE user_id = ?';
+  connection.query(sql, [userId], (err, results) => {
+    if (err || results.length === 0) return res.status(500).json({ error: 'Database error or user not found.' });
+    if (results[0].password !== current_password) {
+      return res.status(400).json({ error: 'Current password is incorrect.' });
+    }
+    // Update password
+    const updateSql = 'UPDATE users SET password = ? WHERE user_id = ?';
+    connection.query(updateSql, [new_password, userId], (err2) => {
+      if (err2) return res.status(500).json({ error: 'Database error.' });
+      res.json({ success: true });
+    });
+  });
+});
+
 // Staff User Management route
 app.get('/staff/user_management', requireStaff, (req, res) => {
   const sql = `SELECT u.user_id, ui.username, u.email, u.phone_number as phone, 
@@ -216,7 +439,7 @@ app.post('/register', (req, res) => {
         if (err) {
           connection.rollback(() => {});
           if (err.code === 'ER_DUP_ENTRY') {
-            return res.render('register', { layout: 'user', activePage: 'register', error: 'Email or phone number already exists.' });
+          return res.render('register', { layout: 'user', activePage: 'register', error: 'Email or phone number already exists.' });
           }
           console.error('Insert users error:', err);
           return res.status(500).send('Database error');
@@ -367,6 +590,29 @@ app.get('/marketplace', (req, res) => {
   connection.query(sql, params, (err, listings) => {
     if (err) return res.status(500).send('Database error');
     res.render('users/marketplace', { layout: 'user', activePage: 'shop', listings });
+  });
+});
+
+// Mark listing as sold
+app.post('/listings/:id/mark_sold', (req, res) => {
+  const listingId = req.params.id;
+  if (!req.session.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Only the owner can mark as sold
+  const checkSql = 'SELECT user_id FROM listings WHERE listing_id = ?';
+  connection.query(checkSql, [listingId], (err, results) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    if (results.length === 0) return res.status(404).json({ error: 'Listing not found' });
+    const listingOwner = results[0].user_id;
+    if (req.session.user.id !== listingOwner) {
+      return res.status(403).json({ error: 'You do not have permission to mark this listing as sold' });
+    }
+    const updateSql = "UPDATE listings SET status = 'sold' WHERE listing_id = ?";
+    connection.query(updateSql, [listingId], (err2, result) => {
+      if (err2) return res.status(500).json({ error: 'Database error during update' });
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Listing not found' });
+      res.json({ success: true });
+    });
   });
 });
 

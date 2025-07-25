@@ -1,0 +1,239 @@
+{{!< user}}
+<link rel="stylesheet" href="/assets/css/users/post_product.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<section class="hero-section">
+    <div class="hero-content">
+        <h1 class="hero-title">Edit Listing</h1>
+        <p class="hero-subtitle">Update your product details below.</p>
+    </div>
+</section>
+
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8">
+            <form class="product-form" id="editProductForm" action="/edit_listing/{{listing.listing_id}}" method="POST" enctype="multipart/form-data">
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-info-circle"></i>
+                        Basic Information
+                    </h3>
+                    <div class="mb-3">
+                        <label for="productTitle" class="form-label">Product Title *</label>
+                        <input type="text" class="form-control" id="productTitle" name="title" value="{{listing.title}}" required>
+                        <div class="field-error" id="titleError"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="productDescription" class="form-label">Description *</label>
+                        <textarea class="form-control" id="productDescription" name="description" rows="5" required>{{listing.description}}</textarea>
+                        <div class="field-error" id="descriptionError"></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="productBrand" class="form-label">Brand</label>
+                            <input type="text" class="form-control" id="productBrand" name="brand" value="{{listing.brand}}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="productSize" class="form-label">Size</label>
+                            <select class="form-select" id="productSize" name="size">
+                                <option value="">Select Size</option>
+                                <option value="XS" {{#if (eq listing.size 'XS')}}selected{{/if}}>XS</option>
+                                <option value="S" {{#if (eq listing.size 'S')}}selected{{/if}}>S</option>
+                                <option value="M" {{#if (eq listing.size 'M')}}selected{{/if}}>M</option>
+                                <option value="L" {{#if (eq listing.size 'L')}}selected{{/if}}>L</option>
+                                <option value="XL" {{#if (eq listing.size 'XL')}}selected{{/if}}>XL</option>
+                                <option value="XXL" {{#if (eq listing.size 'XXL')}}selected{{/if}}>XXL</option>
+                                <option value="One Size" {{#if (eq listing.size 'One Size')}}selected{{/if}}>One Size</option>
+                                <option value="Other" {{#if (eq listing.size 'Other')}}selected{{/if}}>Other</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-tags"></i>
+                        Category *
+                    </h3>
+                    <input type="text" class="form-control" name="category" value="{{listing.category}}" required>
+                </div>
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-star"></i>
+                        Condition *
+                    </h3>
+                    <select class="form-select" name="item_condition" required>
+                        <option value="like-new" {{#if (eq listing.item_condition 'like-new')}}selected{{/if}}>Like New</option>
+                        <option value="excellent" {{#if (eq listing.item_condition 'excellent')}}selected{{/if}}>Excellent</option>
+                        <option value="good" {{#if (eq listing.item_condition 'good')}}selected{{/if}}>Good</option>
+                        <option value="fair" {{#if (eq listing.item_condition 'fair')}}selected{{/if}}>Fair</option>
+                    </select>
+                </div>
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-dollar-sign"></i>
+                        Price *
+                    </h3>
+                    <input type="number" class="form-control" name="price" id="productPrice" value="{{listing.price}}" required min="0" step="0.01">
+                    <div class="field-error" id="priceError"></div>
+                </div>
+                <div class="form-section">
+                    <h3 class="section-title">
+                        <i class="fas fa-images"></i>
+                        Images
+                    </h3>
+                    <input type="file" class="form-control" name="images" id="imageInput" multiple accept="image/*">
+                    <div class="field-error" id="imageError"></div>
+                    <div class="mt-2" id="currentImages">
+                        {{#if listing.images}}
+                            {{#each listing.images}}
+                                <div class="position-relative d-inline-block mb-2 me-2 preview-img-wrapper">
+                                    <img src="{{this}}" alt="Listing Image" class="preview-img" style="width: 80px; height: 80px; object-fit: cover; border-radius: 10px;">
+                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 delete-img-btn" data-img-url="{{this}}" style="border-radius: 50%; padding: 0.2rem 0.5rem;">&times;</button>
+                                </div>
+                            {{/each}}
+                        {{/if}}
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">Save Changes</button>
+                <a href="/my_listing" class="btn btn-secondary mt-3 ms-2">Cancel</a>
+                <input type="hidden" name="delete_images" id="deleteImagesInput">
+            </form>
+        </div>
+        <!-- Preview Column -->
+        <div class="col-lg-4">
+            <div class="product-preview">
+                <div class="preview-header">
+                    <h5><i class="fas fa-eye me-2"></i>Preview</h5>
+                    <small class="text-muted">How your listing will appear</small>
+                </div>
+                <div class="preview-content">
+                    <div class="preview-image" id="previewImage">
+                        <img src="{{#if listing.images}}{{#with (lookup listing.images 0)}}{{this}}{{/with}}{{else}}/assets/logo.png{{/if}}" alt="Preview" style="width:100%;height:220px;object-fit:cover;border-radius:12px;">
+                    </div>
+                    <div class="preview-title" id="previewTitle">{{listing.title}}</div>
+                    <div class="preview-price" id="previewPrice">${{listing.price}}</div>
+                    <div class="preview-description" id="previewDescription">{{listing.description}}</div>
+                    <hr>
+                    <small class="text-muted">
+                        <i class="fas fa-tag me-1"></i><span id="previewCategory">{{listing.category}}</span><br>
+                        <i class="fas fa-star me-1"></i><span id="previewCondition">{{listing.item_condition}}</span><br>
+                        <i class="fas fa-ruler me-1"></i><span id="previewSize">{{listing.size}}</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// Live preview logic
+const titleInput = document.getElementById('productTitle');
+const priceInput = document.querySelector('input[name="price"]');
+const descInput = document.getElementById('productDescription');
+const catInput = document.querySelector('input[name="category"]');
+const condInput = document.querySelector('select[name="item_condition"]');
+const sizeInput = document.getElementById('productSize');
+
+titleInput && titleInput.addEventListener('input', e => document.getElementById('previewTitle').textContent = e.target.value || 'Product Title');
+priceInput && priceInput.addEventListener('input', e => document.getElementById('previewPrice').textContent = e.target.value ? `$${e.target.value}` : '$0.00');
+descInput && descInput.addEventListener('input', e => document.getElementById('previewDescription').textContent = e.target.value || 'Product description will appear here...');
+catInput && catInput.addEventListener('input', e => document.getElementById('previewCategory').textContent = e.target.value || 'Category');
+condInput && condInput.addEventListener('change', e => document.getElementById('previewCondition').textContent = e.target.value || 'Condition');
+sizeInput && sizeInput.addEventListener('change', e => document.getElementById('previewSize').textContent = e.target.value || 'Size');
+
+// --- Immediate delete (AJAX) ---
+const currentImagesDiv = document.getElementById('currentImages');
+currentImagesDiv && currentImagesDiv.addEventListener('click', function(e) {
+  if (e.target.classList.contains('delete-img-btn')) {
+    const btn = e.target;
+    const imgUrl = btn.getAttribute('data-img-url');
+    const listingId = "{{listing.listing_id}}";
+
+    fetch('/delete_image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imgUrl, listingId })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        btn.parentElement.remove();
+
+        const previewImg = document.querySelector('#previewImage img');
+        if (previewImg && previewImg.src.includes(imgUrl)) {
+          const nextImg = document.querySelector('.preview-img');
+          previewImg.src = nextImg ? nextImg.src : '/assets/logo.png';
+        }
+      } else {
+        alert(data.error || 'Failed to delete image.');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Failed to delete image.');
+    });
+  }
+});
+
+// --- VALIDATION HELPERS ---
+function validateField(fieldId, errorId, customValidator = null) {
+  const field = document.getElementById(fieldId);
+  const errorElement = document.getElementById(errorId);
+  if (!field || !errorElement) return true;
+  let isValid = true;
+  let errorMessage = '';
+  if (field.hasAttribute('required') && field.value.trim() === '') {
+    isValid = false;
+    errorMessage = 'This field is required';
+  }
+  if (isValid && customValidator) {
+    isValid = customValidator(field);
+    if (!isValid) errorMessage = 'Invalid input';
+  }
+  if (isValid) {
+    field.classList.remove('error');
+    errorElement.classList.remove('show');
+    errorElement.textContent = '';
+  } else {
+    field.classList.add('error');
+    errorElement.textContent = errorMessage;
+    errorElement.classList.add('show');
+  }
+  return isValid;
+}
+function validateImages() {
+  const errorElement = document.getElementById('imageError');
+  const currentImages = document.querySelectorAll('.preview-img');
+  const imageInput = document.getElementById('imageInput');
+  const hasImages = currentImages.length > 0 || (imageInput && imageInput.files && imageInput.files.length > 0);
+  if (hasImages) {
+    errorElement.classList.remove('show');
+    errorElement.textContent = '';
+    return true;
+  } else {
+    errorElement.textContent = 'Please upload at least one image';
+    errorElement.classList.add('show');
+    return false;
+  }
+}
+// Real-time validation
+const titleInput2 = document.getElementById('productTitle');
+titleInput2 && titleInput2.addEventListener('input', function() { validateField('productTitle', 'titleError'); });
+const descInput2 = document.getElementById('productDescription');
+descInput2 && descInput2.addEventListener('input', function() { validateField('productDescription', 'descriptionError'); });
+const priceInput2 = document.getElementById('productPrice');
+priceInput2 && priceInput2.addEventListener('input', function() { validateField('productPrice', 'priceError', (field) => { const value = parseFloat(field.value); return !isNaN(value) && value > 0; }); });
+const imageInput2 = document.getElementById('imageInput');
+imageInput2 && imageInput2.addEventListener('change', function() { validateImages(); });
+// On submit
+const form = document.getElementById('editProductForm');
+form && form.addEventListener('submit', function(e) {
+  const validTitle = validateField('productTitle', 'titleError');
+  const validDesc = validateField('productDescription', 'descriptionError');
+  const validPrice = validateField('productPrice', 'priceError', (field) => { const value = parseFloat(field.value); return !isNaN(value) && value > 0; });
+  const validImages = validateImages();
+  if (!validTitle || !validDesc || !validPrice || !validImages) {
+    e.preventDefault();
+  }
+});
+</script>
