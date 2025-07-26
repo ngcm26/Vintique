@@ -1128,12 +1128,16 @@ app.patch('/staff/:id/status', requireStaff, async (req, res) => {
 
 // ========== FAQ ROUTES ==========
 
-// FAQ page - load the main Q&A interface
-app.get('/qa', async (req, res) => {
+// FAQ page - load the main Q&A interface (user view)
+app.get('/qa', requireAuth, async (req, res) => {
+  // If user is staff, redirect to staff Q&A management page
+  if (req.session.user && req.session.user.role === 'staff') {
+    return res.redirect('/staff/qa');
+  }
+
   let connection;
   try {
     connection = await createConnection();
-    
     // Get all questions with answers and user information
     const [questions] = await connection.execute(`
       SELECT 
@@ -1157,7 +1161,6 @@ app.get('/qa', async (req, res) => {
       GROUP BY q.qa_id
       ORDER BY q.asked_at DESC
     `);
-    
     res.render('users/qa', {
       title: 'Q&A - Vintique',
       layout: 'user',
@@ -1170,6 +1173,56 @@ app.get('/qa', async (req, res) => {
     res.render('users/qa', {
       title: 'Q&A - Vintique',
       layout: 'user',
+      activePage: 'qa',
+      questions: [],
+      error: 'Error loading Q&A',
+      user: req.session.user
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Staff Q&A moderation page
+app.get('/staff/qa', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    // Get all questions with answers and user information
+    const [questions] = await connection.execute(`
+      SELECT 
+        q.*,
+        asker.email as asker_email,
+        asker_info.first_name as asker_first_name,
+        asker_info.last_name as asker_last_name,
+        asker_info.username as asker_username,
+        answerer.email as answerer_email,
+        answerer_info.first_name as answerer_first_name,
+        answerer_info.last_name as answerer_last_name,
+        answerer_info.username as answerer_username,
+        COUNT(qv.vote_id) as helpful_count
+      FROM qa q
+      LEFT JOIN users asker ON q.asker_id = asker.user_id
+      LEFT JOIN user_information asker_info ON q.asker_id = asker_info.user_id
+      LEFT JOIN users answerer ON q.answerer_id = answerer.user_id
+      LEFT JOIN user_information answerer_info ON q.answerer_id = answerer_info.user_id
+      LEFT JOIN qa_votes qv ON q.qa_id = qv.qa_id
+      WHERE q.is_verified = 1
+      GROUP BY q.qa_id
+      ORDER BY q.asked_at DESC
+    `);
+    res.render('staff/qa_management', {
+      title: 'Q&A Management - Vintique',
+      layout: 'staff',
+      activePage: 'qa',
+      questions: questions,
+      user: req.session.user
+    });
+  } catch (error) {
+    console.error('Error fetching Q&A:', error);
+    res.render('staff/qa_management', {
+      title: 'Q&A Management - Vintique',
+      layout: 'staff',
       activePage: 'qa',
       questions: [],
       error: 'Error loading Q&A',
@@ -2074,6 +2127,78 @@ app.get('/api/listings', async (req, res) => {
   } catch (error) {
     console.error('Error fetching listings:', error);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== STAFF Q&A MODERATION API ENDPOINTS ==========
+
+// Staff: Answer a question
+app.post('/api/qa/:id/answer', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const qaId = req.params.id;
+    const { answer_content } = req.body;
+    const staffId = req.session.user.user_id;
+    if (!answer_content || answer_content.trim() === '') {
+      return res.status(400).json({ error: 'Answer content is required.' });
+    }
+    // Get staff username
+    const [staffInfo] = await connection.execute(`
+      SELECT ui.username, u.email 
+      FROM users u 
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id 
+      WHERE u.user_id = ?
+    `, [staffId]);
+    const staffUsername = staffInfo[0]?.username || staffInfo[0]?.email || 'Staff';
+    // Update question with answer
+    await connection.execute(`
+      UPDATE qa 
+      SET answer_content = ?, answerer_id = ?, answerer_username = ?, answered_at = NOW()
+      WHERE qa_id = ?
+    `, [answer_content.trim(), staffId, staffUsername, qaId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Staff answer error:', error);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Staff: Verify a question
+app.patch('/api/qa/:id/verify', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const qaId = req.params.id;
+    await connection.execute(`
+      UPDATE qa SET is_verified = 1 WHERE qa_id = ?
+    `, [qaId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Staff verify error:', error);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Staff: Delete a question
+app.delete('/api/qa/:id', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const qaId = req.params.id;
+    await connection.execute(`
+      DELETE FROM qa WHERE qa_id = ?
+    `, [qaId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Staff delete error:', error);
+    res.status(500).json({ error: 'Server error.' });
   } finally {
     if (connection) await connection.end();
   }
