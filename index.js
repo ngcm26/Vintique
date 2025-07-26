@@ -176,11 +176,29 @@ const requireAuth = (req, res, next) => {
 };
 
 const requireStaff = (req, res, next) => {
-  if (!req.session.user || req.session.user.role !== 'staff') {
+  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
     return res.redirect('/login');
   }
   
-  // Check if staff account is suspended
+  // Check if staff/admin account is suspended
+  if (req.session.user.status === 'suspended') {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destruction error:', err);
+      }
+    });
+    return res.redirect('/login');
+  }
+  
+  next();
+};
+
+const requireAdmin = (req, res, next) => {
+  if (!req.session.user || req.session.user.role !== 'admin') {
+    return res.redirect('/login');
+  }
+  
+  // Check if admin account is suspended
   if (req.session.user.status === 'suspended') {
     req.session.destroy((err) => {
       if (err) {
@@ -331,7 +349,7 @@ app.post('/login', async (req, res) => {
     };
     
     // Redirect based on user role
-    if (user.role === 'staff') {
+    if (user.role === 'staff' || user.role === 'admin') {
       res.redirect('/staff/dashboard');
     } else {
       res.redirect('/');
@@ -889,17 +907,18 @@ app.get('/users', requireStaff, (req, res) => {
 });
 
 // Staff Management route
-app.get('/staff/staff_management', requireStaff, async (req, res) => {
+app.get('/staff/staff_management', requireAdmin, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
     const currentUserId = req.session.user.user_id;
     
-    // Get all staff members including the current user
+    // Get all staff and admin members except the current user
     const [staffMembers] = await connection.execute(`
       SELECT 
         u.user_id,
         u.email,
+        u.phone_number,
         u.role,
         u.status,
         ui.first_name,
@@ -907,15 +926,34 @@ app.get('/staff/staff_management', requireStaff, async (req, res) => {
         ui.username
       FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
-      WHERE u.role = 'staff'
+      WHERE u.role IN ('staff', 'admin') AND u.user_id != ?
       ORDER BY u.user_id
+    `, [currentUserId]);
+    
+    // Calculate KPI statistics
+    const [kpiStats] = await connection.execute(`
+      SELECT 
+        SUM(CASE WHEN role = 'staff' THEN 1 ELSE 0 END) as totalStaff,
+        SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) as totalAdmins,
+        SUM(CASE WHEN role = 'staff' AND status = 'suspended' THEN 1 ELSE 0 END) as suspendedStaff,
+        SUM(CASE WHEN role = 'admin' AND status = 'suspended' THEN 1 ELSE 0 END) as suspendedAdmins,
+        SUM(CASE WHEN role = 'staff' AND status = 'active' THEN 1 ELSE 0 END) as activeStaff,
+        SUM(CASE WHEN role = 'admin' AND status = 'active' THEN 1 ELSE 0 END) as activeAdmins
+      FROM users
+      WHERE role IN ('staff', 'admin')
     `);
     
     res.render('staff/staff_management', { 
       layout: 'staff', 
       activePage: 'staff_management',
       staffMembers,
-      currentUser: req.session.user
+      currentUser: req.session.user,
+      totalStaff: kpiStats[0].totalStaff || 0,
+      totalAdmins: kpiStats[0].totalAdmins || 0,
+      suspendedStaff: kpiStats[0].suspendedStaff || 0,
+      suspendedAdmins: kpiStats[0].suspendedAdmins || 0,
+      activeStaff: kpiStats[0].activeStaff || 0,
+      activeAdmins: kpiStats[0].activeAdmins || 0
     });
   } catch (error) {
     console.error('Staff management error:', error);
@@ -1000,12 +1038,12 @@ app.patch('/users/:id/status', requireStaff, (req, res) => {
 });
 
 // Staff Management API endpoints
-app.patch('/staff/:id', requireStaff, async (req, res) => {
+app.patch('/staff/:id', requireAdmin, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
     const staffId = req.params.id;
-    const { name, email, role } = req.body;
+    const { email, phone, role } = req.body;
     const currentUserId = req.session.user.user_id;
     
     // Prevent self-editing
@@ -1013,12 +1051,17 @@ app.patch('/staff/:id', requireStaff, async (req, res) => {
       return res.status(403).json({ error: 'Cannot edit your own account.' });
     }
     
-    if (!name || !email || !role) {
-      return res.status(400).json({ error: 'All fields are required.' });
+    if (!email || !phone || !role) {
+      return res.status(400).json({ error: 'Email, phone number, and role are required.' });
     }
     
     if (!['staff', 'admin'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role value.' });
+    }
+    
+    // Validate phone number format
+    if (!/^\d{8}$/.test(phone)) {
+      return res.status(400).json({ error: 'Phone number must be exactly 8 digits long.' });
     }
     
     // Check if email already exists for another user
@@ -1028,23 +1071,29 @@ app.patch('/staff/:id', requireStaff, async (req, res) => {
     );
     
     if (existingUser.length > 0) {
-      return res.status(400).json({ error: 'Email already exists.' });
+      return res.status(409).json({ error: 'Email already exists.' });
+    }
+    
+    // Check if phone number already exists for another user
+    const [existingPhone] = await connection.execute(
+      'SELECT user_id FROM users WHERE phone_number = ? AND user_id != ?',
+      [phone, staffId]
+    );
+    
+    if (existingPhone.length > 0) {
+      return res.status(409).json({ error: 'Phone number already exists.' });
     }
     
     // Update user table
     await connection.execute(
-      'UPDATE users SET email = ?, role = ? WHERE user_id = ?',
-      [email, role, staffId]
+      'UPDATE users SET email = ?, phone_number = ?, role = ? WHERE user_id = ?',
+      [email, phone, role, staffId]
     );
     
     // Update user_information table
-    const nameParts = name.split(' ');
-    const firstName = nameParts[0] || '';
-    const lastName = nameParts.slice(1).join(' ') || '';
-    
     await connection.execute(
-      'UPDATE user_information SET first_name = ?, last_name = ?, email = ? WHERE user_id = ?',
-      [firstName, lastName, email, staffId]
+      'UPDATE user_information SET email = ?, phone_number = ? WHERE user_id = ?',
+      [email, phone, staffId]
     );
     
     res.json({ success: true });
@@ -1057,7 +1106,7 @@ app.patch('/staff/:id', requireStaff, async (req, res) => {
 });
 
 // Delete staff member
-app.delete('/staff/:id', requireStaff, async (req, res) => {
+app.delete('/staff/:id', requireAdmin, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
@@ -1069,14 +1118,14 @@ app.delete('/staff/:id', requireStaff, async (req, res) => {
       return res.status(403).json({ error: 'Cannot delete your own account.' });
     }
     
-    // Check if staff member exists
+    // Check if staff/admin member exists
     const [staffMember] = await connection.execute(
-      'SELECT user_id, role FROM users WHERE user_id = ? AND role = "staff"',
+      'SELECT user_id, role FROM users WHERE user_id = ? AND role IN ("staff", "admin")',
       [staffId]
     );
     
     if (staffMember.length === 0) {
-      return res.status(404).json({ error: 'Staff member not found.' });
+      return res.status(404).json({ error: 'Staff/Admin member not found.' });
     }
     
     // Delete staff member
@@ -1093,13 +1142,15 @@ app.delete('/staff/:id', requireStaff, async (req, res) => {
 });
 
 // Change staff status
-app.patch('/staff/:id/status', requireStaff, async (req, res) => {
+app.patch('/staff/:id/status', requireAdmin, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
     const staffId = req.params.id;
     const { status } = req.body;
     const currentUserId = req.session.user.user_id;
+    
+    console.log('Status update request:', { staffId, status, currentUserId });
     
     // Prevent self-status-change
     if (parseInt(staffId) === currentUserId) {
@@ -1110,11 +1161,13 @@ app.patch('/staff/:id/status', requireStaff, async (req, res) => {
       return res.status(400).json({ error: 'Invalid status.' });
     }
     
-    const updateStatusSql = 'UPDATE users SET status = ? WHERE user_id = ? AND role = "staff"';
+    const updateStatusSql = 'UPDATE users SET status = ? WHERE user_id = ? AND role IN ("staff", "admin")';
     const [result] = await connection.execute(updateStatusSql, [status, staffId]);
     
+    console.log('Status update result:', { affectedRows: result.affectedRows, staffId, status });
+    
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Staff member not found.' });
+      return res.status(404).json({ error: 'Staff/Admin member not found.' });
     }
     
     res.json({ success: true });
@@ -1125,6 +1178,129 @@ app.patch('/staff/:id/status', requireStaff, async (req, res) => {
     if (connection) await connection.end();
   }
 });
+
+// Create staff member
+app.post('/staff', requireAdmin, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    await connection.beginTransaction();
+
+        const { email, role, phone, password } = req.body;
+    
+    // Validate input
+    if (!email || !role || !phone || !password) {
+      return res.status(400).json({ error: 'Email, role, phone number, and password are required.' });
+    }
+
+        if (!['staff', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be staff or admin.' });
+    }
+    
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+    
+    // Validate phone number format (8 digits)
+    if (!/^\d{8}$/.test(phone)) {
+      return res.status(400).json({ error: 'Phone number must be exactly 8 digits long.' });
+    }
+    
+    // Check if email already exists
+    const [existingUser] = await connection.execute(
+      'SELECT user_id FROM users WHERE email = ?',
+      [email]
+    );
+    
+    if (existingUser.length > 0) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Email already exists.' });
+    }
+    
+    // Check if phone number already exists
+    const [existingPhone] = await connection.execute(
+      'SELECT user_id FROM users WHERE phone_number = ?',
+      [phone]
+    );
+    
+    if (existingPhone.length > 0) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Phone number already exists.' });
+    }
+    
+    // Clean up any orphaned user_information records (in case of previous failed transactions)
+    await connection.execute(
+      'DELETE FROM user_information WHERE user_id NOT IN (SELECT user_id FROM users)'
+    );
+
+        // Insert staff member into users table
+    const [result] = await connection.execute(
+      'INSERT INTO users (email, phone_number, password, role, status) VALUES (?, ?, ?, ?, ?)',
+      [email, phone, password, role, 'active']
+    );
+    
+    const newStaffId = result.insertId;
+    console.log('Created user with ID:', newStaffId);
+    
+    // Check if user_information record already exists
+    const [existingInfo] = await connection.execute(
+      'SELECT user_id FROM user_information WHERE user_id = ?',
+      [newStaffId]
+    );
+    
+    console.log('Existing user_information records for user_id', newStaffId, ':', existingInfo.length);
+    
+    if (existingInfo.length > 0) {
+      console.log('Updating existing user_information record');
+      // Update existing record
+      await connection.execute(
+        'UPDATE user_information SET username = ?, first_name = ?, last_name = ?, email = ?, phone_number = ? WHERE user_id = ?',
+        [email.split('@')[0], 'Staff', 'Member', email, phone, newStaffId]
+      );
+    } else {
+      console.log('Creating new user_information record');
+      // Insert new user_information record
+      await connection.execute(
+        'INSERT INTO user_information (user_id, username, first_name, last_name, email, phone_number) VALUES (?, ?, ?, ?, ?, ?)',
+        [newStaffId, email.split('@')[0], 'Staff', 'Member', email, phone]
+      );
+    }
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: 'Staff member created successfully.',
+      staffId: newStaffId
+    });
+
+  } catch (error) {
+    console.error('Staff creation error:', error);
+
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error('Rollback error:', rollbackError);
+      }
+    }
+
+    if (error.code === 'ER_DUP_ENTRY') {
+      if (error.message.includes('email')) {
+        return res.status(409).json({ error: 'Email already exists.' });
+      }
+      if (error.message.includes('phone_number')) {
+        return res.status(409).json({ error: 'Phone number already exists.' });
+      }
+      return res.status(409).json({ error: 'User already exists.' });
+    }
+
+    res.status(500).json({ error: 'Database error: ' + error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 
 // ========== FAQ ROUTES ==========
 

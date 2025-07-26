@@ -1,17 +1,17 @@
-<h1>Staff: Manage Staff</h1>
+<h1>Admin: Manage Staff & Admin</h1>
 <div style="height: 32px;"></div>
 <div class="header-bar">
-  <h3 class="mb-0">Staff Management</h3>
+  <h3 class="mb-0">Staff & Admin Management</h3>
   <div style="display: flex; gap: 8px; align-items: center;">
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStaffModal">
+    <button class="btn-add-staff" data-bs-toggle="modal" data-bs-target="#addStaffModal">
       <i class="fas fa-plus"></i> Add Staff Member
     </button>
     <input type="text" class="form-control" id="staffSearch" style="width: 250px;" placeholder="Search staff...">
-                <select id="statusFilter" class="form-control" style="width: 140px;">
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-            </select>
+    <select id="statusFilter" class="form-control" style="width: 140px;">
+      <option value="all">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="suspended">Suspended</option>
+    </select>
     <select id="roleFilter" class="form-control" style="width: 120px;">
       <option value="all">All Roles</option>
       <option value="admin">Admin</option>
@@ -20,54 +20,54 @@
   </div>
 </div>
 <div class="table-container">
-  <table class="table table-hover user-mgmt-table" id="staffTable">
-    <thead>
-      <tr>
-        <th>Staff ID</th>
-        <th>Name</th>
-        <th>Email</th>
-        <th>Role</th>
-        <th>Status</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{#each staffMembers}}
-        <tr data-staff-id="{{this.user_id}}" {{#if (eq this.user_id ../currentUser.user_id)}}class="current-user-row"{{/if}}>
-          <td>{{this.user_id}}</td>
-          <td>{{this.first_name}} {{this.last_name}}</td>
-          <td>{{this.email}}</td>
-          <td>
-            <span class="badge role-{{this.role}}">{{this.role}}</span>
-          </td>
-          <td>
+<table class="table table-hover user-mgmt-table" id="staffTable">
+  <thead>
+    <tr>
+      <th>Staff ID</th>
+      <th>Email</th>
+      <th>Phone</th>
+      <th>Role</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each staffMembers}}
+      <tr data-staff-id="{{this.user_id}}" {{#if (eq this.user_id ../currentUser.user_id)}}class="current-user-row"{{/if}}>
+        <td>{{this.user_id}}</td>
+        <td>{{this.email}}</td>
+        <td>{{this.phone_number}}</td>
+        <td>
+          <span class="badge role-{{this.role}}">{{this.role}}</span>
+        </td>
+        <td>
+          {{#if (eq this.status 'active')}}
+            <span class="badge status-active">Active</span>
+          {{else}}
+            <span class="badge status-banned">Suspended</span>
+          {{/if}}
+        </td>
+        <td class="actions-cell">
+          {{#if (eq this.user_id ../currentUser.user_id)}}
+            <!-- Current user - show disabled buttons -->
+            <button class="btn btn-sm btn-secondary" disabled title="You cannot edit your own account">Edit</button>
+            <button class="btn btn-sm btn-danger" disabled title="You cannot delete your own account">Delete</button>
+            <span class="text-muted small">(Your account)</span>
+          {{else}}
+            <!-- Other staff members - show active buttons -->
             {{#if (eq this.status 'active')}}
-              <span class="badge status-active">Active</span>
+              <button class="btn btn-sm btn-warning" onclick="toggleStaffStatus(this)">Suspend</button>
             {{else}}
-              <span class="badge status-banned">Suspended</span>
+              <button class="btn btn-sm btn-success" onclick="toggleStaffStatus(this)">Activate</button>
             {{/if}}
-          </td>
-          <td class="actions-cell">
-            {{#if (eq this.user_id ../currentUser.user_id)}}
-              <!-- Current user - show disabled buttons -->
-              <button class="btn btn-sm btn-secondary" disabled title="You cannot edit your own account">Edit</button>
-              <button class="btn btn-sm btn-danger" disabled title="You cannot delete your own account">Delete</button>
-              <span class="text-muted small">(Your account)</span>
-            {{else}}
-              <!-- Other staff members - show active buttons -->
-              {{#if (eq this.status 'active')}}
-                <button class="btn btn-sm btn-warning" onclick="toggleStaffStatus(this)">Suspend</button>
-              {{else}}
-                <button class="btn btn-sm btn-success" onclick="toggleStaffStatus(this)">Activate</button>
-              {{/if}}
-              <button class="btn btn-sm btn-secondary" onclick="editStaff(this)">Edit</button>
-              <button class="btn btn-sm btn-danger" onclick="deleteStaff(this)">Delete</button>
-            {{/if}}
-          </td>
-        </tr>
-      {{/each}}
-    </tbody>
-  </table>
+            <button class="btn btn-sm btn-secondary" onclick="editStaff(this)">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteStaff(this)">Delete</button>
+          {{/if}}
+        </td>
+      </tr>
+    {{/each}}
+  </tbody>
+</table>
 </div>
 
 <!-- Edit Staff Modal -->
@@ -85,16 +85,16 @@
             <input type="text" class="form-control" id="editStaffId" readonly>
           </div>
           <div class="mb-3">
-            <label for="editStaffName" class="form-label">Name</label>
-            <input type="text" class="form-control" id="editStaffName">
+            <label for="editStaffEmail" class="form-label">Email</label>
+            <input type="email" class="form-control" id="editStaffEmail" required>
           </div>
           <div class="mb-3">
-            <label for="editStaffEmail" class="form-label">Email</label>
-            <input type="email" class="form-control" id="editStaffEmail">
+            <label for="editStaffPhone" class="form-label">Phone Number</label>
+            <input type="tel" class="form-control" id="editStaffPhone" placeholder="12345678" required>
           </div>
           <div class="mb-3">
             <label for="editStaffRole" class="form-label">Role</label>
-            <select class="form-control" id="editStaffRole">
+            <select class="form-control" id="editStaffRole" required>
               <option value="staff">Staff</option>
               <option value="admin">Admin</option>
             </select>
@@ -131,25 +131,22 @@
             </select>
           </div>
           <div class="mb-3">
-            <label for="staffPermissions" class="form-label">Permissions</label>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="userManagement" checked>
-              <label class="form-check-label" for="userManagement">User Management</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="listingManagement" checked>
-              <label class="form-check-label" for="listingManagement">Listing Management</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="qaModeration" checked>
-              <label class="form-check-label" for="qaModeration">Q&A Moderation</label>
-            </div>
+            <label for="staffPhone" class="form-label">Phone Number</label>
+            <input type="tel" class="form-control" id="staffPhone" placeholder="12345678" required>
+          </div>
+          <div class="mb-3">
+            <label for="staffPassword" class="form-label">Password</label>
+            <input type="password" class="form-control" id="staffPassword" required>
+          </div>
+          <div class="mb-3">
+            <label for="staffConfirmPassword" class="form-label">Confirm Password</label>
+            <input type="password" class="form-control" id="staffConfirmPassword" required>
           </div>
         </form>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="addStaffMember()">Add Staff Member</button>
+        <button type="button" class="btn btn-warning" onclick="addStaffMember()">Add Staff Member</button>
       </div>
     </div>
   </div>
@@ -165,8 +162,8 @@
     const staffId = editingStaffRow.cells[0].textContent;
     
     document.getElementById('editStaffId').value = editingStaffRow.cells[0].textContent;
-    document.getElementById('editStaffName').value = editingStaffRow.cells[1].textContent;
-    document.getElementById('editStaffEmail').value = editingStaffRow.cells[2].textContent;
+    document.getElementById('editStaffEmail').value = editingStaffRow.cells[1].textContent;
+    document.getElementById('editStaffPhone').value = editingStaffRow.cells[2].textContent;
     
     // Set role based on badge text
     const roleBadge = editingStaffRow.querySelector('td:nth-child(4) span');
@@ -178,21 +175,34 @@
 
   function saveStaffChanges() {
     const staffId = document.getElementById('editStaffId').value;
-    const name = document.getElementById('editStaffName').value;
     const email = document.getElementById('editStaffEmail').value;
+    const phone = document.getElementById('editStaffPhone').value;
     const role = document.getElementById('editStaffRole').value;
+    
+    // Validate phone number format
+    if (!/^\d{8}$/.test(phone)) {
+      alert('Phone number must be exactly 8 digits long.');
+      return;
+    }
     
     fetch(`/staff/${staffId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, role })
+      body: JSON.stringify({ email, phone, role })
     })
-    .then(res => res.json())
+    .then(res => {
+      if (!res.ok) {
+        return res.json().then(data => {
+          throw new Error(data.error || 'Failed to update staff member');
+        });
+      }
+      return res.json();
+    })
     .then(data => {
       if (data.success) {
         // Update the table row
-        editingStaffRow.cells[1].textContent = name;
-        editingStaffRow.cells[2].textContent = email;
+        editingStaffRow.cells[1].textContent = email;
+        editingStaffRow.cells[2].textContent = phone;
         
         // Update role badge
         const roleBadge = editingStaffRow.querySelector('td:nth-child(4) span');
@@ -205,7 +215,10 @@
         alert(data.error || 'Failed to update staff member.');
       }
     })
-    .catch(() => alert('Failed to update staff member.'));
+    .catch(error => {
+      console.error('Error:', error);
+      alert(error.message || 'Failed to update staff member. Please try again.');
+    });
   }
 
   function toggleStaffStatus(btn) {
@@ -252,9 +265,9 @@
   function deleteStaff(btn) {
     const row = btn.closest('tr');
     const staffId = row.cells[0].textContent;
-    const staffName = row.cells[1].textContent;
+    const staffEmail = row.cells[1].textContent;
     
-    if (!confirm(`Are you sure you want to delete staff member "${staffName}"? This action cannot be undone.`)) return;
+    if (!confirm(`Are you sure you want to delete staff member with email "${staffEmail}"? This action cannot be undone.`)) return;
     
     fetch(`/staff/${staffId}`, {
       method: 'DELETE'
@@ -274,22 +287,77 @@
   function addStaffMember() {
     const email = document.getElementById('staffEmail').value;
     const role = document.getElementById('staffRole').value;
+    const phone = document.getElementById('staffPhone').value;
+    const password = document.getElementById('staffPassword').value;
+    const confirmPassword = document.getElementById('staffConfirmPassword').value;
     
     if (!email) {
       alert('Please enter an email address');
       return;
     }
     
-    // Here you would typically make an API call to add the staff member
-    // For now, we'll just show a success message
-    alert('Staff member invitation sent to ' + email);
+    if (!phone) {
+      alert('Please enter a phone number');
+      return;
+    }
     
-    // Close the modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('addStaffModal'));
-    modal.hide();
+    if (!password) {
+      alert('Please enter a password');
+      return;
+    }
     
-    // Reset the form
-    document.getElementById('addStaffForm').reset();
+    if (password !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
+    
+    // Make API call to create staff member
+    fetch('/staff', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: email,
+        role: role,
+        phone: phone,
+        password: password
+      })
+    })
+    .then(res => {
+      if (!res.ok) {
+        return res.json().then(data => {
+          throw new Error(data.error || 'Failed to create staff member');
+        });
+      }
+      return res.json();
+    })
+    .then(data => {
+      if (data.success) {
+        alert('Staff member created successfully!');
+        
+        // Close the modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addStaffModal'));
+        modal.hide();
+        
+        // Reset the form
+        document.getElementById('addStaffForm').reset();
+        
+        // Force reload the page to show the new staff member
+        window.location.reload(true);
+      } else {
+        alert(data.error || 'Failed to create staff member.');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert(error.message || 'Failed to create staff member. Please try again.');
+    });
   }
 
   // Search and filter functionality
@@ -305,8 +373,8 @@
     
     rows.forEach(row => {
       const staffId = row.cells[0].textContent.toLowerCase();
-      const name = row.cells[1].textContent.toLowerCase();
-      const email = row.cells[2].textContent.toLowerCase();
+      const email = row.cells[1].textContent.toLowerCase();
+      const phone = row.cells[2].textContent.toLowerCase();
       const roleBadge = row.querySelector('td:nth-child(4) span');
       const statusBadge = row.querySelector('td:nth-child(5) span');
       
@@ -326,7 +394,7 @@
         (role === 'staff' && isStaff);
       
       let textMatch =
-        staffId.includes(filter) || name.includes(filter) || email.includes(filter);
+        staffId.includes(filter) || email.includes(filter) || phone.includes(filter);
       
       row.style.display = statusMatch && roleMatch && textMatch ? '' : 'none';
     });
