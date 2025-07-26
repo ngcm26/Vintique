@@ -319,11 +319,55 @@ async function loadMessages(conversationId) {
     
     const messages = await response.json();
     
+    // If the first message has a listing_id, fetch and display the product card
+    if (messages.length > 0 && messages[0].listing_id) {
+      const listingId = messages[0].listing_id;
+      const product = await fetchProductInfo(listingId);
+      displayProductCard(product);
+    } else {
+      removeProductCard();
+    }
+    
     displayMessages(messages);
   } catch (error) {
     console.error('Error loading messages:', error);
     showError('Failed to load messages. Please try again.');
   }
+}
+
+async function fetchProductInfo(listingId) {
+  try {
+    const response = await fetch(`/api/listings`);
+    if (!response.ok) return null;
+    const listings = await response.json();
+    return listings.find(l => l.listing_id == listingId);
+  } catch (e) {
+    return null;
+  }
+}
+
+function displayProductCard(product) {
+  removeProductCard();
+  if (!product) return;
+  const messagesArea = document.getElementById('messagesArea');
+  const card = document.createElement('div');
+  card.className = 'chat-product-card';
+  card.style = 'background: #fffbe6; border-radius: 16px; margin-bottom: 1rem; padding: 1rem; display: flex; align-items: center; box-shadow: 0 2px 8px rgba(255,215,0,0.10);';
+  card.innerHTML = `
+    <img src="${product.image_url || '/assets/logo.png'}" alt="${product.title}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; margin-right: 1rem;">
+    <div>
+      <div style="font-weight: bold; font-size: 1.1rem;">${product.title}</div>
+      <div style="color: #888; font-size: 0.95rem;">${product.category} • $${product.price}</div>
+      <div style="color: #666; font-size: 0.9rem;">${product.brand ? product.brand + ' • ' : ''}${product.item_condition}</div>
+    </div>
+  `;
+  messagesArea.prepend(card);
+}
+
+function removeProductCard() {
+  const messagesArea = document.getElementById('messagesArea');
+  const card = messagesArea.querySelector('.chat-product-card');
+  if (card) card.remove();
 }
 
 function showLoadingMessages() {

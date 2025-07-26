@@ -1663,11 +1663,11 @@ app.post('/start-conversation', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Cannot message yourself' });
     }
     
-    // Check if conversation already exists
+    // Check if conversation already exists (buyer/seller only, ignore listing)
     const [existingConv] = await connection.execute(`
       SELECT * FROM conversations 
-      WHERE buyer_id = ? AND seller_id = ? AND listing_id = ?
-    `, [buyerId, sellerId, listing_id]);
+      WHERE buyer_id = ? AND seller_id = ?
+    `, [buyerId, sellerId]);
     
     let conversationId;
     
@@ -1692,7 +1692,7 @@ app.post('/start-conversation', requireAuth, async (req, res) => {
       const buyerUsername = buyerInfo[0]?.username || buyerInfo[0]?.email || 'Unknown';
       const sellerUsername = sellerInfo[0]?.username || sellerInfo[0]?.email || 'Unknown';
       
-      // Create new conversation
+      // Create new conversation (store the most recent listing_id for context)
       const [convResult] = await connection.execute(`
         INSERT INTO conversations (buyer_id, seller_id, buyer_username, seller_username, listing_id, created_at, updated_at, last_message_at)
         VALUES (?, ?, ?, ?, ?, NOW(), NOW(), NOW())
@@ -1701,7 +1701,7 @@ app.post('/start-conversation', requireAuth, async (req, res) => {
       conversationId = convResult.insertId;
     }
     
-    // Create initial message
+    // Create initial message, include listing_id for context if possible
     const [buyerInfo] = await connection.execute(`
       SELECT ui.username, u.email 
       FROM users u 
@@ -1711,10 +1711,19 @@ app.post('/start-conversation', requireAuth, async (req, res) => {
     
     const buyerUsername = buyerInfo[0]?.username || buyerInfo[0]?.email || 'Unknown';
     
-    await connection.execute(`
-      INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sender_type, sent_at)
-      VALUES (?, ?, ?, ?, 'buyer', NOW())
-    `, [conversationId, buyerId, buyerUsername, message.trim()]);
+    // Try to include listing_id in the message if the column exists
+    try {
+      await connection.execute(`
+        INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sender_type, sent_at, listing_id)
+        VALUES (?, ?, ?, ?, 'buyer', NOW(), ?)
+      `, [conversationId, buyerId, buyerUsername, message.trim(), listing_id]);
+    } catch (err) {
+      // fallback if listing_id column does not exist
+      await connection.execute(`
+        INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sender_type, sent_at)
+        VALUES (?, ?, ?, ?, 'buyer', NOW())
+      `, [conversationId, buyerId, buyerUsername, message.trim()]);
+    }
     
     res.json({
       success: true,
