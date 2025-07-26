@@ -38,11 +38,11 @@ body {
     margin-top: -100px;
     margin-bottom: 2.5rem;
     /* Ensure content is not hidden under navbar */
-    padding-top: 180px;
+    padding-top: 120px;
 }
 
 .hero-section form {
-  margin-top: 2rem;
+  margin-top: 1rem;
   margin-bottom: 0;
 }
 
@@ -536,6 +536,9 @@ body {
   }
   .products-grid {
     grid-template-columns: 1fr;
+  }
+  .hero-title {
+    font-size: 2.2rem;
   }
   .hero-title::before {
     left: -12px;

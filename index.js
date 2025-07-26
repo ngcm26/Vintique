@@ -161,6 +161,17 @@ const requireAuth = (req, res, next) => {
   if (!req.session.user) {
     return res.redirect('/login');
   }
+  
+  // Check if account is suspended
+  if (req.session.user.status === 'suspended') {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destruction error:', err);
+      }
+    });
+    return res.redirect('/login');
+  }
+  
   next();
 };
 
@@ -168,6 +179,17 @@ const requireStaff = (req, res, next) => {
   if (!req.session.user || req.session.user.role !== 'staff') {
     return res.redirect('/login');
   }
+  
+  // Check if staff account is suspended
+  if (req.session.user.status === 'suspended') {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destruction error:', err);
+      }
+    });
+    return res.redirect('/login');
+  }
+  
   next();
 };
 
@@ -255,11 +277,15 @@ app.post('/login', async (req, res) => {
     // Get user from users table and join with user_information if it exists
     const [users] = await connection.execute(`
       SELECT 
-        u.*,
+        u.user_id,
+        u.email,
+        u.phone_number,
+        u.password,
+        u.role,
+        u.status,
         ui.first_name,
         ui.last_name,
-        ui.username,
-        COALESCE(ui.status, 'active') as status
+        ui.username
       FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE u.email = ?
@@ -275,7 +301,7 @@ app.post('/login', async (req, res) => {
     
     const user = users[0];
     
-    // Check if user is suspended
+    // Check if user is suspended (applies to both users and staff)
     if (user.status === 'suspended') {
       return res.render('users/login', { 
         error: 'Your account has been suspended',
@@ -300,10 +326,16 @@ app.post('/login', async (req, res) => {
       first_name: user.first_name,
       last_name: user.last_name,
       username: user.username,
-      role: user.role
+      role: user.role,
+      status: user.status
     };
     
-    res.redirect('/');
+    // Redirect based on user role
+    if (user.role === 'staff') {
+      res.redirect('/staff/dashboard');
+    } else {
+      res.redirect('/');
+    }
   } catch (error) {
     console.error('Login error:', error);
     res.render('users/login', { 
@@ -749,6 +781,91 @@ app.post('/account-settings/password', (req, res) => {
 
 // ========== STAFF ROUTES ==========
 
+// Staff Dashboard route
+app.get('/staff/dashboard', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    
+    // Get dashboard statistics
+    const [userStats] = await connection.execute(`
+      SELECT 
+        COUNT(*) as total_users,
+        SUM(CASE WHEN COALESCE(ui.status, 'active') = 'suspended' THEN 1 ELSE 0 END) as suspended_users
+      FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.role = 'user'
+    `);
+    
+    const [listingStats] = await connection.execute(`
+      SELECT 
+        COUNT(*) as total_listings,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_listings,
+        SUM(CASE WHEN status = 'sold' THEN 1 ELSE 0 END) as sold_listings
+      FROM listings
+    `);
+    
+    const [qaStats] = await connection.execute(`
+      SELECT 
+        COUNT(*) as total_questions,
+        SUM(CASE WHEN answer_content IS NOT NULL THEN 1 ELSE 0 END) as answered_questions
+      FROM qa 
+      WHERE is_verified = 1
+    `);
+    
+    const [recentListings] = await connection.execute(`
+      SELECT 
+        l.*,
+        ui.username,
+        ui.first_name,
+        ui.last_name
+      FROM listings l
+      LEFT JOIN user_information ui ON l.user_id = ui.user_id
+      ORDER BY l.created_at DESC
+      LIMIT 5
+    `);
+    
+    const [recentUsers] = await connection.execute(`
+      SELECT 
+        u.*,
+        ui.username,
+        ui.first_name,
+        ui.last_name,
+        COALESCE(ui.status, 'active') as status
+      FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.role = 'user'
+      ORDER BY u.user_id DESC
+      LIMIT 5
+    `);
+    
+    const stats = {
+      users: userStats[0],
+      listings: listingStats[0],
+      qa: qaStats[0]
+    };
+    
+    res.render('staff/dashboard', { 
+      layout: 'staff', 
+      activePage: 'dashboard',
+      stats,
+      recentListings,
+      recentUsers,
+      user: req.session.user
+    });
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.render('staff/dashboard', { 
+      layout: 'staff', 
+      activePage: 'dashboard',
+      error: 'Error loading dashboard',
+      user: req.session.user
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 // Staff User Management route
 app.get('/staff/user_management', requireStaff, (req, res) => {
   const sql = `SELECT u.user_id, ui.username, u.email, u.phone_number as phone, 
@@ -762,7 +879,7 @@ app.get('/staff/user_management', requireStaff, (req, res) => {
       return res.status(500).send('Database error');
     }
     const users = results.map(u => ({ ...u, isBanned: u.status === 'suspended' }));
-    res.render('staff/user_management', { layout: 'staff', users });
+    res.render('staff/user_management', { layout: 'staff', activePage: 'user_management', users });
   });
 });
 
@@ -772,8 +889,46 @@ app.get('/users', requireStaff, (req, res) => {
 });
 
 // Staff Management route
-app.get('/staff/staff_management', requireStaff, (req, res) => {
-  res.render('staff/staff_management', { layout: 'staff' });
+app.get('/staff/staff_management', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const currentUserId = req.session.user.user_id;
+    
+    // Get all staff members including the current user
+    const [staffMembers] = await connection.execute(`
+      SELECT 
+        u.user_id,
+        u.email,
+        u.role,
+        u.status,
+        ui.first_name,
+        ui.last_name,
+        ui.username
+      FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.role = 'staff'
+      ORDER BY u.user_id
+    `);
+    
+    res.render('staff/staff_management', { 
+      layout: 'staff', 
+      activePage: 'staff_management',
+      staffMembers,
+      currentUser: req.session.user
+    });
+  } catch (error) {
+    console.error('Staff management error:', error);
+    res.render('staff/staff_management', { 
+      layout: 'staff', 
+      activePage: 'staff_management',
+      error: 'Error loading staff data',
+      staffMembers: [],
+      currentUser: req.session.user
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
 });
 
 // Staff User Management API endpoints
@@ -842,6 +997,133 @@ app.patch('/users/:id/status', requireStaff, (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found.' });
     res.json({ success: true });
   });
+});
+
+// Staff Management API endpoints
+app.patch('/staff/:id', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const staffId = req.params.id;
+    const { name, email, role } = req.body;
+    const currentUserId = req.session.user.user_id;
+    
+    // Prevent self-editing
+    if (parseInt(staffId) === currentUserId) {
+      return res.status(403).json({ error: 'Cannot edit your own account.' });
+    }
+    
+    if (!name || !email || !role) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+    
+    if (!['staff', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role value.' });
+    }
+    
+    // Check if email already exists for another user
+    const [existingUser] = await connection.execute(
+      'SELECT user_id FROM users WHERE email = ? AND user_id != ?',
+      [email, staffId]
+    );
+    
+    if (existingUser.length > 0) {
+      return res.status(400).json({ error: 'Email already exists.' });
+    }
+    
+    // Update user table
+    await connection.execute(
+      'UPDATE users SET email = ?, role = ? WHERE user_id = ?',
+      [email, role, staffId]
+    );
+    
+    // Update user_information table
+    const nameParts = name.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    
+    await connection.execute(
+      'UPDATE user_information SET first_name = ?, last_name = ?, email = ? WHERE user_id = ?',
+      [firstName, lastName, email, staffId]
+    );
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Staff update error:', error);
+    res.status(500).json({ error: 'Database error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Delete staff member
+app.delete('/staff/:id', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const staffId = req.params.id;
+    const currentUserId = req.session.user.user_id;
+    
+    // Prevent self-deletion
+    if (parseInt(staffId) === currentUserId) {
+      return res.status(403).json({ error: 'Cannot delete your own account.' });
+    }
+    
+    // Check if staff member exists
+    const [staffMember] = await connection.execute(
+      'SELECT user_id, role FROM users WHERE user_id = ? AND role = "staff"',
+      [staffId]
+    );
+    
+    if (staffMember.length === 0) {
+      return res.status(404).json({ error: 'Staff member not found.' });
+    }
+    
+    // Delete staff member
+    await connection.execute('DELETE FROM user_information WHERE user_id = ?', [staffId]);
+    await connection.execute('DELETE FROM users WHERE user_id = ?', [staffId]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Staff deletion error:', error);
+    res.status(500).json({ error: 'Database error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Change staff status
+app.patch('/staff/:id/status', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const staffId = req.params.id;
+    const { status } = req.body;
+    const currentUserId = req.session.user.user_id;
+    
+    // Prevent self-status-change
+    if (parseInt(staffId) === currentUserId) {
+      return res.status(403).json({ error: 'Cannot change your own status.' });
+    }
+    
+    if (!['active', 'suspended'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status.' });
+    }
+    
+    const updateStatusSql = 'UPDATE users SET status = ? WHERE user_id = ? AND role = "staff"';
+    const [result] = await connection.execute(updateStatusSql, [status, staffId]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Staff member not found.' });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Staff status update error:', error);
+    res.status(500).json({ error: 'Database error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
 });
 
 // ========== FAQ ROUTES ==========
@@ -1710,10 +1992,24 @@ app.get('/api/listings', async (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📧 Messages available at http://localhost:${PORT}/messages`);
-  console.log(`❓ Q&A available at http://localhost:${PORT}/qa`);
-  console.log(`🔧 Test DB at http://localhost:${PORT}/test-db`);
-  console.log(`👥 View users at http://localhost:${PORT}/api/users`);
-  console.log(`📦 View listings at http://localhost:${PORT}/api/listings`);
+  console.log(`Server running at http://localhost:${PORT}`);
+});
+
+// Handle graceful shutdown on Ctrl+C
+process.on('SIGINT', () => {
+  console.log('\nReceived SIGINT (Ctrl+C). Shutting down gracefully...');
+  
+  // Close database connection
+  if (connection) {
+    connection.end((err) => {
+      if (err) {
+        console.error('Error closing database connection:', err);
+      } else {
+        console.log('Database connection closed.');
+      }
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
+  }
 });

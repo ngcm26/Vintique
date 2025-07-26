@@ -1,10 +1,13 @@
 /* FAQ Page Styles */
+/* Ensure navbar compatibility - don't override body padding-top */
 body {
-  font-family: 'Calibri', sans-serif;
-  background-color: #fafafa;
-  margin: 0;
-  padding: 0;
+  font-family: 'DM Sans', sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
 }
+
+
+/* Remove navbar overrides - let the main navbar CSS handle everything */
 
 /* Full-width hero section */
 .hero-section {
@@ -16,7 +19,7 @@ body {
   position: relative;
   background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 50%, #fd79a8 100%);
   padding: 160px 0 80px;
-  margin-top: -24px;
+  margin-top: -100px; /* Restore negative margin to eliminate gap with navbar */
   margin-bottom: 3rem;
   overflow: hidden;
   min-height: 350px;
@@ -79,19 +82,21 @@ body {
 .hero-title::before {
   content: '🌸';
   position: absolute;
-  left: -60px;
+  left: -80px;
   top: 20px;
   font-size: 2rem;
   animation: bounce 2s ease-in-out infinite;
+  z-index: 3;
 }
 
 .hero-title::after {
   content: '🌸';
   position: absolute;
-  right: -60px;
+  right: -80px;
   top: 20px;
   font-size: 2rem;
   animation: bounce 2s ease-in-out infinite 1s;
+  z-index: 3;
 }
 
 @keyframes bounce {
@@ -648,9 +653,14 @@ body {
     font-size: 2.5rem;
   }
   
-  .hero-title::before,
+  .hero-title::before {
+    left: -50px;
+    font-size: 1.5rem;
+  }
+  
   .hero-title::after {
-    display: none;
+    right: -50px;
+    font-size: 1.5rem;
   }
   
   .hero-subtitle {
@@ -701,6 +711,16 @@ body {
   
   .hero-title {
     font-size: 2.2rem;
+  }
+  
+  .hero-title::before {
+    left: -40px;
+    font-size: 1.2rem;
+  }
+  
+  .hero-title::after {
+    right: -40px;
+    font-size: 1.2rem;
   }
   
   .stats-section {

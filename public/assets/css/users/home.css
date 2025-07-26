@@ -125,7 +125,7 @@ body {
 }
 
 .btn-primary-custom {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'DM Sans', sans-serif;
     background: #fd79a8;
     border: none;
     padding: 0.8rem 2rem;
@@ -145,7 +145,7 @@ body {
 }
 
 .btn-secondary-custom {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'DM Sans', sans-serif;
     background: white;
     border: 2px solid #fd79a8;
     padding: 0.8rem 2rem;

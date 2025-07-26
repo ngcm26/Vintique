@@ -1,0 +1,147 @@
+<div class="dashboard-container">
+  <!-- Welcome Section -->
+  <div class="welcome-section mb-4">
+    <h1 class="dashboard-title">Staff Dashboard</h1>
+    <p class="welcome-text">Welcome back, {{user.first_name}} {{user.last_name}}!</p>
+  </div>
+
+  <!-- Statistics Cards -->
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{{stats.users.total_users}}</h3>
+          <p class="stat-label">Total Users</p>
+          <small class="stat-subtitle">{{stats.users.suspended_users}} suspended</small>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-tags"></i>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{{stats.listings.total_listings}}</h3>
+          <p class="stat-label">Total Listings</p>
+          <small class="stat-subtitle">{{stats.listings.active_listings}} active</small>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-question-circle"></i>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{{stats.qa.total_questions}}</h3>
+          <p class="stat-label">Q&A Questions</p>
+          <small class="stat-subtitle">{{stats.qa.answered_questions}} answered</small>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{{stats.listings.sold_listings}}</h3>
+          <p class="stat-label">Sold Items</p>
+          <small class="stat-subtitle">Successfully sold</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="quick-actions">
+        <h4 class="section-title">Quick Actions</h4>
+        <div class="action-buttons">
+          <a href="/staff/user_management" class="btn btn-action">
+            <i class="fas fa-user-cog"></i>
+            Manage Users
+          </a>
+          <a href="/staff/staff_management" class="btn btn-action">
+            <i class="fas fa-user-tie"></i>
+            Manage Staff
+          </a>
+          <a href="/marketplace" class="btn btn-action">
+            <i class="fas fa-store"></i>
+            View Marketplace
+          </a>
+          <a href="/qa" class="btn btn-action">
+            <i class="fas fa-comments"></i>
+            Q&A Forum
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity -->
+  <div class="row">
+    <div class="col-md-6">
+      <div class="activity-card">
+        <h4 class="section-title">
+          <i class="fas fa-clock"></i>
+          Recent Listings
+        </h4>
+        {{#if recentListings.length}}
+          <div class="activity-list">
+            {{#each recentListings}}
+              <div class="activity-item">
+                <div class="activity-content">
+                  <h6 class="activity-title">{{title}}</h6>
+                  <p class="activity-details">
+                    <span class="price">${{price}}</span> • 
+                    <span class="user">{{first_name}} {{last_name}}</span> • 
+                    <span class="date">{{formatDate created_at}}</span>
+                  </p>
+                  <span class="status-badge status-{{status}}">{{status}}</span>
+                </div>
+              </div>
+            {{/each}}
+          </div>
+        {{else}}
+          <p class="no-data">No recent listings</p>
+        {{/if}}
+      </div>
+    </div>
+    
+    <div class="col-md-6">
+      <div class="activity-card">
+        <h4 class="section-title">
+          <i class="fas fa-user-plus"></i>
+          Recent Users
+        </h4>
+        {{#if recentUsers.length}}
+          <div class="activity-list">
+            {{#each recentUsers}}
+              <div class="activity-item">
+                <div class="activity-content">
+                  <h6 class="activity-title">{{first_name}} {{last_name}}</h6>
+                  <p class="activity-details">
+                    <span class="email">{{email}}</span> • 
+                    <span class="username">{{username}}</span>
+                  </p>
+                  <span class="status-badge status-{{status}}">{{status}}</span>
+                </div>
+              </div>
+            {{/each}}
+          </div>
+        {{else}}
+          <p class="no-data">No recent users</p>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</div>

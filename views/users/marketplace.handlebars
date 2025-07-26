@@ -1,18 +1,24 @@
-<div style="width: 100vw; position: relative; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw;">
-  <section class="hero-section">
-    <div class="hero-content">
-      <h1 class="hero-title">Discover Sustainable Fashion</h1>
-      <p class="hero-subtitle">Shop pre-loved designer pieces and help save the planet, one outfit at a time.</p>
-      <form class="d-flex align-items-center shadow-sm bg-white rounded-pill px-3 py-2 mb-3 mx-auto" style="gap: 1rem; max-width: 700px;" onsubmit="event.preventDefault(); searchProducts();">
-        <input type="text" class="form-control border-0 rounded-pill flex-grow-1" placeholder="Search for brands, categories, or specific items..." style="background: transparent; box-shadow: none;" id="searchInput">
-        <button type="button" class="btn btn-warning rounded-pill px-5 fw" style="box-shadow: 0 2px 8px rgba(255,215,0,0.10); min-width: 20
-        0px;" onclick="searchProducts()">
+<!-- Marketplace Page - Handlebars Template -->
+<link rel="stylesheet" href="/assets/css/users/marketplace.css">
+
+<!-- Hero Section - Full Width -->
+<section class="hero-section">
+  <div class="hero-content">
+    <h1 class="hero-title">Discover Sustainable Fashion</h1>
+    <p class="hero-subtitle">Shop pre-loved designer pieces and help save the planet, one outfit at a time.</p>
+    
+    <div class="search-container">
+      <div class="d-flex align-items-center">
+        <input type="text" class="search-input" placeholder="Search for brands, categories, or specific items..." id="searchInput">
+        <button class="search-btn" onclick="searchProducts()">
           <i class="fas fa-search me-2"></i>Find Items
         </button>
-      </form>
+      </div>
     </div>
-  </section>
+  </div>
+</section>
 
+<!-- Main Content -->
 <div class="container">
   <div class="filters-section shadow-sm p-4 mb-4" style="border-radius: 28px; background: #fff;">
     <div class="row justify-content-center mb-2">
@@ -24,7 +30,7 @@
           <button class="btn btn-light filter-tab" onclick="filterCategory('accessories')">Accessories</button>
           <button class="btn btn-light filter-tab" onclick="filterCategory('bags')">Bags</button>
           <button class="btn btn-light filter-tab" onclick="filterCategory('designer')">Designer Only</button>
-          <button class="btn btn-light filter-tab" onclick="filterCategory('sustainable')">High Eco Score</button>
+          {{!-- <button class="btn btn-light filter-tab" onclick="filterCategory('sustainable')">High Eco Score</button> --}}
         </div>
         <div class="row align-items-center g-3">
           <div class="col-md-4">
@@ -71,9 +77,9 @@
             <img src="/assets/logo.png" alt="{{title}}">
           {{/if}}
 
-          {{#if eco_score}}
+          {{!-- {{#if eco_score}}
             <span class="product-badge">{{eco_score}}% Eco</span>
-          {{/if}}
+          {{/if}} --}}
 
           {{#if is_verified}}
             <span class="verified-badge">Verified</span>
