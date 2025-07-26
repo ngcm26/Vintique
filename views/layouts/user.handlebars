@@ -10,6 +10,9 @@
   {{#if (eq activePage 'register')}}
     <link rel="stylesheet" href="/assets/css/users/register.css">
   {{/if}}
+  {{#if (eq activePage 'shop')}}
+    <link rel="stylesheet" href="/assets/css/users/marketplace.css">
+  {{/if}}
 </head>
 <body>
   <!-- Navbar for guests and users -->
@@ -21,12 +24,20 @@
         </a>
         <div class="collapse navbar-collapse justify-content-center" id="navbarNav">
           <ul class="navbar-nav">
-            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'home')}}active{{/if}}" href="/">Home</a></li>
-            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'shop')}}active{{/if}}" href="#">Shop</a></li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'home')}}active{{/if}}" href="/home">Home</a></li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'shop')}}active{{/if}}" href="/marketplace">Shop</a></li>
             {{#if user}}
               <li class="nav-item"><a class="nav-link {{#if (eq activePage 'sell')}}active{{/if}}" href="#">Sell</a></li>
               <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="/qa">Q&amp;A</a></li>
               <li class="nav-item"><a class="nav-link {{#if (eq activePage 'messages')}}active{{/if}}" href="/messages">Messages</a></li>
+              <li class="nav-item">
+                <a class="nav-link{{#ifCond activePage '==' 'sell'}} active{{/ifCond}}" href="/post_product">Sell</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link{{#ifCond activePage '==' 'mylistings'}} active{{/ifCond}}" href="/my_listing">My Listings</a>
+              </li>
+              <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="#">Q&amp;A</a></li>
+              <li class="nav-item"><a class="nav-link {{#if (eq activePage 'messages')}}active{{/if}}" href="#">Messages</a></li>
             {{/if}}
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'about')}}active{{/if}}" href="#">About</a></li>
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'feedback')}}active{{/if}}" href="#">Feedback</a></li>
@@ -43,7 +54,6 @@
                 <ul class="dropdown-menu" aria-labelledby="accountDropdown">
                   <li><a class="dropdown-item" href="/order-history">Order History</a></li>
                   <li><a class="dropdown-item" href="/account-settings">Account Settings</a></li>
-                  <li><a class="dropdown-item" href="/seller-verification">Seller Verification</a></li>
                   <li><hr class="dropdown-divider"></li>
                   <li><a class="dropdown-item" href="/logout">Log Out</a></li>
                 </ul>

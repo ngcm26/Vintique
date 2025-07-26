@@ -1,0 +1,413 @@
+{{!< user}}
+<link rel="stylesheet" href="/assets/css/users/account_setting.css">
+
+<section class="hero-section">
+  <div class="hero-content">
+    <h1 class="hero-title">Account Settings</h1>
+    <p class="hero-subtitle">Manage your profile, password, and preferences</p>
+  </div>
+</section>
+
+<div class="container mt-4">
+  <div class="row">
+    <!-- Profile Sidebar -->
+    <div class="col-lg-3">
+      <div class="account-container">
+        <div class="profile-section text-center">
+          <img id="profileImagePreview" src="/assets/Profile.webp" alt="Profile Picture" class="profile-picture mb-3">
+          <form id="profileImageForm" enctype="multipart/form-data">
+            <input type="file" name="profile_image" id="profileImageInput" accept="image/*" class="form-control mb-2">
+            <input type="hidden" name="current_profile_image_url" id="currentProfileImageUrl">
+            <button type="submit" class="btn btn-save w-100">Change Profile Picture</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Settings Area -->
+    <div class="col-lg-9">
+      <form id="personalInfoForm">
+        <div class="account-container personal-info">
+          <div class="settings-section">
+            <h3 class="settings-title">Personal Information</h3>
+            <div class="row">
+              <div class="col-md-6 form-group">
+                <label class="form-label">First Name</label>
+                <input type="text" class="form-control" name="first_name" id="firstName">
+              </div>
+              <div class="col-md-6 form-group">
+                <label class="form-label">Last Name</label>
+                <input type="text" class="form-control" name="last_name" id="lastName">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email Address</label>
+              <input type="email" class="form-control" name="email" id="userEmail">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone Number</label>
+              <input type="tel" class="form-control" name="phone_number" id="userPhone">
+            </div>
+            <button type="submit" class="btn btn-save">Save Personal Info</button>
+            <div id="personalInfoMsg" class="mt-2"></div>
+          </div>
+        </div>
+      </form>
+
+      <!-- Address Details Section -->
+      <div class="account-container">
+        <div class="settings-section">
+          <h3 class="settings-title">Address Details</h3>
+          <div id="addressList"></div>
+          <button type="button" id="addAddressBtn" class="btn btn-save mt-2">Add Address</button>
+          <div id="addressMsg" class="mt-2"></div>
+        </div>
+      </div>
+
+      <!-- Address Modal -->
+      <div class="modal fade" id="addressModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="addressModalLabel">Add New Address</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="addressFormModal">
+                <input type="hidden" id="addressIndex" name="addressIndex">
+                <div class="mb-3">
+                  <label class="form-label">Address Name</label>
+                  <input type="text" class="form-control" id="modalName" placeholder="e.g., Home, Office">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Street Address</label>
+                  <input type="text" class="form-control" id="modalStreet">
+                </div>
+                <div class="row mb-3">
+                  <div class="col">
+                    <label class="form-label">City</label>
+                    <input type="text" class="form-control" id="modalCity">
+                  </div>
+                  <div class="col">
+                    <label class="form-label">State</label>
+                    <input type="text" class="form-control" id="modalState">
+                  </div>
+                  <div class="col">
+                    <label class="form-label">ZIP Code</label>
+                    <input type="text" class="form-control" id="modalPostalCode">
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Country</label>
+                  <input type="text" class="form-control" id="modalCountry">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Phone Number</label>
+                  <input type="text" class="form-control" id="modalPhone">
+                </div>
+                <div class="mb-3 form-check">
+                  <input type="checkbox" class="form-check-input" id="modalDefault">
+                  <label class="form-check-label" for="modalDefault">Make this my default address</label>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-save" id="saveAddressModalBtn">Save Address</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="account-container password-section">
+        <div class="settings-section">
+          <h3 class="settings-title">Change Password</h3>
+          <form id="passwordChangeForm">
+            <div class="form-group">
+              <label class="form-label">Current Password</label>
+              <input type="password" class="form-control" name="current_password" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Password</label>
+              <input type="password" class="form-control" name="new_password" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm New Password</label>
+              <input type="password" class="form-control" name="confirm_password" required>
+            </div>
+            <button type="submit" class="btn btn-save">Update Password</button>
+          </form>
+          <div id="passwordChangeMsg" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- (Load once) Bootstrap JS bundle -->
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // ------------------ Prefill personal info ------------------
+  fetch('/account-settings/api')
+    .then(res => res.json())
+    .then(data => {
+      if (!data) return;
+      const setVal = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.value = v || '';
+      };
+      setVal('firstName', data.first_name);
+      setVal('lastName', data.last_name);
+      setVal('userEmail', data.email);
+      setVal('userPhone', data.phone_number);
+
+      const currentUrlEl = document.getElementById('currentProfileImageUrl');
+      if (currentUrlEl) currentUrlEl.value = data.profile_image_url || '';
+      if (data.profile_image_url) {
+        const img = document.getElementById('profileImagePreview');
+        if (img) img.src = data.profile_image_url;
+      }
+    });
+
+  // ------------------ Profile image upload ------------------
+  const profileImageForm = document.getElementById('profileImageForm');
+  profileImageForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(profileImageForm);
+    fetch('/account-settings/api', { method: 'POST', body: formData })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.profile_image_url) {
+          document.getElementById('profileImagePreview').src = data.profile_image_url;
+          document.getElementById('currentProfileImageUrl').value = data.profile_image_url;
+          alert('Profile image updated!');
+        } else {
+          alert('Failed to update profile image.');
+        }
+      });
+  });
+
+  // ------------------ Personal info update ------------------
+  const personalInfoForm = document.getElementById('personalInfoForm');
+  personalInfoForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(personalInfoForm);
+    formData.append('current_profile_image_url', document.getElementById('currentProfileImageUrl').value);
+    fetch('/account-settings/api', { method: 'POST', body: formData })
+      .then(res => res.json())
+      .then(data => {
+        const msgDiv = document.getElementById('personalInfoMsg');
+        if (data.success) {
+          msgDiv.textContent = 'Personal information updated!';
+          msgDiv.style.color = 'green';
+        } else {
+          msgDiv.textContent = data.error || 'Failed to update personal information.';
+          msgDiv.style.color = 'red';
+        }
+      });
+  });
+
+  // ------------------ Password change ------------------
+  const passwordChangeForm = document.getElementById('passwordChangeForm');
+  passwordChangeForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(passwordChangeForm);
+    fetch('/account-settings/password', {
+      method: 'POST',
+      body: new URLSearchParams([...formData])
+    })
+    .then(res => res.json())
+    .then(data => {
+      const msgDiv = document.getElementById('passwordChangeMsg');
+      if (data.success) {
+        msgDiv.textContent = 'Password updated successfully!';
+        msgDiv.style.color = 'green';
+        passwordChangeForm.reset();
+      } else {
+        msgDiv.textContent = data.error || 'Failed to update password.';
+        msgDiv.style.color = 'red';
+      }
+    });
+  });
+
+  // ------------------ Address Management ------------------
+  let addresses = [];
+  let defaultAddressIndex = 1;
+  let addressModal = new bootstrap.Modal(document.getElementById('addressModal'));
+
+  function renderAddresses() {
+    const list = document.getElementById('addressList');
+    list.innerHTML = '';
+    addresses.forEach((addr, idx) => {
+      if (!addr) return;
+      const isDefault = (defaultAddressIndex === idx + 1);
+      const card = document.createElement('div');
+      card.className = `address-card${isDefault ? ' default' : ''}`;
+      card.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <strong>${addr.name || 'Address'}${isDefault ? '<span class="address-type">Default</span>' : ''}</strong>
+          </div>
+          <div>
+            ${addresses.filter(a => a).length > 1 ? `<input type="radio" name="defaultAddress" value="${idx + 1}" ${isDefault ? 'checked' : ''} title="Set as default">` : ''}
+            <button type="button" class="btn btn-link btn-sm" onclick="editAddress(${idx})"><i class="fa fa-edit"></i> Edit</button>
+            <button type="button" class="btn btn-link btn-sm text-danger" onclick="deleteAddress(${idx})"><i class="fa fa-trash"></i> Delete</button>
+          </div>
+        </div>
+        <div class="mt-2">
+          <div>${addr.street || ''}</div>
+          <div>${addr.city || ''}${addr.state ? ', ' + addr.state : ''}${addr.postal_code ? ' ' + addr.postal_code : ''}</div>
+          <div>${addr.country || ''}</div>
+          ${addr.phone ? `<div>Phone: ${addr.phone}</div>` : ''}
+        </div>
+      `;
+      list.appendChild(card);
+    });
+    document.getElementById('addAddressBtn').innerHTML = '<i class="fa fa-plus"></i> Add New Address';
+    document.getElementById('addAddressBtn').style.display = addresses.filter(a => a).length < 3 ? '' : 'none';
+  }
+
+  function getAddressFields() {
+    return {
+      name: document.getElementById('modalName').value,
+      street: document.getElementById('modalStreet').value,
+      city: document.getElementById('modalCity').value,
+      state: document.getElementById('modalState').value,
+      country: document.getElementById('modalCountry').value,
+      postal_code: document.getElementById('modalPostalCode').value,
+      phone: document.getElementById('modalPhone').value,
+      isDefault: document.getElementById('modalDefault').checked
+    };
+  }
+
+  function openAddressModal(idx) {
+    document.getElementById('addressIndex').value = idx;
+    if (addresses[idx]) {
+      document.getElementById('modalName').value = addresses[idx].name || '';
+      document.getElementById('modalStreet').value = addresses[idx].street || '';
+      document.getElementById('modalCity').value = addresses[idx].city || '';
+      document.getElementById('modalState').value = addresses[idx].state || '';
+      document.getElementById('modalCountry').value = addresses[idx].country || '';
+      document.getElementById('modalPostalCode').value = addresses[idx].postal_code || '';
+      document.getElementById('modalPhone').value = addresses[idx].phone || '';
+      document.getElementById('modalDefault').checked = (defaultAddressIndex === idx + 1);
+    } else {
+      document.getElementById('addressFormModal').reset();
+      document.getElementById('modalDefault').checked = false;
+    }
+    addressModal.show();
+  }
+
+  window.editAddress = function(idx) {
+    openAddressModal(idx);
+  };
+
+  window.deleteAddress = function(idx) {
+    if (confirm('Delete this address?')) {
+      addresses[idx] = null;
+      if (defaultAddressIndex === idx + 1) {
+        const next = addresses.findIndex(a => a);
+        defaultAddressIndex = next >= 0 ? next + 1 : 1;
+      }
+      saveAddresses();
+    }
+  };
+
+  document.getElementById('addAddressBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    let idx = addresses.findIndex(a => !a);
+    if (idx === -1) idx = addresses.length;
+    openAddressModal(idx);
+  });
+
+  document.getElementById('saveAddressModalBtn').addEventListener('click', function() {
+    const idx = parseInt(document.getElementById('addressIndex').value, 10);
+    const addr = getAddressFields();
+    addresses[idx] = addr;
+    if (addresses.filter(a => a).length === 1 || addr.isDefault) defaultAddressIndex = idx + 1;
+    saveAddresses();
+    addressModal.hide();
+  });
+
+  document.getElementById('addressList').addEventListener('change', function(e) {
+    if (e.target.name === 'defaultAddress') {
+      defaultAddressIndex = parseInt(e.target.value, 10);
+      saveAddresses();
+    }
+  });
+
+  function saveAddresses() {
+    const data = new FormData();
+    data.append('first_name', document.getElementById('firstName').value);
+    data.append('last_name', document.getElementById('lastName').value);
+    data.append('email', document.getElementById('userEmail').value);
+    data.append('phone_number', document.getElementById('userPhone').value);
+    data.append('current_profile_image_url', document.getElementById('currentProfileImageUrl').value);
+
+    for (let i = 0; i < 3; i++) {
+      const addr = addresses[i] || {};
+      data.append(`address_name${i ? '_' + (i + 1) : ''}`, addr.name || '');
+      data.append(`address_street${i ? '_' + (i + 1) : ''}`, addr.street || '');
+      data.append(`address_city${i ? '_' + (i + 1) : ''}`, addr.city || '');
+      data.append(`address_state${i ? '_' + (i + 1) : ''}`, addr.state || '');
+      data.append(`address_country${i ? '_' + (i + 1) : ''}`, addr.country || '');
+      data.append(`address_postal_code${i ? '_' + (i + 1) : ''}`, addr.postal_code || '');
+      data.append(`address_phone${i ? '_' + (i + 1) : ''}`, addr.phone || '');
+    }
+    data.append('default_address_index', defaultAddressIndex);
+
+    fetch('/account-settings/api', { method: 'POST', body: data })
+      .then(res => res.json())
+      .then(data => {
+        const msgDiv = document.getElementById('addressMsg');
+        if (data.success) {
+          msgDiv.textContent = 'Address updated!';
+          msgDiv.style.color = 'green';
+        } else {
+          msgDiv.textContent = data.error || 'Failed to update address.';
+          msgDiv.style.color = 'red';
+        }
+        renderAddresses();
+      });
+  }
+
+  // Load addresses on page load
+  fetch('/account-settings/api')
+    .then(res => res.json())
+    .then(data => {
+      addresses = [
+        (data.address_name || data.address_street || data.address_city || data.address_state || data.address_country || data.address_postal_code || data.address_phone) ? {
+          name: data.address_name,
+          street: data.address_street,
+          city: data.address_city,
+          state: data.address_state,
+          country: data.address_country,
+          postal_code: data.address_postal_code,
+          phone: data.address_phone
+        } : null,
+        (data.address_name_2 || data.address_street_2 || data.address_city_2 || data.address_state_2 || data.address_country_2 || data.address_postal_code_2 || data.address_phone_2) ? {
+          name: data.address_name_2,
+          street: data.address_street_2,
+          city: data.address_city_2,
+          state: data.address_state_2,
+          country: data.address_country_2,
+          postal_code: data.address_postal_code_2,
+          phone: data.address_phone_2
+        } : null,
+        (data.address_name_3 || data.address_street_3 || data.address_city_3 || data.address_state_3 || data.address_country_3 || data.address_postal_code_3 || data.address_phone_3) ? {
+          name: data.address_name_3,
+          street: data.address_street_3,
+          city: data.address_city_3,
+          state: data.address_state_3,
+          country: data.address_country_3,
+          postal_code: data.address_postal_code_3,
+          phone: data.address_phone_3
+        } : null
+      ];
+      defaultAddressIndex = data.default_address_index || 1;
+      renderAddresses();
+    });
+});
+</script>

@@ -1,0 +1,264 @@
+<div style="width: 100vw; position: relative; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw;">
+  <section class="hero-section">
+    <div class="hero-content">
+      <h1 class="hero-title">Discover Sustainable Fashion</h1>
+      <p class="hero-subtitle">Shop pre-loved designer pieces and help save the planet, one outfit at a time.</p>
+      <form class="d-flex align-items-center shadow-sm bg-white rounded-pill px-3 py-2 mb-3 mx-auto" style="gap: 1rem; max-width: 700px;" onsubmit="event.preventDefault(); searchProducts();">
+        <input type="text" class="form-control border-0 rounded-pill flex-grow-1" placeholder="Search for brands, categories, or specific items..." style="background: transparent; box-shadow: none;" id="searchInput">
+        <button type="button" class="btn btn-warning rounded-pill px-5 fw" style="box-shadow: 0 2px 8px rgba(255,215,0,0.10); min-width: 20
+        0px;" onclick="searchProducts()">
+          <i class="fas fa-search me-2"></i>Find Items
+        </button>
+      </form>
+    </div>
+  </section>
+
+<div class="container">
+  <div class="filters-section shadow-sm p-4 mb-4" style="border-radius: 28px; background: #fff;">
+    <div class="row justify-content-center mb-2">
+      <div class="col-lg-12">
+        <div class="d-flex flex-wrap gap-2 justify-content-center mb-3 filter-tabs">
+          <button class="btn btn-light filter-tab active" onclick="filterCategory('all')">All Items</button>
+          <button class="btn btn-light filter-tab" onclick="filterCategory('clothing')">Clothing</button>
+          <button class="btn btn-light filter-tab" onclick="filterCategory('shoes')">Shoes</button>
+          <button class="btn btn-light filter-tab" onclick="filterCategory('accessories')">Accessories</button>
+          <button class="btn btn-light filter-tab" onclick="filterCategory('bags')">Bags</button>
+          <button class="btn btn-light filter-tab" onclick="filterCategory('designer')">Designer Only</button>
+          <button class="btn btn-light filter-tab" onclick="filterCategory('sustainable')">High Eco Score</button>
+        </div>
+        <div class="row align-items-center g-3">
+          <div class="col-md-4">
+            <select class="form-select" id="priceFilter" onchange="applyFilters()">
+              <option value="">All Prices</option>
+              <option value="0-25">$0 - $25</option>
+              <option value="25-50">$25 - $50</option>
+              <option value="50-100">$50 - $100</option>
+              <option value="100+">$100+</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <select class="form-select" id="conditionFilter" onchange="applyFilters()">
+              <option value="">All Conditions</option>
+              <option value="like-new">Like New</option>
+              <option value="excellent">Excellent</option>
+              <option value="good">Good</option>
+              <option value="fair">Fair</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <select class="form-select" id="sortBy" onchange="sortProducts()">
+              <option value="newest">Newest First</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="products-grid" id="productGrid">
+    {{#each listings}}
+      <div class="product-card"
+           data-category="{{category}}"
+           data-price="{{price}}"
+           data-condition="{{item_condition}}"
+           onclick="window.location.href='/listing/{{listing_id}}'">
+
+        <div class="product-image">
+          {{#if image_url}}
+            <img src="{{image_url}}" alt="{{title}}">
+          {{else}}
+            <img src="/assets/logo.png" alt="{{title}}">
+          {{/if}}
+
+          {{#if eco_score}}
+            <span class="product-badge">{{eco_score}}% Eco</span>
+          {{/if}}
+
+          {{#if is_verified}}
+            <span class="verified-badge">Verified</span>
+          {{/if}}
+        </div>
+
+        <div class="product-info">
+          <div class="product-category">{{category}}</div>
+
+          <h3 class="product-title">{{title}}</h3>
+
+          <div class="product-seller">by @{{username}}</div>
+
+          <div class="product-details">
+            <div class="product-price">${{price}}</div>
+            <div class="product-condition {{conditionClass item_condition}}">
+              {{capitalize item_condition}}
+            </div>
+          </div>
+
+          <div class="product-actions">
+            <button class="btn-buy" onclick="event.stopPropagation(); handleAddToCart({{listing_id}})">
+              Buy Now
+            </button>
+            <button class="btn-chat" title="Chat with seller" onclick="event.stopPropagation(); handleChatClick({{listing_id}})">
+              <i class="fas fa-comment"></i>
+            </button>
+          </div>
+
+          <div class="product-date">Listed {{formatDate created_at}} ago</div>
+        </div>
+
+      </div>
+    {{/each}}
+  </div>
+</div>
+
+<script>
+// Marketplace search and filter logic
+
+window.addEventListener('DOMContentLoaded', function() {
+  window.allProducts = Array.from(document.querySelectorAll('.product-card'));
+});
+
+window.searchProducts = function() {
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+  const productCards = document.querySelectorAll('.product-card');
+  let visibleCount = 0;
+
+  productCards.forEach(card => {
+    const title = card.querySelector('.product-title').textContent.toLowerCase();
+    const seller = card.querySelector('.product-seller').textContent.toLowerCase();
+    const category = card.querySelector('.product-category').textContent.toLowerCase();
+    if (searchTerm === '' || title.includes(searchTerm) || seller.includes(searchTerm) || category.includes(searchTerm)) {
+      card.style.display = 'block';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+};
+
+window.filterCategory = function(category) {
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  event.target.classList.add('active');
+
+  const productCards = document.querySelectorAll('.product-card');
+  let visibleCount = 0;
+
+  productCards.forEach(card => {
+    let showCard = true;
+    if (category === 'designer') {
+      showCard = card.querySelector('.verified-badge') !== null;
+    } else if (category === 'sustainable') {
+      // You can add a data-sustainability attribute if needed
+      showCard = false; // Implement as needed
+    } else if (category !== 'all') {
+      showCard = card.dataset.category === category;
+    }
+    if (showCard) {
+      card.style.display = 'block';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  document.getElementById('priceFilter').value = '';
+  document.getElementById('conditionFilter').value = '';
+};
+
+window.applyFilters = function() {
+  const priceFilter = document.getElementById('priceFilter').value;
+  const conditionFilter = document.getElementById('conditionFilter').value;
+  const productCards = document.querySelectorAll('.product-card');
+  let visibleCount = 0;
+
+  productCards.forEach(card => {
+    let showCard = true;
+    if (priceFilter) {
+      const productPrice = parseFloat(card.dataset.price);
+      if (priceFilter === '100+' && productPrice < 100) {
+        showCard = false;
+      } else if (priceFilter !== '100+') {
+        const [minPrice, maxPrice] = priceFilter.split('-').map(p => parseFloat(p));
+        if (productPrice < minPrice || productPrice > maxPrice) {
+          showCard = false;
+        }
+      }
+    }
+    if (conditionFilter && showCard) {
+      const productCondition = card.dataset.condition;
+      if (productCondition !== conditionFilter) {
+        showCard = false;
+      }
+    }
+    if (showCard) {
+      card.style.display = 'block';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+};
+
+window.sortProducts = function() {
+  const sortBy = document.getElementById('sortBy').value;
+  const productGrid = document.getElementById('productGrid');
+  const products = Array.from(productGrid.children);
+  products.sort((a, b) => {
+    switch (sortBy) {
+      case 'price-low':
+        return parseFloat(a.dataset.price) - parseFloat(b.dataset.price);
+      case 'price-high':
+        return parseFloat(b.dataset.price) - parseFloat(a.dataset.price);
+      case 'newest':
+      default:
+        return 0;
+    }
+  });
+  productGrid.innerHTML = '';
+  products.forEach(product => productGrid.appendChild(product));
+};
+
+// Optional: search on Enter key
+const searchInput = document.getElementById('searchInput');
+if (searchInput) {
+  searchInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      searchProducts();
+    }
+  });
+  searchInput.addEventListener('input', function(e) {
+    if (e.target.value.trim() === '') {
+      searchProducts();
+    }
+  });
+}
+
+window.handleAddToCart = function(listingId) {
+  var isLoggedIn = {{#if user}}true{{else}}false{{/if}};
+  if (!isLoggedIn) {
+    window.location.href = '/login';
+    return;
+  }
+  // Add to cart logic (localStorage for now)
+  let cart = JSON.parse(localStorage.getItem('vintique_cart') || '[]');
+  if (!cart.includes(listingId)) {
+    cart.push(listingId);
+    localStorage.setItem('vintique_cart', JSON.stringify(cart));
+    alert('Item added to cart!');
+  } else {
+    alert('Item is already in your cart.');
+  }
+};
+
+window.handleChatClick = function(listingId) {
+  var isLoggedIn = {{#if user}}true{{else}}false{{/if}};
+  if (!isLoggedIn) {
+    window.location.href = '/login';
+    return;
+  }
+  // openChat logic placeholder
+  alert('Open chat for listing ' + listingId);
+};
+</script>
+
