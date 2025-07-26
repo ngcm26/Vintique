@@ -104,7 +104,7 @@
             <button class="btn-buy" onclick="event.stopPropagation(); handleAddToCart({{listing_id}})">
               Buy Now
             </button>
-            <button class="btn-chat" title="Chat with seller" onclick="event.stopPropagation(); handleChatClick({{listing_id}})">
+            <button class="btn-chat" title="Chat with seller" onclick="event.stopPropagation(); startConversationFromMarketplace('{{listing_id}}', '{{email}}', '{{title}}')">
               <i class="fas fa-comment"></i>
             </button>
           </div>
@@ -257,14 +257,32 @@ window.handleAddToCart = function(listingId) {
   }
 };
 
-window.handleChatClick = function(listingId) {
+window.startConversationFromMarketplace = async function(listingId, sellerEmail, productTitle) {
   var isLoggedIn = {{#if user}}true{{else}}false{{/if}};
   if (!isLoggedIn) {
     window.location.href = '/login';
     return;
   }
-  // openChat logic placeholder
-  alert('Open chat for listing ' + listingId);
+  const message = prompt(`Send a message about "${productTitle}":`, "Hi, I'm interested in your product!");
+  if (!message || message.trim() === '') return;
+  try {
+    const response = await fetch('/start-conversation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        listing_id: listingId,
+        message: message.trim()
+      })
+    });
+    const data = await response.json();
+    if (response.ok) {
+      window.location.href = `/messages?conversation=${data.conversation_id}`;
+    } else {
+      alert('Error: ' + data.error);
+    }
+  } catch (error) {
+    alert('Network error while contacting seller');
+  }
 };
 </script>
 
