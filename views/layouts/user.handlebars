@@ -31,10 +31,10 @@
               <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="/qa">Q&amp;A</a></li>
               <li class="nav-item"><a class="nav-link {{#if (eq activePage 'messages')}}active{{/if}}" href="/messages">Messages</a></li>
               <li class="nav-item">
-                <a class="nav-link{{#ifCond activePage '==' 'sell'}} active{{/ifCond}}" href="/post_product">Sell</a>
+              <a class="nav-link{{#if (eq activePage 'sell')}} active{{/if}}" href="/post_product">Sell</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link{{#ifCond activePage '==' 'mylistings'}} active{{/ifCond}}" href="/my_listing">My Listings</a>
+                <a class="nav-link{{#if (eq activePage 'mylistings')}} active{{/if}}" href="/my_listing">My Listings</a>
               </li>
               <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="#">Q&amp;A</a></li>
               <li class="nav-item"><a class="nav-link {{#if (eq activePage 'messages')}}active{{/if}}" href="#">Messages</a></li>
