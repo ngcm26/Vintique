@@ -1,0 +1,555 @@
+<!-- FAQ Page - Handlebars Template -->
+<link rel="stylesheet" href="/assets/css/users/faq.css">
+
+<!-- Hero Section - Full Width -->
+<section class="hero-section">
+  <div class="hero-content">
+    <h1 class="hero-title">Community Q&A</h1>
+    <p class="hero-subtitle">Get answers from the Vintique community about sustainable fashion, care tips, and more</p>
+    
+    <div class="search-container">
+      <div class="d-flex align-items-center">
+        <input type="text" class="search-input" placeholder="Search questions and answers..." id="searchInput">
+        <button class="search-btn" onclick="searchQA()">
+          <i class="fas fa-search me-2"></i>Search
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Main Content -->
+<div class="container">
+  <!-- Stats Section -->
+  <div class="stats-section">
+    <div class="stat-item">
+      <div class="stat-number" id="qaCount">{{#if questions}}{{questions.length}}{{else}}0{{/if}}</div>
+      <div class="stat-label">Total Questions</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number" id="answeredCount">
+        {{#if questions}}
+          {{#each questions}}
+            {{#if this.answer_content}}1{{else}}0{{/if}}
+          {{/each}}
+        {{else}}0{{/if}}
+      </div>
+      <div class="stat-label">Questions Answered</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">95%</div>
+      <div class="stat-label">Answer Rate</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">24h</div>
+      <div class="stat-label">Avg Response Time</div>
+    </div>
+  </div>
+
+  <!-- Ask Question Section -->
+  <div class="ask-question-section">
+    {{#if user}}
+      <button class="ask-btn" data-bs-toggle="modal" data-bs-target="#askQuestionModal">
+        <i class="fas fa-plus me-2"></i>Ask a Question
+      </button>
+    {{else}}
+      <a href="/login" class="ask-btn">
+        <i class="fas fa-sign-in-alt me-2"></i>Login to Ask Questions
+      </a>
+    {{/if}}
+    <p class="text-muted mb-0">Have a question about sustainable fashion, product care, or anything Vintique-related? Ask our community!</p>
+  </div>
+
+  <!-- Filters Section -->
+  <div class="filters-section">
+    <div class="filter-tabs">
+      <button class="filter-tab active" onclick="filterCategory('all')">All Questions</button>
+      <button class="filter-tab" onclick="filterCategory('general')">General</button>
+      <button class="filter-tab" onclick="filterCategory('care')">Care & Maintenance</button>
+      <button class="filter-tab" onclick="filterCategory('sustainability')">Sustainability</button>
+      <button class="filter-tab" onclick="filterCategory('sizing')">Sizing & Fit</button>
+      <button class="filter-tab" onclick="filterCategory('selling')">Selling Tips</button>
+      <button class="filter-tab" onclick="filterCategory('answered')">Answered</button>
+      <button class="filter-tab" onclick="filterCategory('unanswered')">Unanswered</button>
+    </div>
+
+    <div class="modern-filters">
+      <div class="filter-group">
+        <label class="filter-label">Sort By</label>
+        <select class="form-select" id="sortBy" onchange="sortQuestions()">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="most-helpful">Most Helpful</option>
+          <option value="unanswered">Unanswered First</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Status Filter</label>
+        <select class="form-select" id="statusFilter" onchange="applyFilters()">
+          <option value="">All Status</option>
+          <option value="answered">Answered</option>
+          <option value="pending">Pending Answer</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q&A Grid -->
+  <div class="qa-grid" id="qaGrid">
+    {{#if questions}}
+      {{#each questions}}
+        <div class="qa-card" data-category="{{this.category}}" data-status="{{#if this.answer_content}}answered{{else}}pending{{/if}}" data-helpful="{{#if this.helpful_count}}{{this.helpful_count}}{{else}}0{{/if}}" data-question-id="{{this.qa_id}}">
+          <div class="qa-header">
+            <div>
+              <span class="qa-category">{{this.category}}</span>
+              <span class="qa-status {{#if this.answer_content}}status-answered{{else}}status-pending{{/if}}">
+                {{#if this.answer_content}}Answered{{else}}Pending Answer{{/if}}
+              </span>
+            </div>
+            <div class="qa-date">{{timeAgo this.asked_at}}</div>
+          </div>
+          
+          <div class="question">{{this.question_text}}</div>
+          <div class="questioner">Asked by {{#if this.asker_username}}@{{this.asker_username}}{{else}}{{this.asker_email}}{{/if}}</div>
+          
+          {{#if this.answer_content}}
+            <div class="answer">
+              <div class="answerer">
+                <i class="fas fa-check-circle me-1"></i>
+                Answered by {{#if this.answerer_username}}@{{this.answerer_username}}{{else}}{{this.answerer_email}}{{/if}}
+              </div>
+              <div class="answer-text">{{this.answer_content}}</div>
+            </div>
+          {{/if}}
+          
+          <div class="qa-actions">
+            <div class="vote-section">
+              <button class="vote-btn" onclick="voteHelpful(this, {{this.qa_id}})" data-voted="false">
+                <i class="fas fa-thumbs-up me-1"></i>Helpful
+              </button>
+              <span class="helpful-count">{{#if this.helpful_count}}{{this.helpful_count}}{{else}}0{{/if}} found this helpful</span>
+            </div>
+            {{#if ../user}}
+              <button class="reply-btn" onclick="showReplyForm(this, {{this.qa_id}})">
+                <i class="fas fa-reply me-1"></i>{{#if this.answer_content}}Reply{{else}}Answer{{/if}}
+              </button>
+            {{/if}}
+          </div>
+        </div>
+      {{/each}}
+    {{else}}
+      <div class="empty-state">
+        <i class="fas fa-question-circle"></i>
+        <h3>No questions yet</h3>
+        <p>Be the first to ask a question about sustainable fashion!</p>
+        {{#if user}}
+          <button class="ask-btn" data-bs-toggle="modal" data-bs-target="#askQuestionModal">
+            <i class="fas fa-plus me-2"></i>Ask First Question
+          </button>
+        {{/if}}
+      </div>
+    {{/if}}
+  </div>
+</div>
+
+<!-- Ask Question Modal -->
+{{#if user}}
+<div class="modal fade" id="askQuestionModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Ask a Question</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form id="askQuestionForm">
+          <div class="mb-3">
+            <label for="questionCategory" class="form-label">Category</label>
+            <select class="form-select" id="questionCategory" required>
+              <option value="">Select a category</option>
+              <option value="general">General</option>
+              <option value="care">Care & Maintenance</option>
+              <option value="sustainability">Sustainability</option>
+              <option value="sizing">Sizing & Fit</option>
+              <option value="selling">Selling Tips</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="questionTitle" class="form-label">Question</label>
+            <textarea class="form-control" id="questionTitle" rows="3" placeholder="What would you like to know?" required></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="questionDetails" class="form-label">Additional Details (Optional)</label>
+            <textarea class="form-control" id="questionDetails" rows="4" placeholder="Provide more context or details about your question..."></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Post Question</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{{/if}}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('FAQ page loaded');
+  updateCounts();
+  
+  // Handle ask question form
+  {{#if user}}
+  const askForm = document.getElementById('askQuestionForm');
+  if (askForm) {
+    askForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      await submitQuestion();
+    });
+  }
+  {{/if}}
+  
+  // Search functionality
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        searchQA();
+      }
+    });
+    
+    searchInput.addEventListener('input', function(e) {
+      if (e.target.value.trim() === '') {
+        searchQA();
+      }
+    });
+  }
+});
+
+function searchQA() {
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+  const qaCards = document.querySelectorAll('.qa-card');
+  let visibleCount = 0;
+  
+  qaCards.forEach(card => {
+    const question = card.querySelector('.question').textContent.toLowerCase();
+    const answer = card.querySelector('.answer-text');
+    const answerText = answer ? answer.textContent.toLowerCase() : '';
+    const category = card.querySelector('.qa-category').textContent.toLowerCase();
+    
+    if (question.includes(searchTerm) || answerText.includes(searchTerm) || category.includes(searchTerm)) {
+      card.style.display = 'block';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  
+  document.getElementById('qaCount').textContent = visibleCount;
+}
+
+function filterCategory(category) {
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  const qaCards = document.querySelectorAll('.qa-card');
+  let visibleCount = 0;
+  
+  qaCards.forEach(card => {
+    let showCard = true;
+    
+    if (category === 'answered') {
+      showCard = card.dataset.status === 'answered';
+    } else if (category === 'unanswered') {
+      showCard = card.dataset.status === 'pending';
+    } else if (category !== 'all') {
+      showCard = card.dataset.category === category;
+    }
+    
+    if (showCard) {
+      card.style.display = 'block';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  
+  document.getElementById('qaCount').textContent = visibleCount;
+}
+
+function applyFilters() {
+  const status = document.getElementById('statusFilter').value;
+  const qaCards = document.querySelectorAll('.qa-card');
+  let visibleCount = 0;
+  
+  qaCards.forEach(card => {
+    let showCard = true;
+    
+    if (status && card.dataset.status !== status) {
+      showCard = false;
+    }
+    
+    if (showCard) {
+      card.style.display = 'block';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  
+  document.getElementById('qaCount').textContent = visibleCount;
+}
+
+function sortQuestions() {
+  const sortBy = document.getElementById('sortBy').value;
+  const qaGrid = document.getElementById('qaGrid');
+  const questions = Array.from(qaGrid.children);
+  
+  questions.sort((a, b) => {
+    switch (sortBy) {
+      case 'most-helpful':
+        return parseInt(b.dataset.helpful) - parseInt(a.dataset.helpful);
+      case 'oldest':
+        return 1; // Simple implementation - in real app would use actual dates
+      case 'unanswered':
+        if (a.dataset.status === 'pending' && b.dataset.status === 'answered') return -1;
+        if (a.dataset.status === 'answered' && b.dataset.status === 'pending') return 1;
+        return 0;
+      case 'newest':
+      default:
+        return 0; // Keep original order for newest
+    }
+  });
+  
+  qaGrid.innerHTML = '';
+  questions.forEach(question => qaGrid.appendChild(question));
+}
+
+async function voteHelpful(button, questionId) {
+  {{#unless user}}
+    alert('Please log in to vote');
+    return;
+  {{/unless}}
+  
+  try {
+    const response = await fetch(`/api/qa/${questionId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      button.classList.toggle('active');
+      const helpfulSpan = button.parentElement.querySelector('.helpful-count');
+      const currentCount = parseInt(helpfulSpan.textContent.match(/\d+/)[0]) || 0;
+      
+      if (data.voted) {
+        helpfulSpan.textContent = `${currentCount + 1} found this helpful`;
+        button.parentElement.parentElement.parentElement.dataset.helpful = currentCount + 1;
+      } else {
+        helpfulSpan.textContent = `${Math.max(0, currentCount - 1)} found this helpful`;
+        button.parentElement.parentElement.parentElement.dataset.helpful = Math.max(0, currentCount - 1);
+      }
+      button.dataset.voted = data.voted;
+    } else {
+      showError(data.error || 'Failed to vote');
+    }
+  } catch (error) {
+    console.error('Error voting:', error);
+    showError('Network error while voting');
+  }
+}
+
+function showReplyForm(button, questionId) {
+  {{#unless user}}
+    alert('Please log in to answer questions');
+    return;
+  {{/unless}}
+  
+  // Hide any existing reply forms
+  document.querySelectorAll('.reply-form').forEach(form => {
+    form.classList.remove('show');
+  });
+
+  // Get the parent qa-card
+  const qaCard = button.closest('.qa-card');
+  
+  // Check if reply form already exists
+  let replyForm = qaCard.querySelector('.reply-form');
+  
+  if (!replyForm) {
+    // Create reply form
+    replyForm = document.createElement('div');
+    replyForm.className = 'reply-form';
+    replyForm.innerHTML = `
+      <h6 style="color: #333; margin-bottom: 1rem;">Add your answer:</h6>
+      <textarea placeholder="Write your answer here..." class="reply-textarea" required></textarea>
+      <div class="reply-form-actions">
+        <button class="btn-submit-reply" onclick="submitReply(this, ${questionId})">Submit Answer</button>
+        <button class="btn-cancel-reply" onclick="cancelReply(this)">Cancel</button>
+      </div>
+    `;
+    
+    // Insert before qa-actions
+    const qaActions = qaCard.querySelector('.qa-actions');
+    qaActions.parentNode.insertBefore(replyForm, qaActions);
+  }
+  
+  // Show the form
+  replyForm.classList.add('show');
+  
+  // Focus on textarea
+  const textarea = replyForm.querySelector('textarea');
+  textarea.focus();
+}
+
+function cancelReply(button) {
+  const replyForm = button.closest('.reply-form');
+  replyForm.classList.remove('show');
+  
+  // Clear textarea
+  const textarea = replyForm.querySelector('textarea');
+  textarea.value = '';
+}
+
+async function submitReply(button, questionId) {
+  const replyForm = button.closest('.reply-form');
+  const textarea = replyForm.querySelector('textarea');
+  const replyText = textarea.value.trim();
+  
+  if (!replyText) {
+    alert('Please write an answer before submitting.');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/qa/${questionId}/answer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        answer_content: replyText
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Reload the page to show the new answer
+      window.location.reload();
+    } else {
+      showError(data.error || 'Failed to submit answer');
+    }
+  } catch (error) {
+    console.error('Error submitting answer:', error);
+    showError('Network error while submitting answer');
+  }
+}
+
+async function submitQuestion() {
+  const category = document.getElementById('questionCategory').value;
+  const questionText = document.getElementById('questionTitle').value.trim();
+  const details = document.getElementById('questionDetails').value.trim();
+  
+  if (!category || !questionText) {
+    alert('Please fill in the required fields.');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/qa', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        category: category,
+        question_text: questionText,
+        details: details
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Close modal and reload page
+      const modal = bootstrap.Modal.getInstance(document.getElementById('askQuestionModal'));
+      modal.hide();
+      
+      showSuccess('Question submitted successfully!');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } else {
+      showError(data.error || 'Failed to submit question');
+    }
+  } catch (error) {
+    console.error('Error submitting question:', error);
+    showError('Network error while submitting question');
+  }
+}
+
+function updateCounts() {
+  const qaCards = document.querySelectorAll('.qa-card');
+  const answeredCards = document.querySelectorAll('.qa-card[data-status="answered"]');
+  
+  document.getElementById('qaCount').textContent = qaCards.length;
+  document.getElementById('answeredCount').textContent = answeredCards.length;
+}
+
+function showError(message) {
+  showNotification(message, 'error');
+}
+
+function showSuccess(message) {
+  showNotification(message, 'success');
+}
+
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 300px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    font-weight: 500;
+  `;
+  notification.innerHTML = `
+    ${message}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (notification.parentElement) {
+      notification.classList.add('fade');
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 150);
+    }
+  }, 5000);
+  
+  const closeBtn = notification.querySelector('.btn-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      notification.remove();
+    });
+  }
+}
+
+console.log('FAQ page fully loaded!');
+</script>

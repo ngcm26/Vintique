@@ -1,0 +1,995 @@
+<!-- Messages Interface - Full Width Design -->
+<link rel="stylesheet" href="/assets/css/users/messages.css">
+
+<!-- Hero Section - Full Width -->
+<section class="hero-section">
+  <div class="hero-content">
+    <h1 class="hero-title">Your Messages</h1>
+    <p class="hero-subtitle">Connect with sellers and buyers in our sustainable fashion community</p>
+  </div>
+</section>
+
+<!-- Main Messages Container - Full Width -->
+<div class="messages-container">
+  <!-- Conversations Sidebar -->
+  <div class="conversations-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">
+        <span>Conversations</span>
+        <span class="badge bg-secondary" id="totalCount">{{#if conversations}}{{conversations.length}}{{else}}0{{/if}}</span>
+        <button class="new-chat-btn" onclick="openNewChatModal()" title="Start New Chat">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
+      <div class="conversation-tabs">
+        <button class="tab-btn active" onclick="filterConversations('all')">All</button>
+        <button class="tab-btn" onclick="filterConversations('archived')">Archived</button>
+        <button class="tab-btn" onclick="filterConversations('muted')">Muted</button>
+        <button class="tab-btn" onclick="filterConversations('blocked')">Blocked</button>
+      </div>
+      <div class="search-messages">
+        <i class="fas fa-search"></i>
+        <input type="text" placeholder="Search conversations..." id="searchConversations">
+      </div>
+    </div>
+    <div class="conversations-list" id="conversationsList">
+      {{#if conversations}}
+        {{#each conversations}}
+          <div class="conversation-item" data-status="active" data-conversation-id="{{this.conversation_id}}" onclick="selectConversation({{this.conversation_id}}, '{{this.other_user_name}}', '{{this.listing_title}}')">
+            <div class="conversation-header">
+              <span class="conversation-name">{{this.other_user_name}}</span>
+              <span class="conversation-time">
+                {{#if this.last_message_time}}
+                  {{timeAgo this.last_message_time}}
+                {{else}}
+                  {{timeAgo this.created_at}}
+                {{/if}}
+              </span>
+              {{#if this.unread_count}}
+                <span class="unread-badge">{{this.unread_count}}</span>
+              {{/if}}
+            </div>
+            <div class="conversation-preview">{{this.last_message_preview}}</div>
+            {{#if this.listing_title}}
+              <div class="product-tag">Re: {{this.listing_title}}</div>
+            {{/if}}
+          </div>
+        {{/each}}
+      {{else}}
+        <div class="conversation-item empty-state">
+          <div class="conversation-header">
+            <span class="conversation-name">No conversations yet</span>
+            <span class="conversation-time">-</span>
+          </div>
+          <div class="conversation-preview">
+            {{#if user}}
+              Click the + button above to start your first conversation, or browse listings and click "Contact Seller"!
+            {{else}}
+              Please log in to view your messages.
+            {{/if}}
+          </div>
+        </div>
+      {{/if}}
+    </div>
+  </div>
+
+  <!-- Chat Area -->
+  <div class="chat-area">
+    <div class="chat-header">
+      <div>
+        <div class="chat-title" id="chatTitle">Select a conversation</div>
+        <div class="chat-subtitle" id="chatSubtitle">Choose a conversation to start messaging</div>
+      </div>
+      <div class="chat-actions">
+        <button class="chat-action-btn" title="View Product" onclick="viewProductDetails()" id="viewProductBtn" style="display: none;">
+          <i class="fas fa-external-link-alt"></i>
+        </button>
+        <button class="chat-action-btn" title="More Options" onclick="showChatOptions()" id="chatOptionsBtn" style="display: none;">
+          <i class="fas fa-ellipsis-v"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="messages-area" id="messagesArea">
+      <div class="empty-chat">
+        <i class="fas fa-comments"></i>
+        <h5>No conversation selected</h5>
+        <p>Choose a conversation from the sidebar to start messaging</p>
+      </div>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator" style="display: none;">
+      <span id="typingUser">Someone is typing</span>
+      <div class="typing-dots">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+    </div>
+
+    <div class="message-input-area" id="messageInputArea" style="display: none;">
+      <div class="message-input-container">
+        <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(event)">
+        <button class="attach-btn" onclick="document.getElementById('imageInput').click()" title="Attach Image">
+          <i class="fas fa-paperclip"></i>
+        </button>
+        <textarea class="message-input" id="messageInput" placeholder="Type your message..." rows="1"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+      <div class="image-preview" id="imagePreview" style="display: none;">
+        <div class="preview-container">
+          <img id="previewImage" src="" alt="Preview">
+          <button class="remove-image-btn" onclick="removeImagePreview()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Chat Modal -->
+<div class="new-chat-modal" id="newChatModal">
+  <div class="modal-content-custom">
+    <div class="modal-header-custom">
+      <div class="d-flex justify-content-between align-items-center w-100">
+        <h3 class="modal-title-custom">Start New Conversation</h3>
+        <button class="close-btn" onclick="closeNewChatModal()">&times;</button>
+      </div>
+    </div>
+    
+    <div class="modal-body-custom">
+      <div class="new-chat-form">
+        <div class="form-group mb-3">
+          <label for="recipientEmail">Recipient Email:</label>
+          <input type="email" id="recipientEmail" class="form-control" placeholder="Enter email address">
+        </div>
+        <div class="form-group mb-3">
+          <label for="initialMessage">Message:</label>
+          <textarea id="initialMessage" class="form-control" rows="3" placeholder="Type your message..."></textarea>
+        </div>
+        <button class="btn btn-primary w-100" onclick="startNewChatFromForm()">Send Message</button>
+      </div>
+      
+      <hr class="my-4">
+      
+      <div class="recent-contacts">
+        <h6 class="section-title">Quick Start</h6>
+        
+        <div class="contact-item" onclick="openNewConversationForm()">
+          <div class="contact-avatar">+</div>
+          <div class="contact-info">
+            <h6>Start New Chat</h6>
+            <p>Enter email to start a conversation</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-footer-custom">
+      <p>Or browse the <a href="/marketplace">marketplace</a> to message sellers directly</p>
+    </div>
+  </div>
+</div>
+
+<!-- Chat Options Modal -->
+<div class="chat-options-modal" id="chatOptionsModal">
+  <div class="options-content">
+    <div class="options-header">
+      <div class="d-flex justify-content-between align-items-center">
+        <h4 class="options-title">Chat Options</h4>
+        <button class="close-btn" onclick="closeChatOptionsModal()" style="background: rgba(255,255,255,0.2);">&times;</button>
+      </div>
+    </div>
+    
+    <div class="options-list">
+      <!-- Dynamic content will be inserted here by JavaScript -->
+    </div>
+  </div>
+</div>
+
+<script>
+let conversations = {{{json conversations}}};
+let currentUser = {{{json user}}};
+let currentConversationId = null;
+let selectedImage = null;
+
+console.log('Loaded conversations:', conversations);
+console.log('Current user:', currentUser);
+
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Messages page loaded');
+  
+  const messageInput = document.getElementById('messageInput');
+  if (messageInput) {
+    messageInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    messageInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  }
+
+  const initialMessageInput = document.getElementById('initialMessage');
+  if (initialMessageInput) {
+    initialMessageInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+    });
+  }
+
+  const searchInput = document.getElementById('searchConversations');
+  if (searchInput) {
+    searchInput.addEventListener('input', function(e) {
+      const searchTerm = e.target.value.toLowerCase();
+      const conversationItems = document.querySelectorAll('.conversation-item:not(.empty-state)');
+      
+      conversationItems.forEach(conv => {
+        const name = conv.querySelector('.conversation-name')?.textContent.toLowerCase() || '';
+        const preview = conv.querySelector('.conversation-preview')?.textContent.toLowerCase() || '';
+        const product = conv.querySelector('.product-tag')?.textContent.toLowerCase() || '';
+        
+        if (name.includes(searchTerm) || preview.includes(searchTerm) || product.includes(searchTerm)) {
+          conv.style.display = 'block';
+        } else {
+          conv.style.display = 'none';
+        }
+      });
+    });
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const conversationId = urlParams.get('conversation');
+  
+  if (conversationId) {
+    const convElement = document.querySelector(`[data-conversation-id="${conversationId}"]`);
+    if (convElement) {
+      convElement.click();
+    }
+  }
+
+  document.getElementById('newChatModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeNewChatModal();
+    }
+  });
+
+  document.getElementById('chatOptionsModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeChatOptionsModal();
+    }
+  });
+});
+
+async function selectConversation(conversationId, otherUser, productTitle) {
+  if (!currentUser) {
+    showNotification('Please log in to view messages', 'error');
+    return;
+  }
+
+  currentConversationId = conversationId;
+  
+  document.querySelectorAll('.conversation-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  
+  const clickedItem = document.querySelector(`[data-conversation-id="${conversationId}"]`);
+  if (clickedItem) {
+    clickedItem.classList.add('active');
+    
+    const badge = clickedItem.querySelector('.unread-badge');
+    if (badge) {
+      badge.remove();
+    }
+  }
+  
+  document.getElementById('chatTitle').textContent = otherUser || 'Unknown User';
+  document.getElementById('chatSubtitle').textContent = productTitle ? `About: ${productTitle}` : 'General conversation';
+  
+  document.getElementById('messageInputArea').style.display = 'block';
+  document.getElementById('viewProductBtn').style.display = productTitle ? 'block' : 'none';
+  document.getElementById('chatOptionsBtn').style.display = 'block';
+  
+  await loadMessages(conversationId);
+}
+
+async function loadMessages(conversationId) {
+  try {
+    showLoadingMessages();
+    
+    const response = await fetch(`/api/conversations/${conversationId}/messages`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const messages = await response.json();
+    
+    displayMessages(messages);
+  } catch (error) {
+    console.error('Error loading messages:', error);
+    showError('Failed to load messages. Please try again.');
+  }
+}
+
+function showLoadingMessages() {
+  const messagesArea = document.getElementById('messagesArea');
+  messagesArea.innerHTML = `
+    <div class="loading-messages">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2">Loading messages...</p>
+    </div>
+  `;
+}
+
+function displayMessages(messages) {
+  const messagesArea = document.getElementById('messagesArea');
+  
+  if (!messages || messages.length === 0) {
+    messagesArea.innerHTML = `
+      <div class="empty-chat">
+        <i class="fas fa-comments"></i>
+        <h5>No messages yet</h5>
+        <p>Start the conversation by sending a message!</p>
+      </div>
+    `;
+    return;
+  }
+  
+  const currentUserId = currentUser ? currentUser.user_id : null;
+  messagesArea.innerHTML = messages.map(message => {
+    const isOwn = message.sender_id === currentUserId;
+    const messageClass = isOwn ? 'sent' : 'received';
+    const senderName = isOwn ? 'You' : `${message.first_name || ''} ${message.last_name || ''}`.trim();
+    const messageTime = new Date(message.sent_at).toLocaleString();
+    
+    // Check if message has an image
+    const hasImage = message.image_url && message.image_url.trim() !== '';
+    const hasText = message.message_content && message.message_content.trim() !== '';
+    
+    let messageContent = '';
+    
+    if (hasImage) {
+      messageContent += `<div class="message-image">
+        <img src="${message.image_url}" alt="Shared image" onclick="openImageModal('${message.image_url}')" style="max-width: 250px; max-height: 250px; border-radius: 8px; cursor: pointer;">
+      </div>`;
+    }
+    
+    if (hasText) {
+      messageContent += `<div class="message-text">${escapeHtml(message.message_content)}</div>`;
+    }
+    
+    return `
+      <div class="message ${messageClass}">
+        <div class="message-bubble">
+          ${messageContent}
+          <div class="message-time">${senderName} • ${messageTime}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+async function sendMessage() {
+  if (!currentConversationId) {
+    showError('No conversation selected');
+    return;
+  }
+  
+  const messageInput = document.getElementById('messageInput');
+  const messageContent = messageInput.value.trim();
+  
+  // Check if we have either text or image
+  if (!messageContent && !selectedImage) {
+    showError('Please enter a message or select an image');
+    return;
+  }
+  
+  const sendBtn = document.getElementById('sendBtn');
+  sendBtn.disabled = true;
+  
+  try {
+    const formData = new FormData();
+    
+    if (messageContent) {
+      formData.append('message_content', messageContent);
+    }
+    
+    if (selectedImage) {
+      formData.append('image', selectedImage);
+    }
+    
+    const response = await fetch(`/api/conversations/${currentConversationId}/messages`, {
+      method: 'POST',
+      body: formData // Don't set Content-Type header, let browser set it for FormData
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      removeImagePreview(); // Clear image preview
+      await loadMessages(currentConversationId);
+    } else {
+      console.error('Error sending message:', data.error);
+      showError('Failed to send message: ' + data.error);
+    }
+  } catch (error) {
+    console.error('Error sending message:', error);
+    showError('Network error while sending message');
+  } finally {
+    sendBtn.disabled = false;
+  }
+}
+
+function filterConversations(filter) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  const conversationItems = document.querySelectorAll('.conversation-item');
+  
+  conversationItems.forEach(conv => {
+    const status = conv.dataset.status || 'active';
+    
+    switch(filter) {
+      case 'all':
+        conv.style.display = status !== 'blocked' ? 'block' : 'none';
+        break;
+      case 'archived':
+        conv.style.display = status === 'archived' ? 'block' : 'none';
+        break;
+      case 'muted':
+        conv.style.display = status === 'muted' ? 'block' : 'none';
+        break;
+      case 'blocked':
+        conv.style.display = status === 'blocked' ? 'block' : 'none';
+        if (status === 'blocked') {
+          conv.classList.add('blocked-conversation');
+        }
+        break;
+    }
+  });
+  
+  updateConversationCounts();
+}
+
+function updateConversationCounts() {
+  const total = document.querySelectorAll('.conversation-item').length;
+  const visible = document.querySelectorAll('.conversation-item[style*="block"], .conversation-item:not([style*="none"])').length;
+  
+  document.getElementById('totalCount').textContent = visible;
+}
+
+function openNewChatModal() {
+  document.getElementById('newChatModal').classList.add('show');
+  document.getElementById('recipientEmail').value = '';
+  document.getElementById('initialMessage').value = '';
+}
+
+function closeNewChatModal() {
+  document.getElementById('newChatModal').classList.remove('show');
+}
+
+function openNewConversationForm() {
+  const email = prompt('Enter the email of the person you want to message:');
+  if (email && email.trim() !== '') {
+    startNewChat(email.trim());
+  }
+}
+
+async function startNewChatFromForm() {
+  const email = document.getElementById('recipientEmail').value.trim();
+  const message = document.getElementById('initialMessage').value.trim();
+  
+  if (!email) {
+    showError('Please enter an email address');
+    return;
+  }
+  
+  if (!message) {
+    showError('Please enter a message');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/conversations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        seller_email: email,
+        initial_message: message
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      closeNewChatModal();
+      showNotification('Message sent successfully!', 'success');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } else {
+      showError('Failed to start conversation: ' + data.error);
+    }
+  } catch (error) {
+    console.error('Error starting conversation:', error);
+    showError('Network error while starting conversation');
+  }
+}
+
+function showChatOptions() {
+  const activeConversation = document.querySelector('.conversation-item.active');
+  
+  if (!activeConversation) {
+    showNotification('Please select a conversation first', 'error');
+    return;
+  }
+  
+  const status = activeConversation.dataset.status || 'active';
+  const optionsList = document.querySelector('.options-list');
+  
+  let optionsHTML = '';
+  
+  switch(status) {
+    case 'blocked':
+      optionsHTML = `
+        <div class="option-item" onclick="executeOption('unblock')">
+          <i class="fas fa-user-check"></i>
+          <span>Unblock User</span>
+        </div>
+        <div class="option-item danger" onclick="executeOption('report')">
+          <i class="fas fa-flag"></i>
+          <span>Report User</span>
+        </div>
+      `;
+      break;
+      
+    case 'archived':
+      optionsHTML = `
+        <div class="option-item" onclick="executeOption('unarchive')">
+          <i class="fas fa-box-open"></i>
+          <span>Unarchive Conversation</span>
+        </div>
+        <div class="option-item" onclick="executeOption('mute')">
+          <i class="fas fa-bell-slash"></i>
+          <span>Mute Notifications</span>
+        </div>
+        <div class="option-item" onclick="executeOption('clear')">
+          <i class="fas fa-broom"></i>
+          <span>Clear Chat History</span>
+        </div>
+        <div class="option-item danger" onclick="executeOption('block')">
+          <i class="fas fa-user-slash"></i>
+          <span>Block User</span>
+        </div>
+        <div class="option-item danger" onclick="executeOption('report')">
+          <i class="fas fa-flag"></i>
+          <span>Report User</span>
+        </div>
+      `;
+      break;
+      
+    case 'muted':
+      optionsHTML = `
+        <div class="option-item" onclick="executeOption('unmute')">
+          <i class="fas fa-bell"></i>
+          <span>Unmute Notifications</span>
+        </div>
+        <div class="option-item" onclick="executeOption('archive')">
+          <i class="fas fa-archive"></i>
+          <span>Archive Conversation</span>
+        </div>
+        <div class="option-item" onclick="executeOption('clear')">
+          <i class="fas fa-broom"></i>
+          <span>Clear Chat History</span>
+        </div>
+        <div class="option-item danger" onclick="executeOption('block')">
+          <i class="fas fa-user-slash"></i>
+          <span>Block User</span>
+        </div>
+        <div class="option-item danger" onclick="executeOption('report')">
+          <i class="fas fa-flag"></i>
+          <span>Report User</span>
+        </div>
+      `;
+      break;
+      
+    default:
+      optionsHTML = `
+        <div class="option-item" onclick="executeOption('archive')">
+          <i class="fas fa-archive"></i>
+          <span>Archive Conversation</span>
+        </div>
+        <div class="option-item" onclick="executeOption('mute')">
+          <i class="fas fa-bell-slash"></i>
+          <span>Mute Notifications</span>
+        </div>
+        <div class="option-item" onclick="executeOption('clear')">
+          <i class="fas fa-broom"></i>
+          <span>Clear Chat History</span>
+        </div>
+        <div class="option-item danger" onclick="executeOption('block')">
+          <i class="fas fa-user-slash"></i>
+          <span>Block User</span>
+        </div>
+        <div class="option-item danger" onclick="executeOption('report')">
+          <i class="fas fa-flag"></i>
+          <span>Report User</span>
+        </div>
+      `;
+      break;
+  }
+  
+  optionsList.innerHTML = optionsHTML;
+  document.getElementById('chatOptionsModal').classList.add('show');
+}
+
+function closeChatOptionsModal() {
+  document.getElementById('chatOptionsModal').classList.remove('show');
+}
+
+async function startNewChat(userEmail) {
+  try {
+    const initialMessage = prompt(`Enter your message to ${userEmail}:`);
+    if (!initialMessage || initialMessage.trim() === '') {
+      return;
+    }
+
+    const response = await fetch('/api/conversations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        seller_email: userEmail,
+        initial_message: initialMessage.trim()
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      window.location.reload();
+    } else {
+      showError('Failed to start conversation: ' + data.error);
+    }
+  } catch (error) {
+    console.error('Error starting conversation:', error);
+    showError('Network error while starting conversation');
+  }
+  
+  closeNewChatModal();
+}
+
+function executeOption(action) {
+  closeChatOptionsModal();
+  
+  const activeConversation = document.querySelector('.conversation-item.active');
+  
+  if (!activeConversation) {
+    showNotification('Please select a conversation first', 'error');
+    return;
+  }
+  
+  switch(action) {
+    case 'archive':
+      activeConversation.dataset.status = 'archived';
+      activeConversation.style.display = 'none';
+      if (!activeConversation.querySelector('.archived-indicator')) {
+        activeConversation.innerHTML += '<span class="archived-indicator" style="font-size: 0.7rem; color: #666; margin-top: 0.3rem; display: block;">📁 Archived</span>';
+      }
+      showNotification('Conversation archived successfully!', 'success');
+      updateConversationCounts();
+      loadEmptyChat();
+      break;
+      
+    case 'unarchive':
+      activeConversation.dataset.status = 'active';
+      activeConversation.style.display = 'block';
+      const archivedIndicator = activeConversation.querySelector('.archived-indicator');
+      if (archivedIndicator) {
+        archivedIndicator.remove();
+      }
+      showNotification('Conversation unarchived successfully!', 'success');
+      updateConversationCounts();
+      break;
+      
+    case 'mute':
+      activeConversation.dataset.status = 'muted';
+      const nameSpan = activeConversation.querySelector('.conversation-name');
+      if (!nameSpan.querySelector('.muted-indicator')) {
+        nameSpan.innerHTML += ' <i class="fas fa-bell-slash muted-indicator" style="color: #666; font-size: 0.7rem; margin-left: 0.3rem;"></i>';
+      }
+      showNotification('Notifications muted for this chat.', 'info');
+      updateConversationCounts();
+      break;
+      
+    case 'unmute':
+      activeConversation.dataset.status = 'active';
+      const mutedIndicator = activeConversation.querySelector('.muted-indicator');
+      if (mutedIndicator) {
+        mutedIndicator.remove();
+      }
+      showNotification('Notifications unmuted for this chat.', 'success');
+      updateConversationCounts();
+      break;
+      
+    case 'clear':
+      const messagesArea = document.getElementById('messagesArea');
+      messagesArea.innerHTML = '<div style="text-align: center; color: #6c757d; padding: 2rem;">💨 Chat history cleared</div>';
+      showNotification('Chat history cleared.', 'success');
+      break;
+      
+    case 'block':
+      activeConversation.dataset.status = 'blocked';
+      activeConversation.classList.add('blocked-conversation');
+      activeConversation.style.display = 'none';
+      if (!activeConversation.querySelector('.blocked-indicator')) {
+        activeConversation.innerHTML += '<span class="blocked-indicator" style="font-size: 0.7rem; color: #dc3545; margin-top: 0.3rem; display: block;">🚫 Blocked</span>';
+      }
+      showNotification('User has been blocked.', 'error');
+      updateConversationCounts();
+      loadEmptyChat();
+      break;
+      
+    case 'unblock':
+      activeConversation.dataset.status = 'active';
+      activeConversation.classList.remove('blocked-conversation');
+      activeConversation.style.display = 'block';
+      const blockedIndicator = activeConversation.querySelector('.blocked-indicator');
+      if (blockedIndicator) {
+        blockedIndicator.remove();
+      }
+      showNotification('User has been unblocked.', 'success');
+      updateConversationCounts();
+      break;
+      
+    case 'report':
+      showNotification('User reported. Our team will review this.', 'error');
+      break;
+  }
+}
+
+function loadEmptyChat() {
+  document.getElementById('chatTitle').textContent = 'Select a conversation';
+  document.getElementById('chatSubtitle').textContent = 'Choose a conversation to start messaging';
+  document.getElementById('messageInputArea').style.display = 'none';
+  document.getElementById('chatOptionsBtn').style.display = 'none';
+  document.getElementById('viewProductBtn').style.display = 'none';
+  
+  const messagesArea = document.getElementById('messagesArea');
+  messagesArea.innerHTML = `
+    <div class="empty-chat">
+      <i class="fas fa-comments" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+      <h5>No conversation selected</h5>
+      <p>Choose a conversation from the sidebar to start messaging</p>
+    </div>
+  `;
+}
+
+window.startConversationFromListing = async function(listingId, sellerEmail, productTitle) {
+  try {
+    if (!currentUser) {
+      alert('Please log in to contact sellers');
+      window.location.href = '/login';
+      return;
+    }
+
+    const message = prompt(`Send a message about "${productTitle}":`);
+    if (!message || message.trim() === '') {
+      return;
+    }
+
+    const response = await fetch('/start-conversation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        listing_id: listingId,
+        message: message.trim()
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      window.location.href = `/messages?conversation=${data.conversation_id}`;
+    } else {
+      alert('Error: ' + data.error);
+    }
+  } catch (error) {
+    console.error('Error starting conversation:', error);
+    alert('Network error while contacting seller');
+  }
+};
+
+function viewProductDetails() {
+  const currentProduct = document.getElementById('chatSubtitle').textContent.replace('About: ', '');
+  
+  if (currentProduct === 'General conversation' || currentProduct === 'New Conversation') {
+    showNotification('No product associated with this conversation', 'info');
+    return;
+  }
+  
+  showNotification(`Opening ${currentProduct} details...`, 'success');
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showError(message) {
+  showNotification(message, 'error');
+}
+
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 300px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    font-weight: 500;
+  `;
+  notification.innerHTML = `
+    ${message}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (notification.parentElement) {
+      notification.classList.add('fade');
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 150);
+    }
+  }, 5000);
+  
+  const closeBtn = notification.querySelector('.btn-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      notification.remove();
+    });
+  }
+}
+
+console.log('Messages page fully loaded!');
+
+// ========== IMAGE HANDLING FUNCTIONS ==========
+
+function handleImageSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Check file size (max 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    showError('Image size must be less than 5MB');
+    return;
+  }
+  
+  // Check file type
+  if (!file.type.startsWith('image/')) {
+    showError('Please select a valid image file');
+    return;
+  }
+  
+  selectedImage = file;
+  
+  // Show preview
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const previewImage = document.getElementById('previewImage');
+    const imagePreview = document.getElementById('imagePreview');
+    
+    previewImage.src = e.target.result;
+    imagePreview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImagePreview() {
+  selectedImage = null;
+  document.getElementById('imagePreview').style.display = 'none';
+  document.getElementById('imageInput').value = '';
+}
+
+function openImageModal(imageUrl) {
+  // Create image modal
+  const modal = document.createElement('div');
+  modal.className = 'image-modal';
+  modal.innerHTML = `
+    <div class="image-modal-content">
+      <span class="image-modal-close" onclick="this.parentElement.parentElement.remove()">&times;</span>
+      <img src="${imageUrl}" alt="Full size image">
+    </div>
+  `;
+  
+  // Add styles
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+  `;
+  
+  const content = modal.querySelector('.image-modal-content');
+  content.style.cssText = `
+    position: relative;
+    max-width: 90%;
+    max-height: 90%;
+  `;
+  
+  const img = modal.querySelector('img');
+  img.style.cssText = `
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  `;
+  
+  const closeBtn = modal.querySelector('.image-modal-close');
+  closeBtn.style.cssText = `
+    position: absolute;
+    top: -30px;
+    right: 0;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.7);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Close on background click
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+  
+  // Close on escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      modal.remove();
+    }
+  }, { once: true });
+}
+</script>
