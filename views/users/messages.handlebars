@@ -191,8 +191,9 @@
 </div>
 
 <script>
-let conversations = {{{json conversations}}};
-let currentUser = {{{json user}}};
+// Use the properly serialized data from the server
+let conversations = {{{conversationsJson}}};
+let currentUser = {{{userJson}}};
 let currentConversationId = null;
 let selectedImage = null;
 
@@ -255,17 +256,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  document.getElementById('newChatModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-      closeNewChatModal();
-    }
-  });
+  const newChatModal = document.getElementById('newChatModal');
+  if (newChatModal) {
+    newChatModal.addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeNewChatModal();
+      }
+    });
+  }
 
-  document.getElementById('chatOptionsModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-      closeChatOptionsModal();
-    }
-  });
+  const chatOptionsModal = document.getElementById('chatOptionsModal');
+  if (chatOptionsModal) {
+    chatOptionsModal.addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeChatOptionsModal();
+      }
+    });
+  }
 });
 
 async function selectConversation(conversationId, otherUser, productTitle) {
@@ -466,9 +473,7 @@ function filterConversations(filter) {
 }
 
 function updateConversationCounts() {
-  const total = document.querySelectorAll('.conversation-item').length;
   const visible = document.querySelectorAll('.conversation-item[style*="block"], .conversation-item:not([style*="none"])').length;
-  
   document.getElementById('totalCount').textContent = visible;
 }
 
@@ -880,8 +885,6 @@ function showNotification(message, type = 'info') {
   }
 }
 
-console.log('Messages page fully loaded!');
-
 // ========== IMAGE HANDLING FUNCTIONS ==========
 
 function handleImageSelect(event) {
@@ -992,4 +995,6 @@ function openImageModal(imageUrl) {
     }
   }, { once: true });
 }
+
+console.log('Messages page fully loaded!');
 </script>

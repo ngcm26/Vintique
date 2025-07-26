@@ -1306,6 +1306,86 @@ app.get('/messages', requireAuth, async (req, res) => {
       };
     });
     
+    // Render the messages template with properly serialized data
+    res.render('users/messages', {
+      title: 'Messages - Vintique',
+      layout: 'user',
+      activePage: 'messages',
+      conversations: formattedConversations,
+      conversationsJson: JSON.stringify(formattedConversations),
+      user: req.session.user,
+      userJson: JSON.stringify(req.session.user)
+    });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.render('users/messages', {
+      title: 'Messages - Vintique',
+      layout: 'user',
+      activePage: 'messages',
+      conversations: [],
+      conversationsJson: JSON.stringify([]),
+      error: 'Error loading conversations',
+      user: req.session.user,
+      userJson: JSON.stringify(req.session.user || {})
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// API endpoint to get conversations (for AJAX requests)
+app.get('/api/conversations', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    
+    // Get conversations with proper joins
+    const [conversations] = await connection.execute(`
+      SELECT 
+        c.*,
+        buyer.email as buyer_email,
+        buyer_info.first_name as buyer_first_name,
+        buyer_info.last_name as buyer_last_name,
+        buyer_info.username as buyer_username,
+        seller.email as seller_email,
+        seller_info.first_name as seller_first_name,
+        seller_info.last_name as seller_last_name,
+        seller_info.username as seller_username,
+        l.title as listing_title,
+        l.price
+      FROM conversations c
+      LEFT JOIN users buyer ON c.buyer_id = buyer.user_id
+      LEFT JOIN user_information buyer_info ON c.buyer_id = buyer_info.user_id
+      LEFT JOIN users seller ON c.seller_id = seller.user_id  
+      LEFT JOIN user_information seller_info ON c.seller_id = seller_info.user_id
+      LEFT JOIN listings l ON c.listing_id = l.listing_id
+      WHERE (c.buyer_id = ? OR c.seller_id = ?)
+      ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+    `, [userId, userId]);
+    
+    const formattedConversations = conversations.map(conv => {
+      const isUserBuyer = conv.buyer_id === userId;
+      let otherUserName;
+      if (isUserBuyer) {
+        otherUserName = conv.seller_first_name && conv.seller_last_name 
+          ? `${conv.seller_first_name} ${conv.seller_last_name}`
+          : conv.seller_username || conv.seller_email || 'Unknown User';
+      } else {
+        otherUserName = conv.buyer_first_name && conv.buyer_last_name 
+          ? `${conv.buyer_first_name} ${conv.buyer_last_name}`
+          : conv.buyer_username || conv.buyer_email || 'Unknown User';
+      }
+      
+      return {
+        ...conv,
+        other_user_name: otherUserName,
+        is_user_buyer: isUserBuyer,
+        last_message_preview: 'Click to view messages',
+        unread_count: 0
+      };
+    });
+    
     res.json(formattedConversations);
   } catch (error) {
     console.error('Error fetching conversations:', error);
