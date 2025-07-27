@@ -1,3 +1,6 @@
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <div class="dashboard-container">
   <!-- Welcome Section -->
   <div class="welcome-section mb-4">
@@ -19,7 +22,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="col-md-3">
       <div class="stat-card">
         <div class="stat-icon">
@@ -32,7 +35,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="col-md-3">
       <div class="stat-card">
         <div class="stat-icon">
@@ -45,7 +48,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="col-md-3">
       <div class="stat-card">
         <div class="stat-icon">
@@ -96,27 +99,27 @@
           Recent Listings
         </h4>
         {{#if recentListings.length}}
-          <div class="activity-list">
-            {{#each recentListings}}
-              <div class="activity-item">
-                <div class="activity-content">
-                  <h6 class="activity-title">{{title}}</h6>
-                  <p class="activity-details">
-                    <span class="price">${{price}}</span> • 
-                    <span class="user">{{first_name}} {{last_name}}</span> • 
-                    <span class="date">{{formatDate created_at}}</span>
-                  </p>
-                  <span class="status-badge status-{{status}}">{{status}}</span>
-                </div>
-              </div>
-            {{/each}}
+        <div class="activity-list">
+          {{#each recentListings}}
+          <div class="activity-item">
+            <div class="activity-content">
+              <h6 class="activity-title">{{title}}</h6>
+              <p class="activity-details">
+                <span class="price">${{price}}</span> •
+                <span class="user">{{first_name}} {{last_name}}</span> •
+                <span class="date">{{formatDate created_at}}</span>
+              </p>
+              <span class="status-badge status-{{status}}">{{status}}</span>
+            </div>
           </div>
+          {{/each}}
+        </div>
         {{else}}
-          <p class="no-data">No recent listings</p>
+        <p class="no-data">No recent listings</p>
         {{/if}}
       </div>
     </div>
-    
+
     <div class="col-md-6">
       <div class="activity-card">
         <h4 class="section-title">
@@ -124,24 +127,292 @@
           Recent Users
         </h4>
         {{#if recentUsers.length}}
-          <div class="activity-list">
-            {{#each recentUsers}}
-              <div class="activity-item">
-                <div class="activity-content">
-                  <h6 class="activity-title">{{first_name}} {{last_name}}</h6>
-                  <p class="activity-details">
-                    <span class="email">{{email}}</span> • 
-                    <span class="username">{{username}}</span>
-                  </p>
-                  <span class="status-badge status-{{status}}">{{status}}</span>
-                </div>
-              </div>
-            {{/each}}
+        <div class="activity-list">
+          {{#each recentUsers}}
+          <div class="activity-item">
+            <div class="activity-content">
+              <h6 class="activity-title">{{first_name}} {{last_name}}</h6>
+              <p class="activity-details">
+                <span class="email">{{email}}</span> •
+                <span class="username">{{username}}</span>
+              </p>
+              <span class="status-badge status-{{status}}">{{status}}</span>
+            </div>
           </div>
+          {{/each}}
+        </div>
         {{else}}
-          <p class="no-data">No recent users</p>
+        <p class="no-data">No recent users</p>
         {{/if}}
       </div>
     </div>
+
+
+    <!-- Date Filter Bar -->
+    <div class="container">
+      <div
+        class="chart-filter-bar d-flex align-items-center justify-content-center gap-3 mb-4 px-4 py-3 mx-auto flex-wrap"
+        style="background: #ffffff; border-radius: 15px; max-width: 700px;">
+        <label for="startDate" class="form-label mb-0" style="font-weight: 600; color: #b08c14;">From</label>
+        <input type="date" id="startDate" class="form-control filter-date-input"
+          style="max-width: 150px; border-radius: 8px; font-weight:500;">
+        <label for="endDate" class="form-label mb-0" style="font-weight: 600; color: #b08c14;">to</label>
+        <input type="date" id="endDate" class="form-control filter-date-input"
+          style="max-width: 150px; border-radius: 8px; font-weight:500;">
+        <button class="btn px-4 fw-semibold" id="filterBtn"
+          style="background: linear-gradient(90deg, #FFD700, #FFA500); color: #333; font-weight: 700; border-radius: 8px; border: none;">
+          Filter
+        </button>
+      </div>
+    </div>
+
+
+
+    <!-- Chart Analytics Section -->
+    <div class="row mt-4">
+      <div class="col-md-6">
+        <div class="chart-container">
+          <button class="expand-btn" onclick="showModal(salesData, 'line')">Expand</button>
+          <div class="section-title">Sales Over Time</div>
+          <canvas id="salesChart"></canvas>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="chart-container">
+          <button class="expand-btn" onclick="showModal(reportData, 'bar')">Expand</button>
+          <div class="section-title">Top Reported Users</div>
+          <canvas id="reportChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Modal for Expanded View -->
+    <div class="modal fade" id="chartModal" tabindex="-1">
+      <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Expanded Chart View</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <canvas id="expandedChart" class="modal-chart w-100"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="reportBreakdownModal" tabindex="-1">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Report Breakdown</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="reportBreakdownBody">
+            <!-- Filled dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
+
+
+<script>
+  // --- Chart Data ---
+  const salesData = {
+    labels: {{{ salesLabels }}},
+  datasets: [{
+    label: 'Sales',
+    data: {{{ salesValues }}},
+    backgroundColor: 'rgba(255, 193, 7, 0.2)',
+    borderColor: '#f59e0b',
+    fill: true,
+    tension: 0.3
+    }]
+  };
+
+  const reportData = {
+    labels: {{{ reportLabels }}},
+  datasets: [{
+    label: 'Reports',
+    data: {{{ reportValues }}},
+    backgroundColor: '#ef4444'
+    }]
+  };
+
+  // --- Sales Over Time Chart ---
+  new Chart(document.getElementById('salesChart'), {
+    type: 'line',
+    data: salesData,
+    options: {
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: {
+            boxWidth: 18,
+            font: {
+              size: 15,
+              weight: 'bold'
+            }
+          }
+        },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            label: function (context) {
+              return `Sales: $${context.formattedValue}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          title: { display: true, text: 'Month', font: { size: 14 } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: "#f3f4f6" },
+          title: { display: true, text: 'Sales Volume ($)', font: { size: 14 } }
+        }
+      }
+    }
+  });
+
+  // --- Top Reported Users Chart ---
+  new Chart(document.getElementById('reportChart'), {
+    type: 'bar',
+    data: reportData,
+    options: {
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: {
+            font: {
+              size: 15,
+              weight: 'bold'
+            }
+          }
+        },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            label: function (context) {
+              return `Reports: ${context.formattedValue}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          title: { display: true, text: 'User', font: { size: 14 } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: "#f3f4f6" },
+          title: { display: true, text: 'Number of Reports', font: { size: 14 } }
+        }
+      },
+      onClick: function (event, elements) {
+        if (elements.length > 0) {
+          const index = elements[0].index;
+          const userEmail = reportData.labels[index];
+          fetchReportBreakdown(userEmail);
+        }
+      }
+    }
+  });
+
+  // --- Expand Chart Modal Logic ---
+  let modalChart;
+  function showModal(chartData, chartType) {
+    const modalEl = new bootstrap.Modal(document.getElementById('chartModal'));
+    if (modalChart) modalChart.destroy();
+    const ctx = document.getElementById('expandedChart');
+    modalChart = new Chart(ctx, {
+      type: chartType,
+      data: chartData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { font: { size: 18, weight: 'bold' } }
+          },
+          tooltip: {
+            enabled: true,
+            callbacks: {
+              label: function (context) {
+                if (chartType === 'line') {
+                  return `Sales: $${context.formattedValue}`;
+                } else if (chartType === 'bar') {
+                  return `Reports: ${context.formattedValue}`;
+                }
+                return context.formattedValue;
+              }
+            }
+          }
+        },
+        scales: chartType === 'line'
+          ? {
+            x: { title: { display: true, text: 'Month', font: { size: 16 } } },
+            y: { title: { display: true, text: 'Sales Volume ($)', font: { size: 16 } } }
+          }
+          : {
+            x: { title: { display: true, text: 'User', font: { size: 16 } } },
+            y: { title: { display: true, text: 'Number of Reports', font: { size: 16 } } }
+          }
+      }
+    });
+    // Wait until modal is fully shown, then resize the chart
+    document.getElementById('chartModal').addEventListener('shown.bs.modal', function handler() {
+      modalChart.resize();
+      document.getElementById('chartModal').removeEventListener('shown.bs.modal', handler);
+    });
+    modalEl.show();
+  }
+
+  // --- Fetch and Show Report Breakdown Modal ---
+  function fetchReportBreakdown(userEmail) {
+    fetch(`/staff/dashboard/report-details/${encodeURIComponent(userEmail)}`)
+      .then(res => res.json())
+      .then(data => {
+        showReportBreakdownModal(data, userEmail);
+      });
+  }
+
+  function showReportBreakdownModal(reports, userEmail) {
+    const body = document.getElementById('reportBreakdownBody');
+    if (!reports.length) {
+      body.innerHTML = `<div>No reports found for ${userEmail}.</div>`;
+    } else {
+      body.innerHTML = `
+        <h6 class="mb-3">Reports for <strong>${userEmail}</strong></h6>
+        <table class="table table-sm">
+          <thead>
+            <tr><th>Date</th><th>Reason</th><th>Details</th></tr>
+          </thead>
+          <tbody>
+            ${reports.map(r => `
+              <tr>
+                <td>${new Date(r.created_at).toLocaleString()}</td>
+                <td>${r.reason}</td>
+                <td>${r.details}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    const modal = new bootstrap.Modal(document.getElementById('reportBreakdownModal'));
+    modal.show();
+  }
+</script>

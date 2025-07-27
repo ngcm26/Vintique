@@ -857,20 +857,57 @@ app.get('/staff/dashboard', requireStaff, async (req, res) => {
       LIMIT 5
     `);
     
+    const [salesOverTime] = await connection.execute(`
+      SELECT 
+        MONTH(created_at) AS month,
+        SUM(price) AS total_sales
+      FROM listings
+      WHERE status = 'sold'
+      GROUP BY MONTH(created_at)
+      ORDER BY month
+    `);
+
+    const [topReportedUsers] = await connection.execute(`
+      SELECT 
+        ui.email,
+        COUNT(*) AS report_count
+      FROM reports r
+      JOIN users u ON r.reported_user_id = u.user_id
+      JOIN user_information ui ON u.user_id = ui.user_id
+      GROUP BY ui.email
+      ORDER BY report_count DESC
+      LIMIT 3
+    `);
+
+
     const stats = {
       users: userStats[0],
       listings: listingStats[0],
       qa: qaStats[0]
     };
     
-    res.render('staff/dashboard', { 
-      layout: 'staff', 
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const salesLabels = JSON.stringify(salesOverTime.map(row => monthNames[row.month - 1]));
+    const salesValues = JSON.stringify(salesOverTime.map(row => row.total_sales));
+
+
+    const reportLabels = topReportedUsers.map(row => `'${row.email}'`).join(', ');
+    const reportValues = topReportedUsers.map(row => row.report_count).join(', ');
+
+    res.render('staff/dashboard', {
+      layout: 'staff',
       activePage: 'dashboard',
       stats,
       recentListings,
       recentUsers,
-      user: req.session.user
+      user: req.session.user,
+      salesLabels: salesLabels,
+      salesValues: salesValues,
+      reportLabels: `[${reportLabels}]`,
+      reportValues: `[${reportValues}]`
     });
+
+
   } catch (error) {
     console.error('Dashboard error:', error);
     res.render('staff/dashboard', { 
@@ -879,6 +916,34 @@ app.get('/staff/dashboard', requireStaff, async (req, res) => {
       error: 'Error loading dashboard',
       user: req.session.user
     });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+
+app.get('/staff/dashboard/report-details/:email', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const email = req.params.email;
+
+    // Find the user's ID from email
+    const [user] = await connection.execute(
+      `SELECT user_id FROM user_information WHERE email = ? LIMIT 1`, [email]
+    );
+    if (!user.length) return res.json([]); // No user found
+
+    const userId = user[0].user_id;
+
+    // Now get all reports for this user
+    const [reports] = await connection.execute(
+      `SELECT created_at, reason, details FROM reports WHERE reported_user_id = ? ORDER BY created_at DESC`,
+      [userId]
+    );
+    res.json(reports);
+  } catch (error) {
+    res.json([]);
   } finally {
     if (connection) await connection.end();
   }
