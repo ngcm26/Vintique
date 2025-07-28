@@ -232,3 +232,78 @@ body {
     margin-bottom: 20px;
   }
 }
+
+
+.chart-container {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.08);
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  margin-bottom: 2rem;
+  min-height: 360px;
+  position: relative;
+  transition: box-shadow 0.2s;
+}
+.chart-container:hover {
+  box-shadow: 0 8px 40px 0 rgba(0,0,0,0.15);
+}
+.section-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.expand-btn {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  background: #fde68a;
+  color: #7c5705;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.93rem;
+  font-weight: 500;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.expand-btn:hover {
+  background: #fbbf24;
+  color: #513400;
+}
+canvas {
+  /* Give all chart canvases a nice height by default */
+  min-height: 220px;
+}
+
+.modal-chart {
+  width: 100% !important;
+  min-height: 380px;
+  height: 56vh !important;
+  max-height: 78vh !important;
+}
+
+.chart-filter-bar {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgb(255, 255, 255);
+  margin-bottom: 24px;
+  margin-top: 40px;
+  /* Add: */
+  max-width: 100%;
+}
+
+
+.filter-date-input {
+  background: #fffde6;
+  border: 1px solid #fcd34d;
+  color: #3b3b3b;
+  font-weight: 500;
+}
+#filterBtn {
+  transition: background 0.2s, color 0.2s;
+}
+#filterBtn:hover {
+  background: #f59e0b;
+  color: #fff;
+}
