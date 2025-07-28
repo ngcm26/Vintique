@@ -99,6 +99,9 @@ app.engine('handlebars', engine({
     not: function(a) { 
       return !a; 
     },
+    add: function(a, b) {
+      return a + b;
+    },
     formatDate: function(date) {
       return new Date(date).toLocaleDateString();
     },
@@ -106,11 +109,25 @@ app.engine('handlebars', engine({
       const now = new Date();
       const messageDate = new Date(date);
       const diffInMinutes = Math.floor((now - messageDate) / (1000 * 60));
+      const diffInDays = Math.floor(diffInMinutes / 1440);
       
       if (diffInMinutes < 1) return 'Just now';
       if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
       if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
-      return `${Math.floor(diffInMinutes / 1440)} days ago`;
+      if (diffInDays < 7) return `${diffInDays} days ago`;
+      if (diffInDays < 30) return `${diffInDays} days ago`;
+      
+      // Calculate months and years
+      const diffInMonths = Math.floor(diffInDays / 30);
+      const diffInYears = Math.floor(diffInDays / 365);
+      
+      if (diffInYears >= 1) {
+        return diffInYears === 1 ? '1 year ago' : `${diffInYears} years ago`;
+      } else if (diffInMonths >= 1) {
+        return diffInMonths === 1 ? '1 month ago' : `${diffInMonths} months ago`;
+      } else {
+        return messageDate.toLocaleDateString();
+      }
     },
     json: function(context) {
       return JSON.stringify(context);
@@ -218,17 +235,18 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 const mysql_callback = require('mysql2');
 const connection = mysql_callback.createConnection({
   host: 'localhost',
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '261104',
+  database: process.env.DB_NAME || 'vintiquedb'
 });
 
 connection.connect(err => {
   if (err) {
     console.error('Error connecting to MySQL:', err);
-    process.exit(1);
+    console.log('Continuing without database connection...');
+  } else {
+    console.log('Connected to MySQL!');
   }
-  console.log('Connected to MySQL!');
 });
 
 // ========== BASIC ROUTES ==========
@@ -257,6 +275,32 @@ app.get('/debug', (req, res) => {
     user: req.session.user,
     loggedIn: !!req.session.user,
     sessionId: req.sessionID
+  });
+});
+
+// Test product detail route with mock data
+app.get('/test-product/:id', (req, res) => {
+  const mockListing = {
+    listing_id: req.params.id,
+    title: 'Test Product',
+    description: 'This is a test product for debugging purposes.',
+    price: 99.99,
+    category: 'clothing',
+    brand: 'Test Brand',
+    size: 'M',
+    item_condition: 'excellent',
+    username: 'testuser',
+    is_verified: true,
+    image_url: '/assets/logo.png',
+    additional_images: [],
+    created_at: new Date()
+  };
+  
+  res.render('users/product_detail', { 
+    layout: 'user', 
+    activePage: 'shop', 
+    listing: mockListing,
+    user: req.session.user 
   });
 });
 
@@ -621,12 +665,12 @@ app.get('/marketplace', (req, res) => {
           (
             SELECT image_url FROM listing_images img2
             WHERE img2.listing_id = l.listing_id
-            ORDER BY img2.image_id DESC
+            ORDER BY img2.is_main DESC, img2.image_id ASC
             LIMIT 1
           ) as image_url,
-          ui.username
+          COALESCE(u.email, 'Unknown') as username
     FROM listings l
-    LEFT JOIN user_information ui ON l.user_id = ui.user_id
+    LEFT JOIN users u ON l.user_id = u.user_id
     WHERE l.status = 'active'`;
   const params = [];
   if (req.session.user && req.session.user.role === 'user') {
@@ -636,7 +680,85 @@ app.get('/marketplace', (req, res) => {
   sql += '\n    ORDER BY l.created_at DESC';
   connection.query(sql, params, (err, listings) => {
     if (err) return res.status(500).send('Database error');
+    
+    // Handle cases where no image is found
+    listings.forEach(listing => {
+      if (!listing.image_url || listing.image_url === 'null') {
+        listing.image_url = '/assets/logo.png';
+      } else {
+        // Ensure the image URL has the correct path
+        listing.image_url = listing.image_url.startsWith('/uploads/') ? listing.image_url : `/uploads/${listing.image_url}`;
+      }
+    });
+    
     res.render('users/marketplace', { layout: 'user', activePage: 'shop', listings });
+  });
+});
+
+// Product detail page
+app.get('/listing/:id', (req, res) => {
+  const listingId = req.params.id;
+  
+  const sql = `
+    SELECT l.*, 
+           COALESCE(u.email, 'Unknown') as username,
+           COALESCE(GROUP_CONCAT(li.image_url ORDER BY li.is_main DESC, li.image_id ASC), '') as image_urls
+    FROM listings l
+    LEFT JOIN users u ON l.user_id = u.user_id
+    LEFT JOIN listing_images li ON l.listing_id = li.listing_id
+    WHERE l.listing_id = ? AND l.status = 'active'
+    GROUP BY l.listing_id`;
+    
+  connection.query(sql, [listingId], (err, results) => {
+    if (err) {
+      console.error('Database error in product detail:', err);
+      return res.status(500).render('users/product_detail', { 
+        layout: 'user', 
+        activePage: 'shop', 
+        error: 'Database connection error. Please try again later.',
+        user: req.session.user 
+      });
+    }
+    if (results.length === 0) {
+      return res.status(404).render('users/product_detail', { 
+        layout: 'user', 
+        activePage: 'shop', 
+        error: 'Product not found.',
+        user: req.session.user 
+      });
+    }
+    
+    const listing = results[0];
+    
+    // Parse image URLs
+    if (listing.image_urls) {
+      const imageUrls = listing.image_urls.split(',').map(url => {
+        // Clean up the URL and ensure it has the correct path
+        const cleanUrl = url.trim();
+        if (cleanUrl && cleanUrl !== 'null') {
+          return cleanUrl.startsWith('/uploads/') ? cleanUrl : `/uploads/${cleanUrl}`;
+        }
+        return null;
+      }).filter(url => url !== null);
+      
+      if (imageUrls.length > 0) {
+        listing.image_url = imageUrls[0]; // Main image
+        listing.additional_images = imageUrls.slice(1); // Additional images
+      } else {
+        listing.image_url = '/assets/logo.png'; // Default image
+        listing.additional_images = [];
+      }
+    } else {
+      listing.image_url = '/assets/logo.png'; // Default image
+      listing.additional_images = [];
+    }
+    
+    res.render('users/product_detail', { 
+      layout: 'user', 
+      activePage: 'shop', 
+      listing,
+      user: req.session.user 
+    });
   });
 });
 
