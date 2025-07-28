@@ -1,0 +1,564 @@
+<!-- Shopping Cart Page -->
+<link rel="stylesheet" href="/assets/css/users/cart.css">
+
+  <!-- Stripe Script -->
+  <script src="https://js.stripe.com/v3/"></script>
+  
+  <div class="cart-container">
+  <!-- Cart Content -->
+  <div class="cart-content">
+    <!-- Cart Items Section -->
+    <div class="cart-items-section">
+      <div class="cart-items-header">
+        <h3>Cart Items (<span id="cartItemCount">0</span>)</h3>
+        <button class="btn-clear-cart" onclick="clearCart()" id="clearCartBtn" style="display: none;">
+          <i class="fas fa-trash"></i> Clear Cart
+        </button>
+      </div>
+      
+      <div class="cart-items" id="cartItems">
+        <!-- Cart items will be dynamically loaded here -->
+        <div class="empty-cart" id="emptyCart">
+          <i class="fas fa-shopping-bag"></i>
+          <h4>Your cart is empty</h4>
+          <p>Add some items to get started!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Side Section -->
+    <div class="right-side-section">
+      <!-- Address Selection Section -->
+      <div class="address-selection-section" id="addressSelectionSection" style="display: none;">
+        <div class="address-selection-header">
+          <h3>Shipping Address</h3>
+          <a href="/account-settings" class="btn-manage-addresses">
+            <i class="fas fa-cog"></i> Manage Addresses
+          </a>
+        </div>
+        
+        <!-- Default Address Display -->
+        <div class="default-address-display" id="defaultAddressDisplay">
+          <!-- Default address will be displayed here -->
+        </div>
+        
+        <!-- Choose Other Address Button -->
+        <div class="choose-other-address" id="chooseOtherAddressBtn" style="display: none;">
+          <button class="btn-choose-other" onclick="openAddressModal()">
+            <i class="fas fa-map-marker-alt"></i> Choose Other Address
+          </button>
+        </div>
+        
+        <div class="no-addresses" id="noAddresses" style="display: none;">
+          <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>No addresses found!</strong>
+            <p>Please add a shipping address in your account settings before proceeding with checkout.</p>
+            <a href="/account-settings" class="btn btn-primary">
+              <i class="fas fa-plus"></i> Add Address
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Address Selection Modal -->
+      <div class="modal fade" id="addressModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Choose Shipping Address</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="address-options-modal" id="addressOptionsModal">
+                <!-- Address options will be dynamically loaded here -->
+              </div>
+              
+              <!-- Add Address Section -->
+              <div class="add-address-section" id="addAddressSection" style="display: none;">
+                <hr class="modal-divider">
+                <div class="text-center">
+                  <p class="text-muted mb-3">Need to add a new address?</p>
+                  <a href="/account-settings" class="btn btn-outline-primary">
+                    <i class="fas fa-plus"></i> Add New Address
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary" id="confirmAddressBtn" onclick="confirmAddressSelection()">
+                Use Selected Address
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cart Summary Section -->
+      <div class="cart-summary-section">
+        <div class="cart-summary">
+          <h3>Order Summary</h3>
+          
+          <div class="summary-item">
+            <span>Subtotal</span>
+            <span id="subtotal">$0.00</span>
+          </div>
+          
+          <div class="summary-item">
+            <span>Shipping</span>
+            <span id="shipping">$0.00</span>
+          </div>
+          
+          <div class="summary-item">
+            <span>Tax</span>
+            <span id="tax">$0.00</span>
+          </div>
+          
+          <hr class="summary-divider">
+          
+          <div class="summary-item total">
+            <span>Total</span>
+            <span id="total">$0.00</span>
+          </div>
+          
+          <div class="cart-actions">
+            <button class="btn-checkout" onclick="proceedToCheckout()" id="checkoutBtn" disabled>
+              <i class="fas fa-credit-card"></i> Proceed to Checkout
+            </button>
+            <a href="/marketplace" class="btn-continue-shopping">
+              <i class="fas fa-arrow-left"></i> Continue Shopping
+            </a>
+          </div>
+          
+          <div class="cart-benefits">
+            <div class="benefit-item">
+              <i class="fas fa-shipping-fast"></i>
+              <span>Free shipping on orders over $50</span>
+            </div>
+            <div class="benefit-item">
+              <i class="fas fa-undo"></i>
+              <span>30-day return policy</span>
+            </div>
+            <div class="benefit-item">
+              <i class="fas fa-shield-alt"></i>
+              <span>Secure checkout</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Cart functionality
+let cartItems = [];
+let userAddresses = [];
+let selectedAddressId = null;
+
+// Load cart items from database
+async function loadCartItems() {
+  try {
+    const response = await fetch('/api/cart');
+    if (response.ok) {
+      const data = await response.json();
+      cartItems = data.items || [];
+      displayCartItems();
+      updateCartSummary();
+      
+      // Load addresses if cart has items
+      if (cartItems.length > 0) {
+        await loadUserAddresses();
+      }
+    } else {
+      console.error('Error loading cart:', response.statusText);
+      cartItems = [];
+    }
+  } catch (error) {
+    console.error('Error loading cart:', error);
+    cartItems = [];
+  }
+}
+
+// Load user addresses
+async function loadUserAddresses() {
+  try {
+    const response = await fetch('/api/user/addresses');
+    if (response.ok) {
+      const data = await response.json();
+      userAddresses = data.addresses || [];
+      displayAddressOptions();
+    } else {
+      console.error('Error loading addresses:', response.statusText);
+      userAddresses = [];
+    }
+  } catch (error) {
+    console.error('Error loading addresses:', error);
+    userAddresses = [];
+  }
+}
+
+// Display address options
+function displayAddressOptions() {
+  const addressSection = document.getElementById('addressSelectionSection');
+  const defaultAddressDisplay = document.getElementById('defaultAddressDisplay');
+  const chooseOtherAddressBtn = document.getElementById('chooseOtherAddressBtn');
+  const noAddresses = document.getElementById('noAddresses');
+  
+  if (userAddresses.length === 0) {
+    addressSection.style.display = 'block';
+    defaultAddressDisplay.style.display = 'none';
+    chooseOtherAddressBtn.style.display = 'none';
+    noAddresses.style.display = 'block';
+    return;
+  }
+  
+  addressSection.style.display = 'block';
+  noAddresses.style.display = 'none';
+  
+  // Find default address
+  const defaultAddress = userAddresses.find(addr => addr.isDefault) || userAddresses[0];
+  const defaultIndex = userAddresses.indexOf(defaultAddress);
+  
+  // Display default address
+  displayDefaultAddress(defaultAddress, defaultIndex);
+  
+  // Show "Choose Other Address" button if there are multiple addresses
+  if (userAddresses.length > 1) {
+    chooseOtherAddressBtn.style.display = 'block';
+  } else {
+    chooseOtherAddressBtn.style.display = 'none';
+  }
+  
+  // Set selected address to default
+  selectedAddressId = defaultIndex;
+  updateCheckoutButton();
+}
+
+// Display default address
+function displayDefaultAddress(address, index) {
+  const defaultAddressDisplay = document.getElementById('defaultAddressDisplay');
+  
+  const addressHTML = `
+    <div class="default-address-card">
+      <div class="address-content">
+        <div class="address-header">
+          <strong>${address.name || 'Default Address'}</strong>
+          <span class="default-badge">Default</span>
+        </div>
+        <div class="address-details">
+          <div>${address.street || ''}</div>
+          <div>${address.city || ''}${address.state ? ', ' + address.state : ''}${address.postal_code ? ' ' + address.postal_code : ''}</div>
+          <div>${address.country || ''}</div>
+          ${address.phone ? `<div>Phone: ${address.phone}</div>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  defaultAddressDisplay.innerHTML = addressHTML;
+  defaultAddressDisplay.style.display = 'block';
+}
+
+// Open address selection modal
+function openAddressModal() {
+  const modal = new bootstrap.Modal(document.getElementById('addressModal'));
+  populateAddressModal();
+  modal.show();
+}
+
+// Populate address modal
+function populateAddressModal() {
+  const addressOptionsModal = document.getElementById('addressOptionsModal');
+  const addAddressSection = document.getElementById('addAddressSection');
+  
+  if (userAddresses.length === 0) {
+    addressOptionsModal.innerHTML = `
+      <div class="text-center py-4">
+        <i class="fas fa-map-marker-alt text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-3">No addresses found</h5>
+        <p class="text-muted">You need to add at least one address to continue.</p>
+      </div>
+    `;
+    addAddressSection.style.display = 'block';
+    return;
+  }
+  
+  const addressesHTML = userAddresses.map((address, index) => {
+    const isDefault = address.isDefault;
+    const addressId = `modal_address_${index}`;
+    
+    return `
+      <div class="address-option-modal">
+        <input type="radio" name="modalSelectedAddress" id="${addressId}" value="${index}" 
+               ${isDefault ? 'checked' : ''} onchange="selectModalAddress(${index})">
+        <label for="${addressId}" class="address-label-modal">
+          <div class="address-content-modal">
+            <div class="address-header-modal">
+              <strong>${address.name || 'Address'}</strong>
+              ${isDefault ? '<span class="default-badge-modal">Default</span>' : ''}
+            </div>
+            <div class="address-details-modal">
+              <div>${address.street || ''}</div>
+              <div>${address.city || ''}${address.state ? ', ' + address.state : ''}${address.postal_code ? ' ' + address.postal_code : ''}</div>
+              <div>${address.country || ''}</div>
+              ${address.phone ? `<div>Phone: ${address.phone}</div>` : ''}
+            </div>
+          </div>
+        </label>
+      </div>
+    `;
+  }).join('');
+  
+  addressOptionsModal.innerHTML = addressesHTML;
+  
+  // Show "Add Address" section if user has less than 3 addresses
+  if (userAddresses.length < 3) {
+    addAddressSection.style.display = 'block';
+  } else {
+    addAddressSection.style.display = 'none';
+  }
+}
+
+// Select address in modal
+function selectModalAddress(index) {
+  // Store the selected index for confirmation
+  window.modalSelectedAddressIndex = index;
+}
+
+// Confirm address selection from modal
+function confirmAddressSelection() {
+  if (window.modalSelectedAddressIndex !== undefined) {
+    const selectedAddress = userAddresses[window.modalSelectedAddressIndex];
+    selectedAddressId = window.modalSelectedAddressIndex;
+    
+    // Update the default address display
+    displayDefaultAddress(selectedAddress, selectedAddressId);
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('addressModal'));
+    modal.hide();
+    
+    // Update checkout button
+    updateCheckoutButton();
+  }
+}
+
+// Select address (legacy function - kept for compatibility)
+function selectAddress(index) {
+  selectedAddressId = index;
+  updateCheckoutButton();
+}
+
+// Update checkout button state
+function updateCheckoutButton() {
+  const checkoutBtn = document.getElementById('checkoutBtn');
+  const hasItems = cartItems.length > 0;
+  const hasAddress = selectedAddressId !== null && userAddresses.length > 0;
+  
+  checkoutBtn.disabled = !hasItems || !hasAddress;
+}
+
+// Display cart items
+function displayCartItems() {
+  const cartItemsContainer = document.getElementById('cartItems');
+  const clearCartBtn = document.getElementById('clearCartBtn');
+  const checkoutBtn = document.getElementById('checkoutBtn');
+  const addressSection = document.getElementById('addressSelectionSection');
+  
+  if (cartItems.length === 0) {
+    cartItemsContainer.innerHTML = `
+      <div class="empty-cart" id="emptyCart">
+        <i class="fas fa-shopping-bag"></i>
+        <h4>Your cart is empty</h4>
+        <p>Add some items to get started!</p>
+      </div>
+    `;
+    clearCartBtn.style.display = 'none';
+    checkoutBtn.disabled = true;
+    addressSection.style.display = 'none';
+    return;
+  }
+  
+  clearCartBtn.style.display = 'block';
+  addressSection.style.display = 'block';
+  
+  const itemsHTML = cartItems.map((item, index) => `
+    <div class="cart-item" data-cart-id="${item.cart_id}" data-index="${index}">
+      <div class="item-image">
+        <img src="${item.image_url || '/assets/logo.png'}" alt="${item.title}">
+      </div>
+      
+      <div class="item-details">
+        <h4 class="item-title">${item.title}</h4>
+        <p class="item-seller">@${item.seller_username}</p>
+        <p class="item-condition">${item.item_condition}</p>
+        <div class="item-price">$${item.price}</div>
+      </div>
+      
+      <div class="item-total">
+        $${parseFloat(item.price).toFixed(2)}
+      </div>
+      
+      <div class="item-actions">
+        <button class="btn-remove-item" onclick="removeItem(${item.cart_id})" title="Remove item">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+  
+  cartItemsContainer.innerHTML = itemsHTML;
+  updateCartItemCount();
+  updateCheckoutButton();
+}
+
+
+
+// Remove item
+async function removeItem(cartId) {
+  if (confirm('Are you sure you want to remove this item from your cart?')) {
+    try {
+      const response = await fetch(`/api/cart/${cartId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        await loadCartItems(); // Reload cart items
+      } else {
+        const error = await response.json();
+        alert('Error removing item: ' + error.error);
+      }
+    } catch (error) {
+      console.error('Error removing item:', error);
+      alert('Error removing item. Please try again.');
+    }
+  }
+}
+
+// Clear cart
+async function clearCart() {
+  if (confirm('Are you sure you want to clear your entire cart?')) {
+    try {
+      const response = await fetch('/api/cart', {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        await loadCartItems(); // Reload cart items
+      } else {
+        const error = await response.json();
+        alert('Error clearing cart: ' + error.error);
+      }
+    } catch (error) {
+      console.error('Error clearing cart:', error);
+      alert('Error clearing cart. Please try again.');
+    }
+  }
+}
+
+// Update cart item count
+function updateCartItemCount() {
+  const count = cartItems.length;
+  document.getElementById('cartItemCount').textContent = count;
+  // Also update the navigation badge
+  if (window.updateCartBadge) {
+    window.updateCartBadge();
+  }
+}
+
+// Update cart summary
+function updateCartSummary() {
+  const subtotal = cartItems.reduce((total, item) => {
+    return total + parseFloat(item.price);
+  }, 0);
+  
+  const shipping = subtotal >= 50 ? 0 : 5.99;
+  const tax = subtotal * 0.08; // 8% tax
+  const total = subtotal + shipping + tax;
+  
+  document.getElementById('subtotal').textContent = `$${subtotal.toFixed(2)}`;
+  document.getElementById('shipping').textContent = shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`;
+  document.getElementById('tax').textContent = `$${tax.toFixed(2)}`;
+  document.getElementById('total').textContent = `$${total.toFixed(2)}`;
+}
+
+// Proceed to checkout
+async function proceedToCheckout() {
+  if (cartItems.length === 0) {
+    alert('Your cart is empty!');
+    return;
+  }
+  
+  if (selectedAddressId === null || userAddresses.length === 0) {
+    alert('Please select a shipping address!');
+    return;
+  }
+  
+  const selectedAddress = userAddresses[selectedAddressId];
+  
+  try {
+    // Create order in database with address information
+    const response = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        shipping_address: selectedAddress
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // STRIPE INTEGRATION - Create payment session
+      const paymentResponse = await fetch('/api/stripe/create-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          order_id: data.order_id,
+          amount: data.total
+        })
+      });
+      
+      if (paymentResponse.ok) {
+        const paymentData = await paymentResponse.json();
+        
+        // Redirect to Stripe Checkout
+        const stripe = Stripe(paymentData.publishableKey);
+        const { error } = await stripe.redirectToCheckout({
+          sessionId: paymentData.sessionId
+        });
+        
+        if (error) {
+          console.error('Stripe error:', error);
+          alert('Payment error: ' + error.message);
+        }
+      } else {
+        const paymentError = await paymentResponse.json();
+        if (paymentResponse.status === 503) {
+          alert('Payment processing is currently unavailable. Please contact support.');
+        } else {
+          alert('Error setting up payment: ' + paymentError.error);
+        }
+      }
+      
+    } else {
+      const error = await response.json();
+      alert('Error creating order: ' + error.error);
+    }
+  } catch (error) {
+    console.error('Error during checkout:', error);
+    alert('Error during checkout. Please try again.');
+  }
+}
+
+// Initialize cart on page load
+document.addEventListener('DOMContentLoaded', function() {
+  loadCartItems();
+});
+</script>

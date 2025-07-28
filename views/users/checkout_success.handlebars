@@ -1,0 +1,301 @@
+<!-- Checkout Result Page -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/users/cart.css">
+
+<style>
+* {
+  font-family: 'DM Sans', sans-serif !important;
+}
+</style>
+
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card shadow-lg border-0" style="border-radius: 20px;">
+        <div class="card-body text-center p-5">
+          <!-- Dynamic Icon -->
+          <div class="mb-4" id="resultIcon">
+            <i class="fas fa-spinner fa-spin" style="font-size: 4rem; color: #007bff;"></i>
+          </div>
+          
+          <h2 class="card-title mb-3" id="resultTitle">Processing Payment...</h2>
+          <p class="text-muted mb-4" id="resultMessage">Please wait while we verify your payment.</p>
+          
+          <!-- Order Details -->
+          <div class="alert alert-info" role="alert" id="orderDetails">
+            <h5 class="alert-heading" id="orderTitle">Order Details</h5>
+            <p class="mb-2">Order ID: <strong id="orderIdDisplay">Loading...</strong></p>
+            <p class="mb-0" id="paymentStatus">Verifying payment status...</p>
+          </div>
+          
+          <!-- Next Steps -->
+          <div class="mt-4" id="nextSteps" style="display: none;">
+            <h5 id="nextStepsTitle">What's Next?</h5>
+            <div class="row text-start mt-3" id="nextStepsContent">
+              <!-- Content will be dynamically populated -->
+            </div>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div class="mt-5" id="actionButtons">
+            <a href="/marketplace" class="btn btn-primary me-3">
+              <i class="fas fa-shopping-bag"></i> Continue Shopping
+            </a>
+            <a href="/account-settings" class="btn btn-outline-secondary">
+              <i class="fas fa-user"></i> View Orders
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Manual payment verification
+async function verifyPayment() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const sessionId = urlParams.get('session_id');
+  const orderId = urlParams.get('order_id');
+  const cancelled = urlParams.get('cancelled');
+  
+  // Display order ID immediately
+  if (orderId) {
+    document.getElementById('orderIdDisplay').textContent = orderId;
+  }
+  
+  if (!sessionId || !orderId) {
+    showError('Error: Missing session or order information.');
+    return;
+  }
+  
+  // If user cancelled, show cancellation message
+  if (cancelled === 'true') {
+    showCancelled();
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/stripe/verify-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId: sessionId,
+        orderId: orderId
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showSuccess();
+    } else {
+      showFailure(data.payment_status);
+    }
+    
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    showError('Error verifying payment. Please contact support.');
+  }
+}
+
+function showSuccess() {
+  const resultIcon = document.getElementById('resultIcon');
+  resultIcon.innerHTML = '';
+
+  const icon = document.createElement('i');
+  icon.className = 'fas fa-check-circle';
+  icon.style.fontSize = '4rem';
+  icon.style.color = '#28a745';
+  resultIcon.appendChild(icon);
+
+  document.getElementById('resultTitle').textContent = 'Payment Successful!';
+  document.getElementById('resultMessage').textContent = 'Payment successful! You will receive an email confirmation shortly. Thank you for your purchase!';
+  document.getElementById('orderTitle').textContent = 'Order Confirmation';
+  document.getElementById('paymentStatus').textContent = 'Payment verified successfully! Items have been marked as sold and will no longer appear in the marketplace. You will receive an email confirmation shortly.';
+  document.getElementById('orderDetails').className = 'alert alert-success';
+
+
+
+  document.getElementById('actionButtons').innerHTML = `
+    <a href="/marketplace" class="btn me-3" style="background: #FFD700; color: #333; border: none; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; height: 48px; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);">
+      <i class="fas fa-shopping-bag"></i> Continue Shopping
+    </a>
+    <a href="/account-settings" class="btn" style="background: transparent; color: #6c757d; border: 2px solid #6c757d; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; height: 48px;">
+      <i class="fas fa-user"></i> View Orders
+    </a>
+  `;
+}
+
+
+function showFailure(paymentStatus) {
+  // Update icon
+  document.getElementById('resultIcon').innerHTML = '<i class="fas fa-times-circle" style="font-size: 4rem; color: #dc3545;"></i>';
+  
+  // Fallback: If Font Awesome fails, use Unicode
+  setTimeout(() => {
+    const icon = document.querySelector('#resultIcon i');
+    if (icon && !icon.textContent && !icon.innerHTML.includes('\\')) {
+      icon.innerHTML = '✗';
+    }
+  }, 100);
+  
+  // Update title and message
+  document.getElementById('resultTitle').textContent = 'Payment Failed';
+  document.getElementById('resultMessage').textContent = 'We couldn\'t process your payment. Please try again or contact support.';
+  
+  // Update order details
+  document.getElementById('orderTitle').textContent = 'Payment Status';
+  document.getElementById('paymentStatus').textContent = `Payment status: ${paymentStatus}. Please contact support if you believe this is an error.`;
+  document.getElementById('orderDetails').className = 'alert alert-warning';
+  
+  // Show next steps
+  document.getElementById('nextSteps').style.display = 'block';
+  document.getElementById('nextStepsTitle').textContent = 'What Can You Do?';
+  document.getElementById('nextStepsContent').innerHTML = `
+    <div class="col-md-6">
+      <div class="d-flex align-items-center mb-3">
+        <i class="fas fa-redo me-3 text-warning"></i>
+        <div>
+          <strong>Try Again</strong><br>
+          <small class="text-muted">Go back to cart and retry payment</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="d-flex align-items-center mb-3">
+        <i class="fas fa-headset me-3 text-info"></i>
+        <div>
+          <strong>Contact Support</strong><br>
+          <small class="text-muted">Get help with payment issues</small>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Update action buttons for failure
+  document.getElementById('actionButtons').innerHTML = `
+    <a href="/cart" class="btn me-3" style="background: #FFD700; color: #333; border: none; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; height: 48px; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);">
+      <i class="fas fa-redo"></i> Try Again
+    </a>
+    <a href="/marketplace" class="btn" style="background: transparent; color: #6c757d; border: 2px solid #6c757d; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; height: 48px;">
+      <i class="fas fa-shopping-bag"></i> Continue Shopping
+    </a>
+  `;
+}
+
+function showCancelled() {
+  // Update icon
+  document.getElementById('resultIcon').innerHTML = '<i class="fas fa-times-circle" style="font-size: 4rem; color: #6c757d;"></i>';
+  
+ 
+  
+  // Update title and message
+  document.getElementById('resultTitle').textContent = 'Payment Cancelled';
+  document.getElementById('resultMessage').textContent = 'You cancelled the payment process. Your order is still pending.';
+  
+  // Update order details
+  document.getElementById('orderTitle').textContent = 'Order Status';
+  document.getElementById('paymentStatus').textContent = 'Payment was cancelled. You can try again or contact support.';
+  document.getElementById('orderDetails').className = 'alert alert-secondary';
+  
+  // Show next steps
+  document.getElementById('nextSteps').style.display = 'block';
+  document.getElementById('nextStepsTitle').textContent = 'What Can You Do?';
+  document.getElementById('nextStepsContent').innerHTML = `
+    <div class="col-md-6">
+      <div class="d-flex align-items-center mb-3">
+        <i class="fas fa-redo me-3 text-primary"></i>
+        <div>
+          <strong>Try Again</strong><br>
+          <small class="text-muted">Go back to cart and retry payment</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="d-flex align-items-center mb-3">
+        <i class="fas fa-shopping-bag me-3 text-info"></i>
+        <div>
+          <strong>Continue Shopping</strong><br>
+          <small class="text-muted">Browse more items in our marketplace</small>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Update action buttons for cancellation
+  document.getElementById('actionButtons').innerHTML = `
+    <a href="/cart" class="btn me-3" style="background: #FFD700; color: #333; border: none; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; height: 48px; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);">
+      <i class="fas fa-redo"></i> Try Again
+    </a>
+    <a href="/marketplace" class="btn" style="background: transparent; color: #6c757d; border: 2px solid #6c757d; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; height: 48px;">
+      <i class="fas fa-shopping-bag"></i> Continue Shopping
+    </a>
+  `;
+}
+
+function showError(message) {
+  // Update icon
+  document.getElementById('resultIcon').innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: #ffc107;"></i>';
+  
+  // Fallback: If Font Awesome fails, use Unicode
+  setTimeout(() => {
+    const icon = document.querySelector('#resultIcon i');
+    if (icon && !icon.textContent && !icon.innerHTML.includes('\\')) {
+      icon.innerHTML = '⚠';
+    }
+  }, 100);
+  
+  // Update title and message
+  document.getElementById('resultTitle').textContent = 'Verification Error';
+  document.getElementById('resultMessage').textContent = 'We encountered an issue verifying your payment.';
+  
+  // Update order details
+  document.getElementById('orderTitle').textContent = 'Error Details';
+  document.getElementById('paymentStatus').textContent = message;
+  document.getElementById('orderDetails').className = 'alert alert-danger';
+}
+
+// Verify payment when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  // Debug: Check if Font Awesome is loaded
+  console.log('Font Awesome loaded:', typeof FontAwesome !== 'undefined');
+  
+  // Debug: Check if icons are rendering
+  const icons = document.querySelectorAll('.fas, .fa');
+  console.log('Number of Font Awesome icons found:', icons.length);
+  
+  icons.forEach((icon, index) => {
+    console.log(`Icon ${index + 1}:`, icon.className, icon.textContent);
+  });
+  
+  // Force icon display with CSS (only for icons that might not be working)
+  const style = document.createElement('style');
+  style.textContent = `
+    .fas, .fa {
+      font-family: 'Font Awesome 6 Free' !important;
+      font-weight: 900 !important;
+    }
+    .fa-spinner:before { content: "\\f110"; }
+    .fa-times-circle:before { content: "\\f057"; }
+    .fa-exclamation-triangle:before { content: "\\f071"; }
+    .fa-envelope:before { content: "\\f0e0"; }
+    .fa-shopping-bag:before { content: "\\f290"; }
+    .fa-user:before { content: "\\f007"; }
+    .fa-redo:before { content: "\\f01e"; }
+    .fa-headset:before { content: "\\f590"; }
+    .fa-shopping-cart:before { content: "\\f07a"; }
+    
+    /* Prevent any duplicate pseudo-elements */
+    .fa-check-circle:after { content: none !important; }
+    .fas:after { content: none !important; }
+  `;
+  document.head.appendChild(style);
+  
+  verifyPayment();
+});
+</script> 

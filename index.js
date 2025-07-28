@@ -7,12 +7,27 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
+// Initialize Stripe with error handling
+let stripe;
+try {
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  } else {
+    console.warn('Warning: STRIPE_SECRET_KEY not found in environment variables. Stripe functionality will be disabled.');
+    stripe = null;
+  }
+} catch (error) {
+  console.warn('Warning: Failed to initialize Stripe. Stripe functionality will be disabled.');
+  stripe = null;
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'public/uploads');
 const messagesUploadDir = path.join(__dirname, 'public/uploads/messages');
+const profilePhotoDir = path.join(__dirname, 'public/uploads/profilephoto');
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -22,12 +37,18 @@ if (!fs.existsSync(messagesUploadDir)) {
   fs.mkdirSync(messagesUploadDir, { recursive: true });
 }
 
+if (!fs.existsSync(profilePhotoDir)) {
+  fs.mkdirSync(profilePhotoDir, { recursive: true });
+}
+
 // Configure multer for image uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     // Check the route to determine upload directory
     if (req.route && req.route.path.includes('messages')) {
       cb(null, messagesUploadDir);
+    } else if (req.route && req.route.path.includes('account-settings')) {
+      cb(null, profilePhotoDir);
     } else {
       cb(null, uploadsDir);
     }
@@ -37,6 +58,8 @@ const storage = multer.diskStorage({
     const extension = path.extname(file.originalname);
     if (req.route && req.route.path.includes('messages')) {
       cb(null, 'msg_' + uniqueSuffix + extension);
+    } else if (req.route && req.route.path.includes('account-settings')) {
+      cb(null, 'profile_' + uniqueSuffix + extension);
     } else {
       cb(null, uniqueSuffix + '-' + file.originalname.replace(/\s+/g, '_'));
     }
@@ -106,8 +129,18 @@ app.engine('handlebars', engine({
       return new Date(date).toLocaleDateString();
     },
     timeAgo: function(date) {
+      if (!date || date === 'null' || date === 'undefined') {
+        return 'Date unavailable';
+      }
+      
       const now = new Date();
       const messageDate = new Date(date);
+      
+      // Check if the date is valid
+      if (isNaN(messageDate.getTime())) {
+        return 'Date unavailable';
+      }
+      
       const diffInMinutes = Math.floor((now - messageDate) / (1000 * 60));
       const diffInDays = Math.floor(diffInMinutes / 1440);
       
@@ -158,7 +191,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'vintique_secret_key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -233,14 +266,14 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 // MySQL connection for callback-based queries
 const mysql_callback = require('mysql2');
-const connection = mysql_callback.createConnection({
+const callbackConnection = mysql_callback.createConnection({
   host: 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '261104',
   database: process.env.DB_NAME || 'vintiquedb'
 });
 
-connection.connect(err => {
+callbackConnection.connect(err => {
   if (err) {
     console.error('Error connecting to MySQL:', err);
     console.log('Continuing without database connection...');
@@ -428,7 +461,7 @@ app.post('/register', (req, res) => {
   }
 
   const checkSql = 'SELECT * FROM user_information WHERE username = ? OR email = ? OR phone_number = ?';
-  connection.query(checkSql, [username, email, phone], (err, results) => {
+      callbackConnection.query(checkSql, [username, email, phone], (err, results) => {
     if (err) {
       console.error('Check unique error:', err);
       return res.status(500).send('Database error');
@@ -447,9 +480,9 @@ app.post('/register', (req, res) => {
         return res.status(500).send('Database error');
       }
       const insertUserSql = 'INSERT INTO users (email, phone_number, password, role) VALUES (?, ?, ?, ?)';
-      connection.query(insertUserSql, [email, phone, password, 'user'], (err, userResult) => {
+      callbackConnection.query(insertUserSql, [email, phone, password, 'user'], (err, userResult) => {
         if (err) {
-          connection.rollback(() => {});
+          callbackConnection.rollback(() => {});
           if (err.code === 'ER_DUP_ENTRY') {
             return res.render('register', { layout: 'user', activePage: 'register', error: 'Email or phone number already exists.' });
           }
@@ -458,20 +491,20 @@ app.post('/register', (req, res) => {
         }
         const userId = userResult.insertId;
         const insertInfoSql = 'INSERT INTO user_information (user_id, username, first_name, last_name, email, phone_number) VALUES (?, ?, ?, ?, ?, ?)';
-        connection.query(insertInfoSql, [userId, username, firstname, lastname, email, phone], (err) => {
+                  callbackConnection.query(insertInfoSql, [userId, username, firstname, lastname, email, phone], (err) => {
           if (err) {
-            connection.rollback(() => {});
+            callbackConnection.rollback(() => {});
             console.error('Insert user_information error:', err);
             return res.status(500).send('Database error');
           }
-          connection.commit(err => {
-            if (err) {
-              connection.rollback(() => {});
-              console.error('Transaction commit error:', err);
-              return res.status(500).send('Database error');
-            }
-            res.redirect('/login');
-          });
+                      callbackConnection.commit(err => {
+              if (err) {
+                callbackConnection.rollback(() => {});
+                console.error('Transaction commit error:', err);
+                return res.status(500).send('Database error');
+              }
+              res.redirect('/login');
+            });
         });
       });
     });
@@ -519,7 +552,7 @@ app.post('/post_product', upload.array('images', 5), (req, res) => {
   }
 
   const insertListingSql = `INSERT INTO listings (user_id, title, description, brand, size, category, item_condition, price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-  connection.query(insertListingSql, [userId, title, description, brand, size, category, condition, price], (err, result) => {
+  callbackConnection.query(insertListingSql, [userId, title, description, brand, size, category, condition, price], (err, result) => {
     if (err) {
       console.error('Insert listing error:', err);
       return res.status(500).send('Database error');
@@ -531,7 +564,7 @@ app.post('/post_product', upload.array('images', 5), (req, res) => {
       '/uploads/' + img.filename,
       idx === images.length - 1 // Last image is cover
     ]);
-    connection.query(imageSql, [imageValues], (err2) => {
+    callbackConnection.query(imageSql, [imageValues], (err2) => {
       if (err2) {
         console.error('Insert images error:', err2);
         return res.status(500).send('Database error');
@@ -552,17 +585,28 @@ app.get('/my_listing', (req, res) => {
   }
   const userId = req.session.user.id;
   const sql = `
-    SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.created_at, l.brand, l.size,
+    SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.status, l.created_at, l.updated_at, l.brand, l.size,
           (
             SELECT image_url FROM listing_images img2
             WHERE img2.listing_id = l.listing_id
             ORDER BY img2.image_id DESC
             LIMIT 1
-          ) as image_url
+          ) as image_url,
+          COALESCE(
+            latest_order.created_at,
+            CASE WHEN l.status = 'sold' THEN l.updated_at ELSE NULL END
+          ) as sold_date
     FROM listings l
+    LEFT JOIN (
+      SELECT oi.listing_id, MAX(o.created_at) as created_at
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.order_id
+      WHERE o.status IN ('paid', 'completed')
+      GROUP BY oi.listing_id
+    ) latest_order ON l.listing_id = latest_order.listing_id
     WHERE l.user_id = ?
     ORDER BY l.created_at DESC`;
-  connection.query(sql, [userId], (err, listings) => {
+  callbackConnection.query(sql, [userId], (err, listings) => {
     if (err) return res.status(500).send('Database error');
     res.render('users/my_listing', {
       layout: 'user',
@@ -577,13 +621,13 @@ app.get('/edit_listing/:id', (req, res) => {
   if (!req.session.user) return res.redirect('/login');
   const listingId = req.params.id;
   const sql = `SELECT * FROM listings WHERE listing_id = ?`;
-  connection.query(sql, [listingId], (err, results) => {
+  callbackConnection.query(sql, [listingId], (err, results) => {
     if (err || results.length === 0) return res.status(404).send('Listing not found');
     const listing = results[0];
     if (listing.user_id !== req.session.user.id) return res.status(403).send('Forbidden');
     // Fetch images
     const imgSql = 'SELECT image_url FROM listing_images WHERE listing_id = ? ORDER BY image_id DESC';
-    connection.query(imgSql, [listingId], (err2, imgResults) => {
+    callbackConnection.query(imgSql, [listingId], (err2, imgResults) => {
       listing.images = imgResults ? imgResults.map(img => img.image_url) : [];
       res.render('users/edit_listing', { layout: 'user', listing });
     });
@@ -597,11 +641,11 @@ app.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
   const { title, description, brand, size, category, item_condition, price, delete_images } = req.body;
   // Only allow update if user owns the listing
   const checkSql = 'SELECT user_id FROM listings WHERE listing_id = ?';
-  connection.query(checkSql, [listingId], (err, results) => {
+  callbackConnection.query(checkSql, [listingId], (err, results) => {
     if (err || results.length === 0) return res.status(404).send('Listing not found');
     if (results[0].user_id !== req.session.user.id) return res.status(403).send('Forbidden');
     const updateSql = `UPDATE listings SET title=?, description=?, brand=?, size=?, category=?, item_condition=?, price=? WHERE listing_id=?`;
-    connection.query(updateSql, [title, description, brand, size, category, item_condition, price, listingId], (err2) => {
+    callbackConnection.query(updateSql, [title, description, brand, size, category, item_condition, price, listingId], (err2) => {
       if (err2) return res.status(500).send('Database error');
       // Handle deleted images (legacy, if you still submit the form)
       if (delete_images) {
@@ -609,7 +653,7 @@ app.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
         try { imgsToDelete = JSON.parse(delete_images); } catch {}
         if (imgsToDelete.length > 0) {
           const delImgSql = 'DELETE FROM listing_images WHERE listing_id = ? AND image_url IN (?)';
-          connection.query(delImgSql, [listingId, imgsToDelete], () => {});
+          callbackConnection.query(delImgSql, [listingId, imgsToDelete], () => {});
           // Delete files from filesystem
           imgsToDelete.forEach(imgUrl => {
             if (imgUrl.startsWith('/uploads/')) {
@@ -623,7 +667,7 @@ app.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
       if (req.files && req.files.length > 0) {
         const imageSql = `INSERT INTO listing_images (listing_id, image_url, is_main) VALUES ?`;
         const imageValues = req.files.map((img, idx) => [listingId, '/uploads/' + img.filename, idx === req.files.length - 1]);
-        connection.query(imageSql, [imageValues], () => {
+        callbackConnection.query(imageSql, [imageValues], () => {
           res.redirect('/my_listing');
         });
       } else {
@@ -640,12 +684,12 @@ app.post('/delete_image', (req, res) => {
 
   // Verify listing ownership
   const checkSql = 'SELECT user_id FROM listings WHERE listing_id = ?';
-  connection.query(checkSql, [listingId], (err, results) => {
+  callbackConnection.query(checkSql, [listingId], (err, results) => {
     if (err || results.length === 0) return res.status(404).json({ error: 'Listing not found' });
     if (results[0].user_id !== req.session.user.id) return res.status(403).json({ error: 'Forbidden' });
 
     const delImgSql = 'DELETE FROM listing_images WHERE listing_id = ? AND image_url = ?';
-    connection.query(delImgSql, [listingId, imgUrl], err2 => {
+    callbackConnection.query(delImgSql, [listingId, imgUrl], err2 => {
       if (err2) return res.status(500).json({ error: 'Database error' });
 
       // Delete file from filesystem
@@ -678,7 +722,7 @@ app.get('/marketplace', (req, res) => {
     params.push(req.session.user.id);
   }
   sql += '\n    ORDER BY l.created_at DESC';
-  connection.query(sql, params, (err, listings) => {
+  callbackConnection.query(sql, params, (err, listings) => {
     if (err) return res.status(500).send('Database error');
     
     // Handle cases where no image is found
@@ -695,6 +739,23 @@ app.get('/marketplace', (req, res) => {
   });
 });
 
+// Cart page route
+app.get('/cart', (req, res) => {
+  res.render('users/cart', { layout: 'user', activePage: 'cart', user: req.session.user });
+});
+
+// Checkout success page
+app.get('/checkout/success', (req, res) => {
+  res.render('users/checkout_success', { 
+    layout: 'user', 
+    activePage: 'cart', 
+    user: req.session.user,
+    session_id: req.query.session_id 
+  });
+});
+
+
+
 // Product detail page
 app.get('/listing/:id', (req, res) => {
   const listingId = req.params.id;
@@ -706,10 +767,10 @@ app.get('/listing/:id', (req, res) => {
     FROM listings l
     LEFT JOIN users u ON l.user_id = u.user_id
     LEFT JOIN listing_images li ON l.listing_id = li.listing_id
-    WHERE l.listing_id = ? AND l.status = 'active'
+    WHERE l.listing_id = ?
     GROUP BY l.listing_id`;
     
-  connection.query(sql, [listingId], (err, results) => {
+  callbackConnection.query(sql, [listingId], (err, results) => {
     if (err) {
       console.error('Database error in product detail:', err);
       return res.status(500).render('users/product_detail', { 
@@ -769,15 +830,15 @@ app.post('/listings/:id/mark_sold', (req, res) => {
 
   // Only the owner can mark as sold
   const checkSql = 'SELECT user_id FROM listings WHERE listing_id = ?';
-  connection.query(checkSql, [listingId], (err, results) => {
+  callbackConnection.query(checkSql, [listingId], (err, results) => {
     if (err) return res.status(500).json({ error: 'Database error' });
     if (results.length === 0) return res.status(404).json({ error: 'Listing not found' });
     const listingOwner = results[0].user_id;
     if (req.session.user.id !== listingOwner) {
       return res.status(403).json({ error: 'You do not have permission to mark this listing as sold' });
     }
-    const updateSql = "UPDATE listings SET status = 'sold' WHERE listing_id = ?";
-    connection.query(updateSql, [listingId], (err2, result) => {
+    const updateSql = "UPDATE listings SET status = 'sold', updated_at = NOW() WHERE listing_id = ?";
+    callbackConnection.query(updateSql, [listingId], (err2, result) => {
       if (err2) return res.status(500).json({ error: 'Database error during update' });
       if (result.affectedRows === 0) return res.status(404).json({ error: 'Listing not found' });
       res.json({ success: true });
@@ -791,7 +852,7 @@ app.delete('/listings/:id', (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'Unauthorized' });
 
   const checkSql = 'SELECT user_id FROM listings WHERE listing_id = ?';
-  connection.query(checkSql, [listingId], (err, results) => {
+  callbackConnection.query(checkSql, [listingId], (err, results) => {
     if (err) return res.status(500).json({ error: 'Database error' });
     if (results.length === 0) return res.status(404).json({ error: 'Listing not found' });
 
@@ -801,7 +862,7 @@ app.delete('/listings/:id', (req, res) => {
     }
 
     const deleteSql = 'DELETE FROM listings WHERE listing_id = ?';
-    connection.query(deleteSql, [listingId], (err, result) => {
+    callbackConnection.query(deleteSql, [listingId], (err, result) => {
       if (err) return res.status(500).json({ error: 'Database error during deletion' });
       if (result.affectedRows === 0) return res.status(404).json({ error: 'Listing not found' });
       res.json({ success: true });
@@ -824,99 +885,288 @@ app.get('/account-settings', (req, res) => {
 });
 
 // API: Get user info for account settings
-app.get('/account-settings/api', (req, res) => {
+app.get('/account-settings/api', async (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const userId = req.session.user.id;
-  const sql = `SELECT username, first_name, last_name, email, phone_number, profile_image_url,
-    address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
-    address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
-    address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
-    default_address_index
-    FROM user_information WHERE user_id = ?`;
-  connection.query(sql, [userId], (err, results) => {
-    if (err || results.length === 0) return res.status(500).json({ error: 'Database error or user not found' });
+  
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id;
+    const sql = `SELECT username, first_name, last_name, email, phone_number, profile_image_url,
+      address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
+      address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
+      address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
+      default_address_index
+      FROM user_information WHERE user_id = ?`;
+    
+    const [results] = await connection.execute(sql, [userId]);
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     res.json(results[0]);
-  });
+  } catch (error) {
+    console.error('Account settings API error:', error);
+    res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (connection) await connection.end();
+  }
 });
 
 // API: Update user info for account settings
-app.post('/account-settings/api', upload.single('profile_image'), (req, res) => {
+app.post('/account-settings/api', upload.single('profile_image'), async (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const userId = req.session.user.id;
-  let {
-    first_name, last_name, email, phone_number,
-    address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
-    address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
-    address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
-    default_address_index
-  } = req.body;
+  
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id;
+    let {
+      first_name, last_name, email, phone_number,
+      address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
+      address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
+      address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
+      default_address_index
+    } = req.body;
+    
+    // If this is just a profile image upload (no other fields), get current user data
+    if (!first_name && !last_name && !email && !phone_number && req.file) {
+      const [currentUser] = await connection.execute(
+        'SELECT first_name, last_name, email, phone_number, profile_image_url FROM user_information WHERE user_id = ?',
+        [userId]
+      );
+      
+      if (currentUser.length > 0) {
+        const user = currentUser[0];
+        first_name = user.first_name;
+        last_name = user.last_name;
+        email = user.email;
+        phone_number = user.phone_number;
+        // Keep existing address fields as null since we're not updating them
+      }
+    }
 
-  // Convert empty strings to null for address fields
-  [
-    'address_name', 'address_street', 'address_city', 'address_state', 'address_country', 'address_postal_code', 'address_phone',
-    'address_name_2', 'address_street_2', 'address_city_2', 'address_state_2', 'address_country_2', 'address_postal_code_2', 'address_phone_2',
-    'address_name_3', 'address_street_3', 'address_city_3', 'address_state_3', 'address_country_3', 'address_postal_code_3', 'address_phone_3'
-  ].forEach(field => {
-    if (req.body[field] === '') req.body[field] = null;
-  });
+    // Convert empty strings and undefined values to null for address fields
+    const addressFields = [
+      'address_name', 'address_street', 'address_city', 'address_state', 'address_country', 'address_postal_code', 'address_phone',
+      'address_name_2', 'address_street_2', 'address_city_2', 'address_state_2', 'address_country_2', 'address_postal_code_2', 'address_phone_2',
+      'address_name_3', 'address_street_3', 'address_city_3', 'address_state_3', 'address_country_3', 'address_postal_code_3', 'address_phone_3'
+    ];
+    
+    addressFields.forEach(field => {
+      if (req.body[field] === '' || req.body[field] === undefined || req.body[field] === 'undefined') {
+        req.body[field] = null;
+      }
+    });
+    
+    // Also handle undefined values for main fields
+    if (first_name === undefined) first_name = null;
+    if (last_name === undefined) last_name = null;
+    if (email === undefined) email = null;
+    if (phone_number === undefined) phone_number = null;
 
-  // Validate default_address_index
-  let defaultIndex = parseInt(default_address_index, 10);
-  if (![1, 2, 3].includes(defaultIndex)) defaultIndex = 1;
+    // Validate default_address_index
+    let defaultIndex = parseInt(default_address_index, 10);
+    if (![1, 2, 3].includes(defaultIndex)) defaultIndex = 1;
 
-  let profile_image_url = req.body.current_profile_image_url;
-  if (req.file) {
-    profile_image_url = '/uploads/' + req.file.filename;
-  }
-  const sql = `UPDATE user_information SET first_name=?, last_name=?, email=?, phone_number=?, profile_image_url=?,
-    address_name=?, address_street=?, address_city=?, address_state=?, address_country=?, address_postal_code=?, address_phone=?,
-    address_name_2=?, address_street_2=?, address_city_2=?, address_state_2=?, address_country_2=?, address_postal_code_2=?, address_phone_2=?,
-    address_name_3=?, address_street_3=?, address_city_3=?, address_state_3=?, address_country_3=?, address_postal_code_3=?, address_phone_3=?,
-    default_address_index=?
-    WHERE user_id=?`;
-  connection.query(sql, [
-    first_name, last_name, email, phone_number, profile_image_url,
-    req.body.address_name, req.body.address_street, req.body.address_city, req.body.address_state, req.body.address_country, req.body.address_postal_code, req.body.address_phone,
-    req.body.address_name_2, req.body.address_street_2, req.body.address_city_2, req.body.address_state_2, req.body.address_country_2, req.body.address_postal_code_2, req.body.address_phone_2,
-    req.body.address_name_3, req.body.address_street_3, req.body.address_city_3, req.body.address_state_3, req.body.address_country_3, req.body.address_postal_code_3, req.body.address_phone_3,
-    defaultIndex, userId
-  ], (err, result) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
+    let profile_image_url = req.body.current_profile_image_url;
+    if (req.file) {
+      profile_image_url = '/uploads/profilephoto/' + req.file.filename;
+    }
+    
+    // Check if we have address data or other fields to update
+    const hasAddressData = req.body.address_name || req.body.address_street || req.body.address_city || 
+                          req.body.address_name_2 || req.body.address_street_2 || req.body.address_city_2 ||
+                          req.body.address_name_3 || req.body.address_street_3 || req.body.address_city_3 ||
+                          default_address_index;
+    
+    const hasPersonalData = first_name || last_name || email || phone_number;
+    
+    // If this is just a profile image upload (no other fields), use a simpler query
+    let sql, params;
+    
+    if (req.file && !hasPersonalData && !hasAddressData) {
+      // Only updating profile image
+      sql = `UPDATE user_information SET profile_image_url = ? WHERE user_id = ?`;
+      params = [profile_image_url, userId];
+    } else {
+      // Full update with all fields
+      sql = `UPDATE user_information SET first_name=?, last_name=?, email=?, phone_number=?, profile_image_url=?,
+        address_name=?, address_street=?, address_city=?, address_state=?, address_country=?, address_postal_code=?, address_phone=?,
+        address_name_2=?, address_street_2=?, address_city_2=?, address_state_2=?, address_country_2=?, address_postal_code_2=?, address_phone_2=?,
+        address_name_3=?, address_street_3=?, address_city_3=?, address_state_3=?, address_country_3=?, address_postal_code_3=?, address_phone_3=?,
+        default_address_index=?
+        WHERE user_id=?`;
+      
+      params = [
+        first_name, last_name, email, phone_number, profile_image_url,
+        req.body.address_name, req.body.address_street, req.body.address_city, req.body.address_state, req.body.address_country, req.body.address_postal_code, req.body.address_phone,
+        req.body.address_name_2, req.body.address_street_2, req.body.address_city_2, req.body.address_state_2, req.body.address_country_2, req.body.address_postal_code_2, req.body.address_phone_2,
+        req.body.address_name_3, req.body.address_street_3, req.body.address_city_3, req.body.address_state_3, req.body.address_country_3, req.body.address_postal_code_3, req.body.address_phone_3,
+        defaultIndex, userId
+      ];
+    }
+    
+    // Debug: Log the parameters to see what's being sent
+    console.log('Profile update parameters:', {
+      userId,
+      first_name,
+      last_name,
+      email,
+      phone_number,
+      profile_image_url,
+      defaultIndex,
+      hasAddressData,
+      hasPersonalData,
+      addressFields: {
+        address_name: req.body.address_name,
+        address_street: req.body.address_street,
+        address_city: req.body.address_city,
+        address_name_2: req.body.address_name_2,
+        address_street_2: req.body.address_street_2,
+        address_city_2: req.body.address_city_2,
+        address_name_3: req.body.address_name_3,
+        address_street_3: req.body.address_street_3,
+        address_city_3: req.body.address_city_3
+      }
+    });
+    
+    await connection.execute(sql, params);
+    
     res.json({ success: true, profile_image_url });
-  });
+  } catch (error) {
+    console.error('Account settings update error:', error);
+    res.status(500).json({ error: 'Database error: ' + error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
 });
 
 // API: Change user password
-app.post('/account-settings/password', (req, res) => {
+app.post('/account-settings/password', async (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const userId = req.session.user.id;
-  const { current_password, new_password, confirm_password } = req.body;
-  if (!current_password || !new_password || !confirm_password) {
-    return res.status(400).json({ error: 'All fields are required.' });
-  }
-  if (new_password !== confirm_password) {
-    return res.status(400).json({ error: 'New passwords do not match.' });
-  }
-  // Check current password
-  const sql = 'SELECT password FROM users WHERE user_id = ?';
-  connection.query(sql, [userId], (err, results) => {
-    if (err || results.length === 0) return res.status(500).json({ error: 'Database error or user not found.' });
-    if (results[0].password !== current_password) {
+  
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id;
+    const { current_password, new_password, confirm_password } = req.body;
+    
+    if (!current_password || !new_password || !confirm_password) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+    if (new_password !== confirm_password) {
+      return res.status(400).json({ error: 'New passwords do not match.' });
+    }
+    
+    // Check current password
+    const [users] = await connection.execute('SELECT password FROM users WHERE user_id = ?', [userId]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    if (users[0].password !== current_password) {
       return res.status(400).json({ error: 'Current password is incorrect.' });
     }
+    
     // Update password
-    const updateSql = 'UPDATE users SET password = ? WHERE user_id = ?';
-    connection.query(updateSql, [new_password, userId], (err2) => {
-      if (err2) return res.status(500).json({ error: 'Database error.' });
-      res.json({ success: true });
-    });
-  });
+    await connection.execute('UPDATE users SET password = ? WHERE user_id = ?', [new_password, userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({ error: 'Database error: ' + error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// API: Get user addresses for checkout
+app.get('/api/user/addresses', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id;
+    
+    // First check if user exists in user_information table
+    const checkUserSql = `SELECT user_id FROM user_information WHERE user_id = ?`;
+    const [userCheck] = await connection.execute(checkUserSql, [userId]);
+    
+    if (userCheck.length === 0) {
+      // Create user_information entry if it doesn't exist
+      const createUserInfoSql = `INSERT INTO user_information (user_id, username, email, phone_number) 
+                                SELECT user_id, email, email, phone_number FROM users WHERE user_id = ?`;
+      await connection.execute(createUserInfoSql, [userId]);
+    }
+    
+    const sql = `SELECT 
+      address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
+      address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
+      address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
+      default_address_index
+      FROM user_information WHERE user_id = ?`;
+    
+    const [results] = await connection.execute(sql, [userId]);
+    
+    if (results.length === 0) {
+      return res.json({ addresses: [] });
+    }
+    
+    const userData = results[0];
+    const addresses = [];
+    
+    // Process address 1
+    if (userData.address_street || userData.address_city || userData.address_country) {
+      addresses.push({
+        name: userData.address_name || 'Address 1',
+        street: userData.address_street,
+        city: userData.address_city,
+        state: userData.address_state,
+        country: userData.address_country,
+        postal_code: userData.address_postal_code,
+        phone: userData.address_phone,
+        isDefault: userData.default_address_index === 1
+      });
+    }
+    
+    // Process address 2
+    if (userData.address_street_2 || userData.address_city_2 || userData.address_country_2) {
+      addresses.push({
+        name: userData.address_name_2 || 'Address 2',
+        street: userData.address_street_2,
+        city: userData.address_city_2,
+        state: userData.address_state_2,
+        country: userData.address_country_2,
+        postal_code: userData.address_postal_code_2,
+        phone: userData.address_phone_2,
+        isDefault: userData.default_address_index === 2
+      });
+    }
+    
+    // Process address 3
+    if (userData.address_street_3 || userData.address_city_3 || userData.address_country_3) {
+      addresses.push({
+        name: userData.address_name_3 || 'Address 3',
+        street: userData.address_street_3,
+        city: userData.address_city_3,
+        state: userData.address_state_3,
+        country: userData.address_country_3,
+        postal_code: userData.address_postal_code_3,
+        phone: userData.address_phone_3,
+        isDefault: userData.default_address_index === 3
+      });
+    }
+    
+    res.json({ addresses });
+  } catch (error) {
+    console.error('Error fetching user addresses:', error);
+    res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (connection) await connection.end();
+  }
 });
 
 // ========== STAFF ROUTES ==========
@@ -1078,7 +1328,7 @@ app.get('/staff/user_management', requireStaff, (req, res) => {
                FROM users u
                LEFT JOIN user_information ui ON u.user_id = ui.user_id
                WHERE u.role = 'user'`;
-  connection.query(sql, (err, results) => {
+  callbackConnection.query(sql, (err, results) => {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).send('Database error');
@@ -1173,21 +1423,21 @@ app.patch('/users/:id', requireStaff, (req, res) => {
     WHERE (ui.username = ? OR u.email = ? OR u.phone_number = ?) 
       AND u.user_id != ?
   `;
-  connection.query(checkSql, [username, email, phone, userId], (err, results) => {
+  callbackConnection.query(checkSql, [username, email, phone, userId], (err, results) => {
     if (err) return res.status(500).json({ error: 'Database error during validation.' });
     if (results.length > 0) return res.status(400).json({ error: 'Username, email, or phone number already exists.' });
     connection.beginTransaction(err => {
       if (err) return res.status(500).json({ error: 'Database transaction error.' });
       const updateUsers = `UPDATE users SET email = ?, phone_number = ? WHERE user_id = ?`;
-      connection.query(updateUsers, [email, phone, userId], err => {
-        if (err) return connection.rollback(() => res.status(500).json({ error: 'Error updating users table.' }));
+      callbackConnection.query(updateUsers, [email, phone, userId], err => {
+        if (err) return callbackConnection.rollback(() => res.status(500).json({ error: 'Error updating users table.' }));
         const updateInfo = `UPDATE user_information SET username = ?, email = ?, phone_number = ?, status = ? WHERE user_id = ?`;
-        connection.query(updateInfo, [username, email, phone, status, userId], err => {
-          if (err) return connection.rollback(() => res.status(500).json({ error: 'Error updating user_information table.' }));
-          connection.commit(err => {
-            if (err) return connection.rollback(() => res.status(500).json({ error: 'Transaction commit error.' }));
-            res.json({ success: true });
-          });
+        callbackConnection.query(updateInfo, [username, email, phone, status, userId], err => {
+          if (err) return callbackConnection.rollback(() => res.status(500).json({ error: 'Error updating user_information table.' }));
+                      callbackConnection.commit(err => {
+              if (err) return callbackConnection.rollback(() => res.status(500).json({ error: 'Transaction commit error.' }));
+              res.json({ success: true });
+            });
         });
       });
     });
@@ -1198,12 +1448,12 @@ app.patch('/users/:id', requireStaff, (req, res) => {
 app.delete('/users/:id', requireStaff, (req, res) => {
   const userId = req.params.id;
   const checkRoleSql = 'SELECT role FROM users WHERE user_id = ?';
-  connection.query(checkRoleSql, [userId], (err, results) => {
+  callbackConnection.query(checkRoleSql, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: 'Database error.' });
     if (results.length === 0) return res.status(404).json({ error: 'User not found.' });
     if (results[0].role === 'staff') return res.status(403).json({ error: 'Cannot delete staff users.' });
     const deleteSql = 'DELETE FROM users WHERE user_id = ?';
-    connection.query(deleteSql, [userId], (err, result) => {
+    callbackConnection.query(deleteSql, [userId], (err, result) => {
       if (err) return res.status(500).json({ error: 'Database error during deletion.' });
       if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found.' });
       res.json({ success: true });
@@ -1217,7 +1467,7 @@ app.patch('/users/:id/status', requireStaff, (req, res) => {
   const { status } = req.body;
   if (!['active', 'suspended'].includes(status)) return res.status(400).json({ error: 'Invalid status.' });
   const updateStatusSql = 'UPDATE user_information SET status = ? WHERE user_id = ?';
-  connection.query(updateStatusSql, [status, userId], (err, result) => {
+  callbackConnection.query(updateStatusSql, [status, userId], (err, result) => {
     if (err) return res.status(500).json({ error: 'Database error updating status.' });
     if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found.' });
     res.json({ success: true });
@@ -2562,6 +2812,521 @@ app.delete('/api/qa/:id', requireStaff, async (req, res) => {
   } catch (error) {
     console.error('Staff delete error:', error);
     res.status(500).json({ error: 'Server error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== CART API ENDPOINTS ==========
+
+// Get user's cart items
+app.get('/api/cart', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    
+    const [cartItems] = await connection.execute(`
+      SELECT c.cart_id, c.quantity, c.added_at,
+             l.listing_id, l.title, l.price, l.item_condition, l.category,
+             u.email as seller_username,
+             (SELECT image_url FROM listing_images li 
+              WHERE li.listing_id = l.listing_id 
+              ORDER BY li.is_main DESC, li.image_id ASC 
+              LIMIT 1) as image_url
+      FROM cart c
+      JOIN listings l ON c.listing_id = l.listing_id
+      JOIN users u ON l.user_id = u.user_id
+      WHERE c.user_id = ? AND l.status = 'active'
+      ORDER BY c.added_at DESC
+    `, [userId]);
+    
+    // Handle cases where no image is found
+    cartItems.forEach(item => {
+      if (!item.image_url || item.image_url === 'null') {
+        item.image_url = '/assets/logo.png';
+      } else {
+        item.image_url = item.image_url.startsWith('/uploads/') ? item.image_url : `/uploads/${item.image_url}`;
+      }
+    });
+    
+    res.json({ items: cartItems });
+  } catch (error) {
+    console.error('Cart load error:', error);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Add item to cart
+app.post('/api/cart', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    const { listing_id, quantity = 1 } = req.body;
+    
+    if (!listing_id) {
+      return res.status(400).json({ error: 'Listing ID is required.' });
+    }
+    
+    // Check if listing exists and is active
+    const [listings] = await connection.execute(`
+      SELECT listing_id, user_id, title FROM listings 
+      WHERE listing_id = ? AND status = 'active'
+    `, [listing_id]);
+    
+    if (listings.length === 0) {
+      return res.status(404).json({ error: 'Listing not found or not available.' });
+    }
+    
+    // Check if user is trying to add their own listing
+    if (listings[0].user_id === userId) {
+      return res.status(400).json({ error: 'You cannot add your own listing to cart.' });
+    }
+    
+    // Check if item already exists in cart
+    const [existingItems] = await connection.execute(`
+      SELECT cart_id, quantity FROM cart 
+      WHERE user_id = ? AND listing_id = ?
+    `, [userId, listing_id]);
+    
+    if (existingItems.length > 0) {
+      // Item already in cart - return error
+      return res.status(400).json({ 
+        error: `"${listings[0].title}" is already in your cart.`,
+        alreadyInCart: true 
+      });
+    } else {
+      // Add new item
+      await connection.execute(`
+        INSERT INTO cart (user_id, listing_id, quantity) VALUES (?, ?, ?)
+      `, [userId, listing_id, quantity]);
+      res.json({ 
+        success: true, 
+        message: `"${listings[0].title}" added to cart!` 
+      });
+    }
+  } catch (error) {
+    console.error('Add to cart error:', error);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Update cart item quantity
+app.put('/api/cart/:cartId/quantity', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    const cartId = req.params.cartId;
+    const { change } = req.body;
+    
+    // Get current cart item
+    const [cartItems] = await connection.execute(`
+      SELECT quantity FROM cart WHERE cart_id = ? AND user_id = ?
+    `, [cartId, userId]);
+    
+    if (cartItems.length === 0) {
+      return res.status(404).json({ error: 'Cart item not found.' });
+    }
+    
+    const newQuantity = cartItems[0].quantity + change;
+    
+    if (newQuantity <= 0) {
+      // Remove item if quantity becomes 0 or less
+      await connection.execute(`
+        DELETE FROM cart WHERE cart_id = ?
+      `, [cartId]);
+      res.json({ success: true, message: 'Item removed from cart.' });
+    } else {
+      // Update quantity
+      await connection.execute(`
+        UPDATE cart SET quantity = ? WHERE cart_id = ?
+      `, [newQuantity, cartId]);
+      res.json({ success: true, message: 'Quantity updated.' });
+    }
+  } catch (error) {
+    console.error('Update quantity error:', error);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Remove item from cart
+app.delete('/api/cart/:cartId', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    const cartId = req.params.cartId;
+    
+    const [result] = await connection.execute(`
+      DELETE FROM cart WHERE cart_id = ? AND user_id = ?
+    `, [cartId, userId]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Cart item not found.' });
+    }
+    
+    res.json({ success: true, message: 'Item removed from cart.' });
+  } catch (error) {
+    console.error('Remove from cart error:', error);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Clear entire cart
+app.delete('/api/cart', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    
+    await connection.execute(`
+      DELETE FROM cart WHERE user_id = ?
+    `, [userId]);
+    
+    res.json({ success: true, message: 'Cart cleared.' });
+  } catch (error) {
+    console.error('Clear cart error:', error);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== STRIPE API ENDPOINTS ==========
+
+// Create Stripe payment intent
+app.post('/api/stripe/create-payment-intent', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    // Check if Stripe is configured
+    if (!stripe) {
+      return res.status(503).json({ 
+        error: 'Payment processing is currently unavailable. Please contact support.' 
+      });
+    }
+    
+    connection = await createConnection();
+    const { order_id, amount } = req.body;
+    
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `Order #${order_id}`,
+            description: 'Vintique Purchase',
+          },
+          unit_amount: Math.round(amount * 100), // Convert to cents
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.BASE_URL || 'http://localhost:3000'}/checkout/success?session_id={CHECKOUT_SESSION_ID}&order_id=${order_id}`,
+      cancel_url: `${process.env.BASE_URL || 'http://localhost:3000'}/checkout/success?session_id={CHECKOUT_SESSION_ID}&order_id=${order_id}&cancelled=true`,
+      metadata: {
+        order_id: order_id
+      }
+    });
+    
+    res.json({
+      sessionId: session.id,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY
+    });
+    
+  } catch (error) {
+    console.error('Stripe payment intent error:', error);
+    res.status(500).json({ error: 'Payment setup failed.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Manual payment verification endpoint
+app.post('/api/stripe/verify-payment', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    // Check if Stripe is configured
+    if (!stripe) {
+      return res.status(503).json({ 
+        error: 'Payment processing is currently unavailable.' 
+      });
+    }
+    
+    const { sessionId, orderId } = req.body;
+    
+    if (!sessionId || !orderId) {
+      return res.status(400).json({ error: 'Session ID and Order ID are required.' });
+    }
+    
+    // Retrieve the session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    console.log('Payment status:', session.payment_status);
+    
+    connection = await createConnection();
+    
+    if (session.payment_status === 'paid') {
+      // Start transaction
+      await connection.beginTransaction();
+      
+      try {
+        // Update order status to paid
+        await connection.execute(`
+          UPDATE orders SET status = 'paid' WHERE order_id = ?
+        `, [orderId]);
+        
+        // Get order items to mark listings as sold
+        const [orderItems] = await connection.execute(`
+          SELECT listing_id FROM order_items WHERE order_id = ?
+        `, [orderId]);
+        
+        // Mark all listings in the order as sold
+        for (const item of orderItems) {
+          await connection.execute(`
+            UPDATE listings SET status = 'sold' WHERE listing_id = ?
+          `, [item.listing_id]);
+        }
+        
+        // Commit transaction
+        await connection.commit();
+        
+        res.json({ 
+          success: true, 
+          payment_status: 'paid',
+          message: 'Payment verified successfully. Items marked as sold.',
+          items_sold: orderItems.length
+        });
+      } catch (error) {
+        // Rollback on error
+        await connection.rollback();
+        throw error;
+      }
+    } else {
+      // Update order status to failed
+      await connection.execute(`
+        UPDATE orders SET status = 'failed' WHERE order_id = ?
+      `, [orderId]);
+      
+      res.json({ 
+        success: false, 
+        payment_status: session.payment_status,
+        message: 'Payment was not completed.' 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    res.status(500).json({ error: 'Payment verification failed.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== CHECKOUT API ENDPOINTS ==========
+
+// Create order from cart
+app.post('/api/checkout', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    const { shipping_address } = req.body;
+    
+    // Validate shipping address
+    if (!shipping_address) {
+      return res.status(400).json({ error: 'Shipping address is required.' });
+    }
+    
+    // Get cart items
+    const [cartItems] = await connection.execute(`
+      SELECT c.cart_id, c.quantity,
+             l.listing_id, l.title, l.price, l.item_condition,
+             u.email as seller_username
+      FROM cart c
+      JOIN listings l ON c.listing_id = l.listing_id
+      JOIN users u ON l.user_id = u.user_id
+      WHERE c.user_id = ? AND l.status = 'active'
+    `, [userId]);
+    
+    if (cartItems.length === 0) {
+      return res.status(400).json({ error: 'Cart is empty.' });
+    }
+    
+    // Calculate total
+    const subtotal = cartItems.reduce((total, item) => {
+      return total + (parseFloat(item.price) * item.quantity);
+    }, 0);
+    
+    const shipping = subtotal >= 50 ? 0 : 5.99;
+    const tax = subtotal * 0.08; // 8% tax
+    const total = subtotal + shipping + tax;
+    
+    // Start transaction
+    await connection.beginTransaction();
+    
+    try {
+      // Create order with shipping address
+      let orderResult;
+      try {
+        // Try to insert with shipping address columns
+        [orderResult] = await connection.execute(`
+          INSERT INTO orders (user_id, total_amount, status, shipping_address_name, shipping_address_street, 
+                            shipping_address_city, shipping_address_state, shipping_address_country, 
+                            shipping_address_postal_code, shipping_address_phone) 
+          VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+        `, [userId, total, shipping_address.name, shipping_address.street, shipping_address.city, 
+            shipping_address.state, shipping_address.country, shipping_address.postal_code, shipping_address.phone]);
+      } catch (dbError) {
+        // If shipping address columns don't exist, fall back to basic order creation
+        console.warn('Shipping address columns not found, creating order without address:', dbError.message);
+        [orderResult] = await connection.execute(`
+          INSERT INTO orders (user_id, total_amount, status) VALUES (?, ?, 'pending')
+        `, [userId, total]);
+      }
+      
+      const orderId = orderResult.insertId;
+      
+      // Create order items
+      for (const item of cartItems) {
+        await connection.execute(`
+          INSERT INTO order_items (order_id, listing_id, quantity, price) 
+          VALUES (?, ?, ?, ?)
+        `, [orderId, item.listing_id, item.quantity, item.price]);
+      }
+      
+      // Clear cart
+      await connection.execute(`
+        DELETE FROM cart WHERE user_id = ?
+      `, [userId]);
+      
+      // Commit transaction
+      await connection.commit();
+      
+      res.json({ 
+        success: true, 
+        order_id: orderId,
+        total: total,
+        message: 'Order created successfully.'
+      });
+      
+    } catch (error) {
+      // Rollback on error
+      await connection.rollback();
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error('Checkout error:', error);
+    res.status(500).json({ error: 'Server error during checkout.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Create order for single item (Buy Now)
+app.post('/api/checkout/single', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    const { listing_id, shipping_address } = req.body;
+    
+    if (!listing_id) {
+      return res.status(400).json({ error: 'Listing ID is required.' });
+    }
+    
+    // Validate shipping address
+    if (!shipping_address) {
+      return res.status(400).json({ error: 'Shipping address is required.' });
+    }
+    
+    // Get listing details
+    const [listings] = await connection.execute(`
+      SELECT l.listing_id, l.title, l.price, l.item_condition, l.user_id,
+             u.email as seller_username
+      FROM listings l
+      JOIN users u ON l.user_id = u.user_id
+      WHERE l.listing_id = ? AND l.status = 'active'
+    `, [listing_id]);
+    
+    if (listings.length === 0) {
+      return res.status(404).json({ error: 'Listing not found or not available.' });
+    }
+    
+    const listing = listings[0];
+    
+    // Check if user is trying to buy their own listing
+    if (listing.user_id === userId) {
+      return res.status(400).json({ error: 'You cannot purchase your own listing.' });
+    }
+    
+    // Calculate total
+    const subtotal = parseFloat(listing.price);
+    const shipping = subtotal >= 50 ? 0 : 5.99;
+    const tax = subtotal * 0.08; // 8% tax
+    const total = subtotal + shipping + tax;
+    
+    // Start transaction
+    await connection.beginTransaction();
+    
+    try {
+      // Create order with shipping address
+      let orderResult;
+      try {
+        // Try to insert with shipping address columns
+        [orderResult] = await connection.execute(`
+          INSERT INTO orders (user_id, total_amount, status, shipping_address_name, shipping_address_street, 
+                            shipping_address_city, shipping_address_state, shipping_address_country, 
+                            shipping_address_postal_code, shipping_address_phone) 
+          VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+        `, [userId, total, shipping_address.name, shipping_address.street, shipping_address.city, 
+            shipping_address.state, shipping_address.country, shipping_address.postal_code, shipping_address.phone]);
+      } catch (dbError) {
+        // If shipping address columns don't exist, fall back to basic order creation
+        console.warn('Shipping address columns not found, creating order without address:', dbError.message);
+        [orderResult] = await connection.execute(`
+          INSERT INTO orders (user_id, total_amount, status) VALUES (?, ?, 'pending')
+        `, [userId, total]);
+      }
+      
+      const orderId = orderResult.insertId;
+      
+      // Create order item
+      await connection.execute(`
+        INSERT INTO order_items (order_id, listing_id, quantity, price) 
+        VALUES (?, ?, 1, ?)
+      `, [orderId, listing.listing_id, listing.price]);
+      
+      // Commit transaction
+      await connection.commit();
+      
+      res.json({ 
+        success: true, 
+        order_id: orderId,
+        total: total,
+        message: 'Order created successfully.'
+      });
+      
+    } catch (error) {
+      // Rollback on error
+      await connection.rollback();
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error('Single item checkout error:', error);
+    res.status(500).json({ error: 'Server error during checkout.' });
   } finally {
     if (connection) await connection.end();
   }

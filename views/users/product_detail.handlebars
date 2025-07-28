@@ -82,6 +82,11 @@
             
             <div class="product-price">${{listing.price}}</div>
             <div class="product-condition">{{listing.item_condition}}</div>
+            {{#if (eq listing.status 'sold')}}
+              <div class="product-status sold">
+                <i class="fas fa-check-circle"></i> SOLD
+              </div>
+            {{/if}}
 
             <div class="product-actions">
               {{#if user}}
@@ -427,80 +432,171 @@ function contactSeller(seller, product) {
   window.location.href = `/messages?seller=${encodeURIComponent(seller)}&product=${encodeURIComponent(product)}`;
 }
 
-function addToCart() {
+async function addToCart() {
+  const listingId = window.location.pathname.split('/').pop(); // Get listing ID from URL
   const productTitle = document.querySelector('.product-title').textContent;
-  const productPrice = document.querySelector('.product-price').textContent;
-  const productSeller = document.querySelector('.product-seller').textContent.split('@')[1]?.split(' ')[0] || 'Unknown';
-  const productImage = document.getElementById('mainImage').src;
-  const productCondition = document.querySelector('.product-condition').textContent;
-  
-  // Create cart item
-  const cartItem = {
-    id: Date.now().toString(),
-    title: productTitle,
-    seller: '@' + productSeller,
-    price: productPrice,
-    image: productImage,
-    condition: productCondition,
-    quantity: 1,
-    timestamp: new Date().toISOString()
-  };
-  
-  // Get existing cart items
-  let cartItems = JSON.parse(localStorage.getItem('vintique_cart') || '[]');
-  
-  // Check if item already exists
-  const existingItemIndex = cartItems.findIndex(item => 
-    item.title === cartItem.title && item.seller === cartItem.seller
-  );
-  
-  if (existingItemIndex > -1) {
-    cartItems[existingItemIndex].quantity += 1;
-    showNotification(`Updated quantity for "${productTitle}" in cart!`);
-  } else {
-    cartItems.push(cartItem);
-    showNotification(`"${productTitle}" added to cart!`);
-  }
-  
-  // Store updated cart
-  localStorage.setItem('vintique_cart', JSON.stringify(cartItems));
-  
-  // Animate button
   const cartBtn = document.querySelector('.btn-cart');
-  if (cartBtn) {
-    cartBtn.style.transform = 'scale(0.95)';
-    cartBtn.innerHTML = '<i class="fas fa-check"></i> Added!';
+  const originalText = cartBtn.innerHTML;
+  
+  // Show loading state
+  cartBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+  cartBtn.disabled = true;
+  
+  try {
+    const response = await fetch('/api/cart', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        listing_id: listingId,
+        quantity: 1
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Success - show success state
+      cartBtn.style.transform = 'scale(0.95)';
+      cartBtn.innerHTML = '<i class="fas fa-check"></i> Added!';
+      cartBtn.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+      cartBtn.style.color = 'white';
+      
+      showNotification(data.message || `"${productTitle}" added to cart!`);
+      
+      // Update cart badge
+      if (window.updateCartBadge) {
+        window.updateCartBadge();
+      }
+      
+      // Reset button after 2 seconds
+      setTimeout(() => {
+        cartBtn.style.transform = '';
+        cartBtn.innerHTML = originalText;
+        cartBtn.style.background = '';
+        cartBtn.style.color = '';
+        cartBtn.disabled = false;
+      }, 2000);
+      
+    } else {
+      // Error - show error state
+      cartBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+      cartBtn.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+      cartBtn.style.color = 'white';
+      
+      showNotification(data.error || 'Error adding item to cart', 'error');
+      
+      // Reset button after 3 seconds
+      setTimeout(() => {
+        cartBtn.innerHTML = originalText;
+        cartBtn.style.background = '';
+        cartBtn.style.color = '';
+        cartBtn.disabled = false;
+      }, 3000);
+    }
+  } catch (error) {
+    console.error('Error adding to cart:', error);
+    
+    // Show error state
+    cartBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+    cartBtn.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+    cartBtn.style.color = 'white';
+    
+    showNotification('Error adding item to cart', 'error');
+    
+    // Reset button after 3 seconds
     setTimeout(() => {
-      cartBtn.style.transform = '';
-      cartBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Add to Cart';
-    }, 1500);
+      cartBtn.innerHTML = originalText;
+      cartBtn.style.background = '';
+      cartBtn.style.color = '';
+      cartBtn.disabled = false;
+    }, 3000);
   }
 }
 
-function buyNow() {
-  const productTitle = document.querySelector('.product-title').textContent;
-  const productPrice = document.querySelector('.product-price').textContent;
-  const productSeller = document.querySelector('.product-seller').textContent.split('@')[1]?.split(' ')[0] || 'Unknown';
-  const productImage = document.getElementById('mainImage').src;
-  const productCondition = document.querySelector('.product-condition').textContent;
+async function buyNow() {
+  const listingId = window.location.pathname.split('/').pop(); // Get listing ID from URL
+  const buyBtn = document.querySelector('.btn-purchase');
+  const originalText = buyBtn.innerHTML;
   
-  // Create checkout item
-  const checkoutItem = {
-    id: Date.now().toString(),
-    title: productTitle,
-    seller: '@' + productSeller,
-    price: productPrice,
-    image: productImage,
-    condition: productCondition,
-    quantity: 1,
-    timestamp: new Date().toISOString()
-  };
+  // Show loading state
+  buyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+  buyBtn.disabled = true;
   
-  // Store for checkout
-  localStorage.setItem('checkout_cart', JSON.stringify([checkoutItem]));
-  
-  // Redirect to checkout
-  window.location.href = '/checkout';
+  try {
+    // Create order in database
+    const response = await fetch('/api/checkout/single', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        listing_id: listingId
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // STRIPE INTEGRATION - Create payment session
+      const paymentResponse = await fetch('/api/stripe/create-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          order_id: data.order_id,
+          amount: data.total
+        })
+      });
+      
+      if (paymentResponse.ok) {
+        const paymentData = await paymentResponse.json();
+        
+        // Redirect to Stripe Checkout
+        const stripe = Stripe(paymentData.publishableKey);
+        const { error } = await stripe.redirectToCheckout({
+          sessionId: paymentData.sessionId
+        });
+        
+        if (error) {
+          console.error('Stripe error:', error);
+          alert('Payment error: ' + error.message);
+          
+          // Reset button
+          buyBtn.innerHTML = originalText;
+          buyBtn.disabled = false;
+        }
+      } else {
+        const paymentError = await paymentResponse.json();
+        if (paymentResponse.status === 503) {
+          alert('Payment processing is currently unavailable. Please contact support.');
+        } else {
+          alert('Error setting up payment: ' + paymentError.error);
+        }
+        
+        // Reset button
+        buyBtn.innerHTML = originalText;
+        buyBtn.disabled = false;
+      }
+      
+    } else {
+      const error = await response.json();
+      alert('Error creating order: ' + error.error);
+      
+      // Reset button
+      buyBtn.innerHTML = originalText;
+      buyBtn.disabled = false;
+    }
+  } catch (error) {
+    console.error('Error during buy now:', error);
+    alert('Error during purchase. Please try again.');
+    
+    // Reset button
+    buyBtn.innerHTML = originalText;
+    buyBtn.disabled = false;
+  }
 }
 
 function markAsSold(listingId) {
