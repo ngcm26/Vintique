@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { engine } = require('express-handlebars');
 const session = require('express-session');
 const mysql = require('mysql2/promise');
@@ -44,6 +44,7 @@ if (!fs.existsSync(profilePhotoDir)) {
 // Configure multer for image uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
+    // Check the route to determine upload directory
     if (req.route && req.route.path.includes('messages')) {
       cb(null, messagesUploadDir);
     } else if (req.route && req.route.path.includes('account-settings')) {
@@ -164,6 +165,7 @@ app.engine('handlebars', engine({
     json: function(context) {
       return JSON.stringify(context);
     },
+
     conditionClass: function (c) {
       switch ((c || '').toLowerCase()) {
         case 'like-new':
@@ -177,6 +179,7 @@ app.engine('handlebars', engine({
       return (s || '').replace(/\b\w/g, m => m.toUpperCase());
     },
     substring: function(str, start, length) {
+      if (!str) return '';
       return str.substring(start, start + length);
     }
   }
@@ -213,6 +216,7 @@ const requireAuth = (req, res, next) => {
     return res.redirect('/login');
   }
   
+  // Check if account is suspended
   if (req.session.user.status === 'suspended') {
     req.session.destroy((err) => {
       if (err) {
@@ -230,6 +234,7 @@ const requireStaff = (req, res, next) => {
     return res.redirect('/login');
   }
   
+  // Check if staff/admin account is suspended
   if (req.session.user.status === 'suspended') {
     req.session.destroy((err) => {
       if (err) {
@@ -247,6 +252,7 @@ const requireAdmin = (req, res, next) => {
     return res.redirect('/login');
   }
   
+  // Check if admin account is suspended
   if (req.session.user.status === 'suspended') {
     req.session.destroy((err) => {
       if (err) {
@@ -349,79 +355,92 @@ app.get('/test-db', async (req, res) => {
   }
 });
 
-// ========== MARKETPLACE ROUTES ==========
+// ========== AUTHENTICATION ROUTES ==========
 
-// Marketplace page
-app.get('/marketplace', async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    
-    // Fetch all active listings with user information
-    const [listings] = await connection.execute(`
-      SELECT 
-        l.*,
-        ui.username,
-        u.email,
-        u.user_id as seller_user_id
-      FROM listings l
-      LEFT JOIN users u ON l.seller_id = u.user_id
-      LEFT JOIN user_information ui ON u.user_id = ui.user_id
-      WHERE l.status = 'active'
-      ORDER BY l.created_at DESC
-    `);
-    
-    res.render('users/marketplace', {
-      title: 'Marketplace - Vintique',
-      layout: 'user',
-      activePage: 'marketplace',
-      listings: listings,
-      user: req.session.user
-    });
-  } catch (error) {
-    console.error('Error fetching marketplace listings:', error);
-    res.render('users/marketplace', {
-      title: 'Marketplace - Vintique',
-      layout: 'user',
-      activePage: 'marketplace',
-      listings: [],
-      error: 'Error loading marketplace',
-      user: req.session.user
-    });
-  } finally {
-    if (connection) await connection.end();
-  }
+// Login route
+app.get('/login', (req, res) => {
+  res.render('users/login', { 
+    title: 'Login - Vintique',
+    layout: 'user',
+    activePage: 'login'
+  });
 });
 
-// My Listings page
-app.get('/my_listing', requireAuth, async (req, res) => {
+// Login handler
+app.post('/login', async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
+    const { email, password } = req.body;
     
-    // Fetch user's listings
-    const [listings] = await connection.execute(`
-      SELECT * FROM listings 
-      WHERE seller_id = ? 
-      ORDER BY created_at DESC
-    `, [req.session.user.user_id]);
+    // Get user from users table and join with user_information if it exists
+    const [users] = await connection.execute(`
+      SELECT 
+        u.user_id,
+        u.email,
+        u.phone_number,
+        u.password,
+        u.role,
+        u.status,
+        ui.first_name,
+        ui.last_name,
+        ui.username
+      FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.email = ?
+    `, [email]);
     
-    res.render('users/my_listing', {
-      title: 'My Listings - Vintique',
-      layout: 'user',
-      activePage: 'my_listing',
-      listings: listings,
-      user: req.session.user
-    });
+    if (users.length === 0) {
+      return res.render('users/login', { 
+        error: 'User not found',
+        layout: 'user',
+        activePage: 'login'
+      });
+    }
+    
+    const user = users[0];
+    
+    // Check if user is suspended (applies to both users and staff)
+    if (user.status === 'suspended') {
+      return res.render('users/login', { 
+        error: 'Your account has been suspended',
+        layout: 'user',
+        activePage: 'login'
+      });
+    }
+    
+    // Simple password check (in production, use bcrypt)
+    if (user.password !== password) {
+      return res.render('users/login', { 
+        error: 'Invalid password',
+        layout: 'user',
+        activePage: 'login'
+      });
+    }
+    
+    req.session.user = {
+      user_id: user.user_id,
+      id: user.user_id, // For compatibility
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      username: user.username,
+      role: user.role,
+      status: user.status
+    };
+    
+    // Redirect based on user role
+    if (user.role === 'staff' || user.role === 'admin') {
+      res.redirect('/staff/dashboard');
+    } else {
+      res.redirect('/');
+    }
   } catch (error) {
-    console.error('Error fetching user listings:', error);
-    res.render('users/my_listing', {
-      title: 'My Listings - Vintique',
+    console.error('Login error:', error);
+    res.render('users/login', { 
+      error: 'Server error',
       layout: 'user',
-      activePage: 'my_listing',
-      listings: [],
-      error: 'Error loading your listings',
-      user: req.session.user
+      activePage: 'login'
     });
   } finally {
     if (connection) await connection.end();
@@ -530,110 +549,6 @@ app.post('/post_product', upload.array('images', 5), (req, res) => {
 
   if (!title || !description || !category || !condition || !price || !images || images.length === 0) {
     return res.render('users/post_product', {
-// Individual listing page
-app.get('/listing/:id', async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const listingId = req.params.id;
-    
-    // Fetch the specific listing with seller information
-    const [listings] = await connection.execute(`
-      SELECT 
-        l.*,
-        ui.username,
-        ui.first_name,
-        ui.last_name,
-        u.email,
-        u.user_id as seller_user_id
-      FROM listings l
-      LEFT JOIN users u ON l.seller_id = u.user_id
-      LEFT JOIN user_information ui ON u.user_id = ui.user_id
-      WHERE l.listing_id = ? AND l.status = 'active'
-    `, [listingId]);
-    
-    if (listings.length === 0) {
-      return res.status(404).render('error', {
-        title: 'Listing Not Found - Vintique',
-        layout: 'user',
-        error: 'Listing not found or no longer available',
-        user: req.session.user
-      });
-    }
-    
-    const listing = listings[0];
-    
-    res.render('users/listing_detail', {
-      title: `${listing.title} - Vintique`,
-      layout: 'user',
-      activePage: 'marketplace',
-      listing: listing,
-      user: req.session.user
-    });
-  } catch (error) {
-    console.error('Error fetching listing:', error);
-    res.status(500).render('error', {
-      title: 'Error - Vintique',
-      layout: 'user',
-      error: 'Error loading listing',
-      user: req.session.user
-    });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// ========== MESSAGES ROUTES ==========
-
-// Messages page
-app.get('/messages', requireAuth, async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const userId = req.session.user.user_id;
-    
-    // Fetch conversations for the current user
-    const [conversations] = await connection.execute(`
-      SELECT 
-        c.*,
-        CASE 
-          WHEN c.buyer_id = ? THEN seller_info.username
-          ELSE buyer_info.username
-        END as other_user_name,
-        CASE 
-          WHEN c.buyer_id = ? THEN seller_info.first_name
-          ELSE buyer_info.first_name
-        END as other_first_name,
-        CASE 
-          WHEN c.buyer_id = ? THEN seller_info.last_name
-          ELSE buyer_info.last_name
-        END as other_last_name,
-        l.title as listing_title,
-        l.listing_id,
-        (SELECT message_content FROM messages 
-         WHERE conversation_id = c.conversation_id 
-         ORDER BY sent_at DESC LIMIT 1) as last_message_preview,
-        (SELECT sent_at FROM messages 
-         WHERE conversation_id = c.conversation_id 
-         ORDER BY sent_at DESC LIMIT 1) as last_message_time,
-        (SELECT COUNT(*) FROM messages 
-         WHERE conversation_id = c.conversation_id 
-         AND sender_id != ? AND is_read = 0) as unread_count
-      FROM conversations c
-      LEFT JOIN users seller ON c.seller_id = seller.user_id
-      LEFT JOIN user_information seller_info ON seller.user_id = seller_info.user_id
-      LEFT JOIN users buyer ON c.buyer_id = buyer.user_id
-      LEFT JOIN user_information buyer_info ON buyer.user_id = buyer_info.user_id
-      LEFT JOIN listings l ON c.listing_id = l.listing_id
-      WHERE c.buyer_id = ? OR c.seller_id = ?
-      ORDER BY COALESCE(
-        (SELECT sent_at FROM messages WHERE conversation_id = c.conversation_id ORDER BY sent_at DESC LIMIT 1),
-        c.created_at
-      ) DESC
-    `, [userId, userId, userId, userId, userId, userId]);
-    
-    res.render('users/messages', {
-      title: 'Messages - Vintique',
       layout: 'user',
       activePage: 'sell',
       error: 'All required fields and at least one image must be provided.'
@@ -701,23 +616,6 @@ app.get('/my_listing', (req, res) => {
       layout: 'user',
       activePage: 'mylistings',
       listings
-      activePage: 'messages',
-      conversations: conversations,
-      conversationsJson: JSON.stringify(conversations),
-      userJson: JSON.stringify(req.session.user),
-      user: req.session.user
-    });
-  } catch (error) {
-    console.error('Error fetching conversations:', error);
-    res.render('users/messages', {
-      title: 'Messages - Vintique',
-      layout: 'user',
-      activePage: 'messages',
-      conversations: [],
-      conversationsJson: JSON.stringify([]),
-      userJson: JSON.stringify(req.session.user),
-      error: 'Error loading messages',
-      user: req.session.user
     });
   });
 });
@@ -974,73 +872,6 @@ app.delete('/listings/:id', (req, res) => {
       res.json({ success: true });
     });
   });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// ========== LISTING MANAGEMENT ROUTES ==========
-
-// Mark listing as sold
-app.post('/listings/:id/mark_sold', requireAuth, async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const listingId = req.params.id;
-    const userId = req.session.user.user_id;
-    
-    // Check if the listing belongs to the current user
-    const [listings] = await connection.execute(`
-      SELECT * FROM listings WHERE listing_id = ? AND seller_id = ?
-    `, [listingId, userId]);
-    
-    if (listings.length === 0) {
-      return res.status(404).json({ error: 'Listing not found or you do not have permission to modify it' });
-    }
-    
-    // Update the listing status to sold
-    await connection.execute(`
-      UPDATE listings SET status = 'sold' WHERE listing_id = ?
-    `, [listingId]);
-    
-    res.json({ success: true, message: 'Listing marked as sold' });
-  } catch (error) {
-    console.error('Error marking listing as sold:', error);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Delete listing
-app.delete('/listings/:id', requireAuth, async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const listingId = req.params.id;
-    const userId = req.session.user.user_id;
-    
-    // Check if the listing belongs to the current user
-    const [listings] = await connection.execute(`
-      SELECT * FROM listings WHERE listing_id = ? AND seller_id = ?
-    `, [listingId, userId]);
-    
-    if (listings.length === 0) {
-      return res.status(404).json({ error: 'Listing not found or you do not have permission to delete it' });
-    }
-    
-    // Delete the listing
-    await connection.execute(`
-      DELETE FROM listings WHERE listing_id = ?
-    `, [listingId]);
-    
-    res.json({ success: true, message: 'Listing deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting listing:', error);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    if (connection) await connection.end();
-  }
 });
 
 // ========== ACCOUNT SETTINGS ROUTES ==========
@@ -1340,107 +1171,155 @@ app.get('/api/user/addresses', requireAuth, async (req, res) => {
   } finally {
     if (connection) await connection.end();
   }
-// Edit listing page
-app.get('/edit_listing/:id', requireAuth, async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const listingId = req.params.id;
-    const userId = req.session.user.user_id;
-    
-    // Fetch the listing that belongs to the current user
-    const [listings] = await connection.execute(`
-      SELECT * FROM listings WHERE listing_id = ? AND seller_id = ?
-    `, [listingId, userId]);
-    
-    if (listings.length === 0) {
-      return res.status(404).render('error', {
-        title: 'Listing Not Found - Vintique',
-        layout: 'user',
-        error: 'Listing not found or you do not have permission to edit it',
-        user: req.session.user
-      });
-    }
-    
-    const listing = listings[0];
-    
-    res.render('users/edit_listing', {
-      title: 'Edit Listing - Vintique',
-      layout: 'user',
-      activePage: 'my_listing',
-      listing: listing,
-      user: req.session.user
-    });
-  } catch (error) {
-    console.error('Error fetching listing for edit:', error);
-    res.status(500).render('error', {
-      title: 'Error - Vintique',
-      layout: 'user',
-      error: 'Error loading listing for editing',
-      user: req.session.user
-    });
-  } finally {
-    if (connection) await connection.end();
-  }
 });
 
-// ========== API ROUTES FOR LISTINGS ==========
+// ========== STAFF ROUTES ==========
 
-// Get all listings API
-app.get('/api/listings', async (req, res) => {
+// Staff Dashboard route
+app.get('/staff/dashboard', requireStaff, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
     
-    const [listings] = await connection.execute(`
+    // Get dashboard statistics
+    const [userStats] = await connection.execute(`
       SELECT 
-        l.*,
-        ui.username,
-        u.email
-      FROM listings l
-      LEFT JOIN users u ON l.seller_id = u.user_id
+        COUNT(*) as total_users,
+        SUM(CASE WHEN COALESCE(ui.status, 'active') = 'suspended' THEN 1 ELSE 0 END) as suspended_users
+      FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
-      WHERE l.status = 'active'
-      ORDER BY l.created_at DESC
+      WHERE u.role = 'user'
     `);
     
-    res.json(listings);
-  } catch (error) {
-    console.error('Error fetching listings API:', error);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Get single listing API
-app.get('/api/listings/:id', async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const listingId = req.params.id;
+    const [listingStats] = await connection.execute(`
+      SELECT 
+        COUNT(*) as total_listings,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_listings,
+        SUM(CASE WHEN status = 'sold' THEN 1 ELSE 0 END) as sold_listings
+      FROM listings
+    `);
     
-    const [listings] = await connection.execute(`
+    const [qaStats] = await connection.execute(`
+      SELECT 
+        COUNT(*) as total_questions,
+        SUM(CASE WHEN answer_content IS NOT NULL THEN 1 ELSE 0 END) as answered_questions
+      FROM qa 
+      WHERE is_verified = 1
+    `);
+    
+    const [recentListings] = await connection.execute(`
       SELECT 
         l.*,
         ui.username,
         ui.first_name,
-        ui.last_name,
-        u.email
+        ui.last_name
       FROM listings l
-      LEFT JOIN users u ON l.seller_id = u.user_id
+      LEFT JOIN user_information ui ON l.user_id = ui.user_id
+      ORDER BY l.created_at DESC
+      LIMIT 5
+    `);
+    
+    const [recentUsers] = await connection.execute(`
+      SELECT 
+        u.*,
+        ui.username,
+        ui.first_name,
+        ui.last_name,
+        COALESCE(ui.status, 'active') as status
+      FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
-      WHERE l.listing_id = ? AND l.status = 'active'
-    `, [listingId]);
+      WHERE u.role = 'user'
+      ORDER BY u.user_id DESC
+      LIMIT 5
+    `);
     
-    if (listings.length === 0) {
-      return res.status(404).json({ error: 'Listing not found' });
-    }
+    const [salesOverTime] = await connection.execute(`
+      SELECT 
+        MONTH(created_at) AS month,
+        SUM(price) AS total_sales
+      FROM listings
+      WHERE status = 'sold'
+      GROUP BY MONTH(created_at)
+      ORDER BY month
+    `);
+
+    const [topReportedUsers] = await connection.execute(`
+      SELECT 
+        ui.email,
+        COUNT(*) AS report_count
+      FROM reports r
+      JOIN users u ON r.reported_user_id = u.user_id
+      JOIN user_information ui ON u.user_id = ui.user_id
+      GROUP BY ui.email
+      ORDER BY report_count DESC
+      LIMIT 3
+    `);
+
+
+    const stats = {
+      users: userStats[0],
+      listings: listingStats[0],
+      qa: qaStats[0]
+    };
     
-    res.json(listings[0]);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const salesLabels = JSON.stringify(salesOverTime.map(row => monthNames[row.month - 1]));
+    const salesValues = JSON.stringify(salesOverTime.map(row => row.total_sales));
+
+
+    const reportLabels = topReportedUsers.map(row => `'${row.email}'`).join(', ');
+    const reportValues = topReportedUsers.map(row => row.report_count).join(', ');
+
+    res.render('staff/dashboard', {
+      layout: 'staff',
+      activePage: 'dashboard',
+      stats,
+      recentListings,
+      recentUsers,
+      user: req.session.user,
+      salesLabels: salesLabels,
+      salesValues: salesValues,
+      reportLabels: `[${reportLabels}]`,
+      reportValues: `[${reportValues}]`
+    });
+
+
   } catch (error) {
-    console.error('Error fetching single listing API:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Dashboard error:', error);
+    res.render('staff/dashboard', { 
+      layout: 'staff', 
+      activePage: 'dashboard',
+      error: 'Error loading dashboard',
+      user: req.session.user
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+
+app.get('/staff/dashboard/report-details/:email', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const email = req.params.email;
+
+    // Find the user's ID from email
+    const [user] = await connection.execute(
+      `SELECT user_id FROM user_information WHERE email = ? LIMIT 1`, [email]
+    );
+    if (!user.length) return res.json([]); // No user found
+
+    const userId = user[0].user_id;
+
+    // Now get all reports for this user
+    const [reports] = await connection.execute(
+      `SELECT created_at, reason, details FROM reports WHERE reported_user_id = ? ORDER BY created_at DESC`,
+      [userId]
+    );
+    res.json(reports);
+  } catch (error) {
+    res.json([]);
   } finally {
     if (connection) await connection.end();
   }
@@ -1470,50 +1349,62 @@ app.get('/users', requireStaff, (req, res) => {
 
 // Staff Management route
 app.get('/staff/staff_management', requireAdmin, async (req, res) => {
-// ========== MESSAGING API ROUTES ==========
-
-// Get messages for a conversation
-app.get('/api/conversations/:id/messages', requireAuth, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
-    const conversationId = req.params.id;
-    const userId = req.session.user.user_id;
+    const currentUserId = req.session.user.user_id;
     
-    // Verify user has access to this conversation
-    const [conversations] = await connection.execute(`
-      SELECT * FROM conversations 
-      WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
-    `, [conversationId, userId, userId]);
-    
-    if (conversations.length === 0) {
-      return res.status(404).json({ error: 'Conversation not found' });
-    }
-    
-    // Fetch messages
-    const [messages] = await connection.execute(`
+    // Get all staff and admin members except the current user
+    const [staffMembers] = await connection.execute(`
       SELECT 
-        m.*,
+        u.user_id,
+        u.email,
+        u.phone_number,
+        u.role,
+        u.status,
         ui.first_name,
         ui.last_name,
         ui.username
-      FROM messages m
-      LEFT JOIN users u ON m.sender_id = u.user_id
+      FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
-      WHERE m.conversation_id = ?
-      ORDER BY m.sent_at ASC
-    `, [conversationId]);
+      WHERE u.role IN ('staff', 'admin') AND u.user_id != ?
+      ORDER BY u.user_id
+    `, [currentUserId]);
     
-    // Mark messages as read
-    await connection.execute(`
-      UPDATE messages SET is_read = 1 
-      WHERE conversation_id = ? AND sender_id != ?
-    `, [conversationId, userId]);
+    // Calculate KPI statistics
+    const [kpiStats] = await connection.execute(`
+      SELECT 
+        SUM(CASE WHEN role = 'staff' THEN 1 ELSE 0 END) as totalStaff,
+        SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) as totalAdmins,
+        SUM(CASE WHEN role = 'staff' AND status = 'suspended' THEN 1 ELSE 0 END) as suspendedStaff,
+        SUM(CASE WHEN role = 'admin' AND status = 'suspended' THEN 1 ELSE 0 END) as suspendedAdmins,
+        SUM(CASE WHEN role = 'staff' AND status = 'active' THEN 1 ELSE 0 END) as activeStaff,
+        SUM(CASE WHEN role = 'admin' AND status = 'active' THEN 1 ELSE 0 END) as activeAdmins
+      FROM users
+      WHERE role IN ('staff', 'admin')
+    `);
     
-    res.json(messages);
+    res.render('staff/staff_management', { 
+      layout: 'staff', 
+      activePage: 'staff_management',
+      staffMembers,
+      currentUser: req.session.user,
+      totalStaff: kpiStats[0].totalStaff || 0,
+      totalAdmins: kpiStats[0].totalAdmins || 0,
+      suspendedStaff: kpiStats[0].suspendedStaff || 0,
+      suspendedAdmins: kpiStats[0].suspendedAdmins || 0,
+      activeStaff: kpiStats[0].activeStaff || 0,
+      activeAdmins: kpiStats[0].activeAdmins || 0
+    });
   } catch (error) {
-    console.error('Error fetching messages:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Staff management error:', error);
+    res.render('staff/staff_management', { 
+      layout: 'staff', 
+      activePage: 'staff_management',
+      error: 'Error loading staff data',
+      staffMembers: [],
+      currentUser: req.session.user
+    });
   } finally {
     if (connection) await connection.end();
   }
@@ -1589,262 +1480,268 @@ app.patch('/users/:id/status', requireStaff, (req, res) => {
 
 // Staff Management API endpoints
 app.patch('/staff/:id', requireAdmin, async (req, res) => {
-// Send a message
-app.post('/api/conversations/:id/messages', requireAuth, upload.single('image'), async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
-    const conversationId = req.params.id;
-    const userId = req.session.user.user_id;
-    const { message_content } = req.body;
+    const staffId = req.params.id;
+    const { email, phone, role } = req.body;
+    const currentUserId = req.session.user.user_id;
     
-    // Verify user has access to this conversation
-    const [conversations] = await connection.execute(`
-      SELECT * FROM conversations 
-      WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
-    `, [conversationId, userId, userId]);
-    
-    if (conversations.length === 0) {
-      return res.status(404).json({ error: 'Conversation not found' });
+    // Prevent self-editing
+    if (parseInt(staffId) === currentUserId) {
+      return res.status(403).json({ error: 'Cannot edit your own account.' });
     }
     
-    // Check if we have either text or image
-    if (!message_content && !req.file) {
-      return res.status(400).json({ error: 'Message content or image is required' });
+    if (!email || !phone || !role) {
+      return res.status(400).json({ error: 'Email, phone number, and role are required.' });
     }
     
-    let imageUrl = null;
-    if (req.file) {
-      imageUrl = `/uploads/messages/${req.file.filename}`;
+    if (!['staff', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role value.' });
     }
     
-    // Insert message
-    const [result] = await connection.execute(`
-      INSERT INTO messages (conversation_id, sender_id, message_content, image_url, sent_at, is_read)
-      VALUES (?, ?, ?, ?, NOW(), 0)
-    `, [conversationId, userId, message_content || null, imageUrl]);
+    // Validate phone number format
+    if (!/^\d{8}$/.test(phone)) {
+      return res.status(400).json({ error: 'Phone number must be exactly 8 digits long.' });
+    }
     
-    res.json({ 
-      success: true, 
-      message_id: result.insertId,
-      message: 'Message sent successfully' 
-    });
+    // Check if email already exists for another user
+    const [existingUser] = await connection.execute(
+      'SELECT user_id FROM users WHERE email = ? AND user_id != ?',
+      [email, staffId]
+    );
+    
+    if (existingUser.length > 0) {
+      return res.status(409).json({ error: 'Email already exists.' });
+    }
+    
+    // Check if phone number already exists for another user
+    const [existingPhone] = await connection.execute(
+      'SELECT user_id FROM users WHERE phone_number = ? AND user_id != ?',
+      [phone, staffId]
+    );
+    
+    if (existingPhone.length > 0) {
+      return res.status(409).json({ error: 'Phone number already exists.' });
+    }
+    
+    // Update user table
+    await connection.execute(
+      'UPDATE users SET email = ?, phone_number = ?, role = ? WHERE user_id = ?',
+      [email, phone, role, staffId]
+    );
+    
+    // Update user_information table
+    await connection.execute(
+      'UPDATE user_information SET email = ?, phone_number = ? WHERE user_id = ?',
+      [email, phone, staffId]
+    );
+    
+    res.json({ success: true });
   } catch (error) {
-    console.error('Error sending message:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Staff update error:', error);
+    res.status(500).json({ error: 'Database error.' });
   } finally {
     if (connection) await connection.end();
   }
 });
 
-// Start a new conversation
-app.post('/start-conversation', requireAuth, async (req, res) => {
+// Delete staff member
+app.delete('/staff/:id', requireAdmin, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
-    const { listing_id, message } = req.body;
-    const buyerId = req.session.user.user_id;
+    const staffId = req.params.id;
+    const currentUserId = req.session.user.user_id;
     
-    // Get the listing and seller information
-    const [listings] = await connection.execute(`
-      SELECT seller_id FROM listings WHERE listing_id = ?
-    `, [listing_id]);
-    
-    if (listings.length === 0) {
-      return res.status(404).json({ error: 'Listing not found' });
+    // Prevent self-deletion
+    if (parseInt(staffId) === currentUserId) {
+      return res.status(403).json({ error: 'Cannot delete your own account.' });
     }
     
-    const sellerId = listings[0].seller_id;
+    // Check if staff/admin member exists
+    const [staffMember] = await connection.execute(
+      'SELECT user_id, role FROM users WHERE user_id = ? AND role IN ("staff", "admin")',
+      [staffId]
+    );
     
-    // Check if conversation already exists
-    const [existingConversations] = await connection.execute(`
-      SELECT conversation_id FROM conversations 
-      WHERE listing_id = ? AND buyer_id = ? AND seller_id = ?
-    `, [listing_id, buyerId, sellerId]);
+    if (staffMember.length === 0) {
+      return res.status(404).json({ error: 'Staff/Admin member not found.' });
+    }
     
-    let conversationId;
+    // Delete staff member
+    await connection.execute('DELETE FROM user_information WHERE user_id = ?', [staffId]);
+    await connection.execute('DELETE FROM users WHERE user_id = ?', [staffId]);
     
-    if (existingConversations.length > 0) {
-      conversationId = existingConversations[0].conversation_id;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Staff deletion error:', error);
+    res.status(500).json({ error: 'Database error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Change staff status
+app.patch('/staff/:id/status', requireAdmin, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const staffId = req.params.id;
+    const { status } = req.body;
+    const currentUserId = req.session.user.user_id;
+    
+    console.log('Status update request:', { staffId, status, currentUserId });
+    
+    // Prevent self-status-change
+    if (parseInt(staffId) === currentUserId) {
+      return res.status(403).json({ error: 'Cannot change your own status.' });
+    }
+    
+    if (!['active', 'suspended'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status.' });
+    }
+    
+    const updateStatusSql = 'UPDATE users SET status = ? WHERE user_id = ? AND role IN ("staff", "admin")';
+    const [result] = await connection.execute(updateStatusSql, [status, staffId]);
+    
+    console.log('Status update result:', { affectedRows: result.affectedRows, staffId, status });
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Staff/Admin member not found.' });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Staff status update error:', error);
+    res.status(500).json({ error: 'Database error.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Create staff member
+app.post('/staff', requireAdmin, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    await connection.beginTransaction();
+
+        const { email, role, phone, password } = req.body;
+    
+    // Validate input
+    if (!email || !role || !phone || !password) {
+      return res.status(400).json({ error: 'Email, role, phone number, and password are required.' });
+    }
+
+        if (!['staff', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be staff or admin.' });
+    }
+    
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+    
+    // Validate phone number format (8 digits)
+    if (!/^\d{8}$/.test(phone)) {
+      return res.status(400).json({ error: 'Phone number must be exactly 8 digits long.' });
+    }
+    
+    // Check if email already exists
+    const [existingUser] = await connection.execute(
+      'SELECT user_id FROM users WHERE email = ?',
+      [email]
+    );
+    
+    if (existingUser.length > 0) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Email already exists.' });
+    }
+    
+    // Check if phone number already exists
+    const [existingPhone] = await connection.execute(
+      'SELECT user_id FROM users WHERE phone_number = ?',
+      [phone]
+    );
+    
+    if (existingPhone.length > 0) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Phone number already exists.' });
+    }
+    
+    // Clean up any orphaned user_information records (in case of previous failed transactions)
+    await connection.execute(
+      'DELETE FROM user_information WHERE user_id NOT IN (SELECT user_id FROM users)'
+    );
+
+        // Insert staff member into users table
+    const [result] = await connection.execute(
+      'INSERT INTO users (email, phone_number, password, role, status) VALUES (?, ?, ?, ?, ?)',
+      [email, phone, password, role, 'active']
+    );
+    
+    const newStaffId = result.insertId;
+    console.log('Created user with ID:', newStaffId);
+    
+    // Check if user_information record already exists
+    const [existingInfo] = await connection.execute(
+      'SELECT user_id FROM user_information WHERE user_id = ?',
+      [newStaffId]
+    );
+    
+    console.log('Existing user_information records for user_id', newStaffId, ':', existingInfo.length);
+    
+    if (existingInfo.length > 0) {
+      console.log('Updating existing user_information record');
+      // Update existing record
+      await connection.execute(
+        'UPDATE user_information SET username = ?, first_name = ?, last_name = ?, email = ?, phone_number = ? WHERE user_id = ?',
+        [email.split('@')[0], 'Staff', 'Member', email, phone, newStaffId]
+      );
     } else {
-      // Create new conversation
-      const [result] = await connection.execute(`
-        INSERT INTO conversations (listing_id, buyer_id, seller_id, created_at)
-        VALUES (?, ?, ?, NOW())
-      `, [listing_id, buyerId, sellerId]);
-      
-      conversationId = result.insertId;
+      console.log('Creating new user_information record');
+      // Insert new user_information record
+      await connection.execute(
+        'INSERT INTO user_information (user_id, username, first_name, last_name, email, phone_number) VALUES (?, ?, ?, ?, ?, ?)',
+        [newStaffId, email.split('@')[0], 'Staff', 'Member', email, phone]
+      );
     }
-    
-    // Send the initial message
-    await connection.execute(`
-      INSERT INTO messages (conversation_id, sender_id, message_content, sent_at, is_read)
-      VALUES (?, ?, ?, NOW(), 0)
-    `, [conversationId, buyerId, message]);
-    
-    res.json({ 
-      success: true, 
-      conversation_id: conversationId 
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: 'Staff member created successfully.',
+      staffId: newStaffId
     });
+
   } catch (error) {
-    console.error('Error starting conversation:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Staff creation error:', error);
+
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error('Rollback error:', rollbackError);
+      }
+    }
+
+    if (error.code === 'ER_DUP_ENTRY') {
+      if (error.message.includes('email')) {
+        return res.status(409).json({ error: 'Email already exists.' });
+      }
+      if (error.message.includes('phone_number')) {
+        return res.status(409).json({ error: 'Phone number already exists.' });
+      }
+      return res.status(409).json({ error: 'User already exists.' });
+    }
+
+    res.status(500).json({ error: 'Database error: ' + error.message });
   } finally {
     if (connection) await connection.end();
   }
 });
 
-// Create a new conversation from messages page
-app.post('/api/conversations', requireAuth, async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const { seller_email, initial_message } = req.body;
-    const buyerId = req.session.user.user_id;
-    
-    // Find the seller by email
-    const [sellers] = await connection.execute(`
-      SELECT user_id FROM users WHERE email = ?
-    `, [seller_email]);
-    
-    if (sellers.length === 0) {
-      return res.status(404).json({ error: 'User not found with that email' });
-    }
-    
-    const sellerId = sellers[0].user_id;
-    
-    if (sellerId === buyerId) {
-      return res.status(400).json({ error: 'You cannot start a conversation with yourself' });
-    }
-    
-    // Create new conversation
-    const [result] = await connection.execute(`
-      INSERT INTO conversations (buyer_id, seller_id, created_at)
-      VALUES (?, ?, NOW())
-    `, [buyerId, sellerId]);
-    
-    const conversationId = result.insertId;
-    
-    // Send the initial message
-    await connection.execute(`
-      INSERT INTO messages (conversation_id, sender_id, message_content, sent_at, is_read)
-      VALUES (?, ?, ?, NOW(), 0)
-    `, [conversationId, buyerId, initial_message]);
-    
-    res.json({ 
-      success: true, 
-      conversation_id: conversationId 
-    });
-  } catch (error) {
-    console.error('Error creating conversation:', error);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// ========== AUTHENTICATION ROUTES ==========
-
-// Login route
-app.get('/login', (req, res) => {
-  res.render('users/login', { 
-    title: 'Login - Vintique',
-    layout: 'user',
-    activePage: 'login'
-  });
-});
-
-// Login handler
-app.post('/login', async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const { email, password } = req.body;
-    
-    const [users] = await connection.execute(`
-      SELECT 
-        u.user_id,
-        u.email,
-        u.phone_number,
-        u.password,
-        u.role,
-        u.status,
-        ui.first_name,
-        ui.last_name,
-        ui.username
-      FROM users u
-      LEFT JOIN user_information ui ON u.user_id = ui.user_id
-      WHERE u.email = ?
-    `, [email]);
-    
-    if (users.length === 0) {
-      return res.render('users/login', { 
-        error: 'User not found',
-        layout: 'user',
-        activePage: 'login'
-      });
-    }
-    
-    const user = users[0];
-    
-    if (user.status === 'suspended') {
-      return res.render('users/login', { 
-        error: 'Your account has been suspended',
-        layout: 'user',
-        activePage: 'login'
-      });
-    }
-    
-    if (user.password !== password) {
-      return res.render('users/login', { 
-        error: 'Invalid password',
-        layout: 'user',
-        activePage: 'login'
-      });
-    }
-    
-    req.session.user = {
-      user_id: user.user_id,
-      id: user.user_id,
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      username: user.username,
-      role: user.role,
-      status: user.status
-    };
-    
-    if (user.role === 'staff' || user.role === 'admin') {
-      res.redirect('/staff/dashboard');
-    } else {
-      res.redirect('/');
-    }
-  } catch (error) {
-    console.error('Login error:', error);
-    res.render('users/login', { 
-      error: 'Server error',
-      layout: 'user',
-      activePage: 'login'
-    });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Register routes
-app.get('/register', (req, res) => {
-  res.render('register', { layout: 'user', activePage: 'register' });
-});
-
-// Logout
-app.get('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Logout error:', err);
-    }
-    res.redirect('/');
-  });
-});
 
 // ========== FAQ ROUTES ==========
 
@@ -1987,9 +1884,7 @@ app.get('/staff/qa', requireStaff, async (req, res) => {
   }
 });
 
-// ========== Q&A API ROUTES ==========
-
-// API: Get all questions (only verified for users)
+// API: Get all questions (for auto-refresh)
 app.get('/api/qa', async (req, res) => {
   let connection;
   try {
@@ -2022,21 +1917,21 @@ app.get('/api/qa', async (req, res) => {
     
     if (status) {
       if (status === 'answered') {
-        query += ' AND EXISTS (SELECT 1 FROM qa_answers WHERE qa_answers.qa_id = q.qa_id)';
+        query += ' AND EXISTS (SELECT 1 FROM qa_answers WHERE qa_id = q.qa_id)';
       } else if (status === 'pending') {
-        query += ' AND NOT EXISTS (SELECT 1 FROM qa_answers WHERE qa_answers.qa_id = q.qa_id)';
+        query += ' AND NOT EXISTS (SELECT 1 FROM qa_answers WHERE qa_id = q.qa_id)';
       }
     }
     
     if (search) {
-      query += ' AND (q.question_text LIKE ? OR EXISTS (SELECT 1 FROM qa_answers WHERE qa_answers.qa_id = q.qa_id AND qa_answers.answer_content LIKE ?))';
+      query += ' AND (q.question_text LIKE ? OR EXISTS (SELECT 1 FROM qa_answers WHERE qa_id = q.qa_id AND answer_content LIKE ?))';
       params.push(`%${search}%`, `%${search}%`);
     }
     
     query += ' GROUP BY q.qa_id ORDER BY q.asked_at DESC';
     
     const [questions] = await connection.execute(query, params);
-
+    
     // Get answers for each question
     for (let question of questions) {
       const [answers] = await connection.execute(`
@@ -2065,7 +1960,7 @@ app.get('/api/qa', async (req, res) => {
   }
 });
 
-// API: Submit a new question (now requires manual verification)
+// API: Submit a new question
 app.post('/api/qa', requireAuth, async (req, res) => {
   let connection;
   try {
@@ -2087,16 +1982,28 @@ app.post('/api/qa', requireAuth, async (req, res) => {
     
     const username = userInfo[0]?.username || userInfo[0]?.email || 'Unknown';
     
-    // Insert new question - REQUIRES MANUAL VERIFICATION (is_verified = 0)
+    // Insert new question (not verified by default - requires staff/admin verification)
     const [result] = await connection.execute(`
       INSERT INTO qa (asker_id, asker_username, category, question_text, details, asked_at, is_verified)
       VALUES (?, ?, ?, ?, ?, NOW(), 0)
     `, [userId, username, category, question_text.trim(), details ? details.trim() : null]);
     
-    res.status(201).json({
-      message: 'Question submitted successfully! It will be reviewed by our moderators before being published.',
-      qa_id: result.insertId
-    });
+    // Get the created question with user info
+    const [newQuestion] = await connection.execute(`
+      SELECT 
+        q.*,
+        asker.email as asker_email,
+        asker_info.first_name as asker_first_name,
+        asker_info.last_name as asker_last_name,
+        asker_info.username as asker_username,
+        0 as helpful_count
+      FROM qa q
+      LEFT JOIN users asker ON q.asker_id = asker.user_id
+      LEFT JOIN user_information asker_info ON q.asker_id = asker_info.user_id
+      WHERE q.qa_id = ?
+    `, [result.insertId]);
+    
+    res.status(201).json(newQuestion[0]);
   } catch (error) {
     console.error('Error submitting question:', error);
     res.status(500).json({ error: 'Server error' });
@@ -2105,7 +2012,7 @@ app.post('/api/qa', requireAuth, async (req, res) => {
   }
 });
 
-// API: Submit an answer to a question (with duplicate prevention)
+// API: Submit an answer to a question
 app.post('/api/qa/:questionId/answer', requireAuth, async (req, res) => {
   let connection;
   try {
@@ -2127,19 +2034,9 @@ app.post('/api/qa/:questionId/answer', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
     
-    // Check for duplicate answers from the same user with similar content
-    const [duplicateCheck] = await connection.execute(`
-      SELECT * FROM qa_answers 
-      WHERE qa_id = ? AND answerer_id = ? AND answer_content = ?
-    `, [questionId, userId, answer_content.trim()]);
-    
-    if (duplicateCheck.length > 0) {
-      return res.status(400).json({ error: 'You have already submitted this answer' });
-    }
-    
     // Get user information
     const [userInfo] = await connection.execute(`
-      SELECT ui.username, u.email, u.role
+      SELECT ui.username, u.email 
       FROM users u 
       LEFT JOIN user_information ui ON u.user_id = ui.user_id 
       WHERE u.user_id = ?
@@ -2147,7 +2044,7 @@ app.post('/api/qa/:questionId/answer', requireAuth, async (req, res) => {
     
     const username = userInfo[0]?.username || userInfo[0]?.email || 'Unknown';
     
-    // Insert new answer into qa_answers table
+    // Insert answer into qa_answers table
     const [result] = await connection.execute(`
       INSERT INTO qa_answers (qa_id, answerer_id, answerer_username, answer_content, answered_at)
       VALUES (?, ?, ?, ?, NOW())
@@ -2175,6 +2072,7 @@ app.post('/api/qa/:questionId/answer', requireAuth, async (req, res) => {
     if (connection) await connection.end();
   }
 });
+
 
 // API: Vote helpful on a question
 app.post('/api/qa/:questionId/vote', requireAuth, async (req, res) => {
@@ -2252,18 +2150,584 @@ app.get('/api/qa/votes/status', requireAuth, async (req, res) => {
   }
 });
 
-// API: Get pending questions count for dashboard
-app.get('/api/qa/pending-count', requireStaff, async (req, res) => {
+// API: Search questions
+app.get('/api/qa/search', async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
-    const [result] = await connection.execute(`
-      SELECT COUNT(*) as pending_count FROM qa WHERE is_verified = 0
+    const { q } = req.query;
+    
+    if (!q || q.trim() === '') {
+      return res.json([]);
+    }
+    
+    const searchTerm = `%${q.trim()}%`;
+    
+    const [questions] = await connection.execute(`
+      SELECT 
+        q.*,
+        asker.email as asker_email,
+        asker_info.first_name as asker_first_name,
+        asker_info.last_name as asker_last_name,
+        asker_info.username as asker_username,
+        answerer.email as answerer_email,
+        answerer_info.first_name as answerer_first_name,
+        answerer_info.last_name as answerer_last_name,
+        answerer_info.username as answerer_username,
+        COUNT(qv.vote_id) as helpful_count
+      FROM qa q
+      LEFT JOIN users asker ON q.asker_id = asker.user_id
+      LEFT JOIN user_information asker_info ON q.asker_id = asker_info.user_id
+      LEFT JOIN users answerer ON q.answerer_id = answerer.user_id
+      LEFT JOIN user_information answerer_info ON q.answerer_id = answerer_info.user_id
+      LEFT JOIN qa_votes qv ON q.qa_id = qv.qa_id
+      WHERE q.is_verified = 1 
+        AND (q.question_text LIKE ? OR q.answer_content LIKE ? OR q.category LIKE ?)
+      GROUP BY q.qa_id
+      ORDER BY q.asked_at DESC
+      LIMIT 20
+    `, [searchTerm, searchTerm, searchTerm]);
+    
+    res.json(questions);
+  } catch (error) {
+    console.error('Error searching questions:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// API: Get Q&A statistics
+app.get('/api/qa/stats', async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    
+    const [stats] = await connection.execute(`
+      SELECT 
+        COUNT(*) as total_questions,
+        SUM(CASE WHEN answer_content IS NOT NULL THEN 1 ELSE 0 END) as answered_questions,
+        COUNT(DISTINCT asker_id) as unique_askers,
+        COUNT(DISTINCT answerer_id) as unique_answerers
+      FROM qa 
+      WHERE is_verified = 1
     `);
     
-    res.json({ pending_count: result[0].pending_count });
+    const [categoryStats] = await connection.execute(`
+      SELECT 
+        category,
+        COUNT(*) as count,
+        SUM(CASE WHEN answer_content IS NOT NULL THEN 1 ELSE 0 END) as answered
+      FROM qa 
+      WHERE is_verified = 1
+      GROUP BY category
+      ORDER BY count DESC
+    `);
+    
+    const totalQuestions = stats[0].total_questions;
+    const answeredQuestions = stats[0].answered_questions;
+    const answerRate = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+    
+    res.json({
+      total_questions: totalQuestions,
+      answered_questions: answeredQuestions,
+      answer_rate: answerRate,
+      unique_askers: stats[0].unique_askers,
+      unique_answerers: stats[0].unique_answerers,
+      category_breakdown: categoryStats
+    });
   } catch (error) {
-    console.error('Error getting pending count:', error);
+    console.error('Error fetching Q&A stats:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== STAFF Q&A MODERATION API ENDPOINTS ==========
+
+// Staff: Submit an answer to a question
+app.post('/api/qa/:id/answer', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const { id } = req.params;
+    const { answer_content } = req.body;
+    const userId = req.session.user.user_id;
+    
+    if (!answer_content || answer_content.trim() === '') {
+      return res.status(400).json({ error: 'Answer content is required' });
+    }
+    
+    // Check if question exists
+    const [questionCheck] = await connection.execute(`
+      SELECT * FROM qa WHERE qa_id = ?
+    `, [id]);
+    
+    if (questionCheck.length === 0) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    
+    // Get user information
+    const [userInfo] = await connection.execute(`
+      SELECT ui.username, u.email 
+      FROM users u 
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id 
+      WHERE u.user_id = ?
+    `, [userId]);
+    
+    const username = userInfo[0]?.username || userInfo[0]?.email || 'Unknown';
+    
+    // Insert answer into qa_answers table
+    const [result] = await connection.execute(`
+      INSERT INTO qa_answers (qa_id, answerer_id, answerer_username, answer_content, answered_at)
+      VALUES (?, ?, ?, ?, NOW())
+    `, [id, userId, username, answer_content.trim()]);
+    
+    // Get the created answer with user info
+    const [newAnswer] = await connection.execute(`
+      SELECT 
+        qa_ans.*,
+        answerer.email as answerer_email,
+        answerer_info.first_name as answerer_first_name,
+        answerer_info.last_name as answerer_last_name,
+        answerer_info.username as answerer_username
+      FROM qa_answers qa_ans
+      LEFT JOIN users answerer ON qa_ans.answerer_id = answerer.user_id
+      LEFT JOIN user_information answerer_info ON qa_ans.answerer_id = answerer_info.user_id
+      WHERE qa_ans.answer_id = ?
+    `, [result.insertId]);
+    
+    res.status(201).json(newAnswer[0]);
+  } catch (error) {
+    console.error('Error submitting answer:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Staff: Verify a question
+app.patch('/api/qa/:id/verify', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const { id } = req.params;
+    
+    // Check if question exists
+    const [questionCheck] = await connection.execute(`
+      SELECT * FROM qa WHERE qa_id = ?
+    `, [id]);
+    
+    if (questionCheck.length === 0) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    
+    // Update verification status
+    await connection.execute(`
+      UPDATE qa SET is_verified = 1 WHERE qa_id = ?
+    `, [id]);
+    
+    res.json({ message: 'Question verified successfully' });
+  } catch (error) {
+    console.error('Error verifying question:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Staff: Delete a question
+app.delete('/api/qa/:id', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const { id } = req.params;
+    
+    // Check if question exists
+    const [questionCheck] = await connection.execute(`
+      SELECT * FROM qa WHERE qa_id = ?
+    `, [id]);
+    
+    if (questionCheck.length === 0) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    
+    // Delete related records first (answers and votes)
+    await connection.execute(`
+      DELETE FROM qa_answers WHERE qa_id = ?
+    `, [id]);
+    
+    await connection.execute(`
+      DELETE FROM qa_votes WHERE qa_id = ?
+    `, [id]);
+    
+    // Delete the question
+    await connection.execute(`
+      DELETE FROM qa WHERE qa_id = ?
+    `, [id]);
+    
+    res.json({ message: 'Question deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting question:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== MESSAGES ROUTES ==========
+
+// Messages page
+app.get('/messages', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id;
+    
+    // Fetch conversations for the current user
+    const [conversations] = await connection.execute(`
+      SELECT 
+        c.*,
+        CASE 
+          WHEN c.buyer_id = ? THEN seller_info.username
+          ELSE buyer_info.username
+        END as other_user_name,
+        CASE 
+          WHEN c.buyer_id = ? THEN seller_info.first_name
+          ELSE buyer_info.first_name
+        END as other_first_name,
+        CASE 
+          WHEN c.buyer_id = ? THEN seller_info.last_name
+          ELSE buyer_info.last_name
+        END as other_last_name,
+        l.title as listing_title,
+        l.listing_id,
+        (SELECT message_content FROM messages 
+         WHERE conversation_id = c.conversation_id 
+         ORDER BY sent_at DESC LIMIT 1) as last_message_preview,
+        (SELECT sent_at FROM messages 
+         WHERE conversation_id = c.conversation_id 
+         ORDER BY sent_at DESC LIMIT 1) as last_message_time,
+        (SELECT COUNT(*) FROM messages 
+         WHERE conversation_id = c.conversation_id 
+         AND sender_id != ? AND is_read = 0) as unread_count
+      FROM conversations c
+      LEFT JOIN users seller ON c.seller_id = seller.user_id
+      LEFT JOIN user_information seller_info ON seller.user_id = seller_info.user_id
+      LEFT JOIN users buyer ON c.buyer_id = buyer.user_id
+      LEFT JOIN user_information buyer_info ON buyer.user_id = buyer_info.user_id
+      LEFT JOIN listings l ON c.listing_id = l.listing_id
+      WHERE c.buyer_id = ? OR c.seller_id = ?
+      ORDER BY COALESCE(
+        (SELECT sent_at FROM messages WHERE conversation_id = c.conversation_id ORDER BY sent_at DESC LIMIT 1),
+        c.created_at
+      ) DESC
+    `, [userId, userId, userId, userId, userId, userId]);
+    
+    res.render('users/messages', {
+      title: 'Messages - Vintique',
+      layout: 'user',
+      activePage: 'messages',
+      conversations: conversations,
+      conversationsJson: JSON.stringify(conversations),
+      userJson: JSON.stringify(req.session.user),
+      user: req.session.user
+    });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.render('users/messages', {
+      title: 'Messages - Vintique',
+      layout: 'user',
+      activePage: 'messages',
+      conversations: [],
+      conversationsJson: JSON.stringify([]),
+      userJson: JSON.stringify(req.session.user),
+      error: 'Error loading messages',
+      user: req.session.user
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== MESSAGING API ROUTES ==========
+
+// Get messages for a conversation
+app.get('/api/conversations/:id/messages', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const conversationId = req.params.id;
+    const userId = req.session.user.user_id;
+    
+    // Verify user has access to this conversation
+    const [conversations] = await connection.execute(`
+      SELECT * FROM conversations 
+      WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
+    `, [conversationId, userId, userId]);
+    
+    if (conversations.length === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    // Fetch messages
+    const [messages] = await connection.execute(`
+      SELECT 
+        m.*,
+        ui.first_name,
+        ui.last_name,
+        ui.username
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.user_id
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE m.conversation_id = ?
+      ORDER BY m.sent_at ASC
+    `, [conversationId]);
+    
+    // Mark messages as read
+    await connection.execute(`
+      UPDATE messages SET is_read = 1 
+      WHERE conversation_id = ? AND sender_id != ?
+    `, [conversationId, userId]);
+    
+    res.json(messages);
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Send a message
+app.post('/api/conversations/:id/messages', requireAuth, upload.single('image'), async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const conversationId = req.params.id;
+    const userId = req.session.user.user_id;
+    const { message_content } = req.body;
+    
+    // Verify user has access to this conversation
+    const [conversations] = await connection.execute(`
+      SELECT * FROM conversations 
+      WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
+    `, [conversationId, userId, userId]);
+    
+    if (conversations.length === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    // Check if we have either text or image
+    if (!message_content && !req.file) {
+      return res.status(400).json({ error: 'Message content or image is required' });
+    }
+    
+    let imageUrl = null;
+    if (req.file) {
+      imageUrl = `/uploads/messages/${req.file.filename}`;
+    }
+    
+    // Get sender username
+    const [senderInfo] = await connection.execute(`
+      SELECT username FROM user_information WHERE user_id = ?
+    `, [userId]);
+    
+    const senderUsername = senderInfo.length > 0 ? senderInfo[0].username : 'Unknown';
+    
+    // Insert message
+    const [result] = await connection.execute(`
+      INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, image_url, sent_at, is_read)
+      VALUES (?, ?, ?, ?, ?, NOW(), 0)
+    `, [conversationId, userId, senderUsername, message_content || null, imageUrl]);
+    
+    res.json({ 
+      success: true, 
+      message_id: result.insertId,
+      message: 'Message sent successfully' 
+    });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Start a new conversation
+app.post('/start-conversation', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const { listing_id, message } = req.body;
+    const buyerId = req.session.user.user_id;
+    
+    // Get the listing and seller information
+    const [listings] = await connection.execute(`
+      SELECT seller_id FROM listings WHERE listing_id = ?
+    `, [listing_id]);
+    
+    if (listings.length === 0) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+    
+    const sellerId = listings[0].seller_id;
+    
+    // Check if conversation already exists
+    const [existingConversations] = await connection.execute(`
+      SELECT conversation_id FROM conversations 
+      WHERE listing_id = ? AND buyer_id = ? AND seller_id = ?
+    `, [listing_id, buyerId, sellerId]);
+    
+    let conversationId;
+    
+    if (existingConversations.length > 0) {
+      conversationId = existingConversations[0].conversation_id;
+    } else {
+      // Create new conversation
+      const [result] = await connection.execute(`
+        INSERT INTO conversations (listing_id, buyer_id, seller_id, created_at)
+        VALUES (?, ?, ?, NOW())
+      `, [listing_id, buyerId, sellerId]);
+      
+      conversationId = result.insertId;
+    }
+    
+    // Get sender username
+    const [senderInfo] = await connection.execute(`
+      SELECT username FROM user_information WHERE user_id = ?
+    `, [buyerId]);
+    
+    const senderUsername = senderInfo.length > 0 ? senderInfo[0].username : 'Unknown';
+    
+    // Send the initial message
+    await connection.execute(`
+      INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read)
+      VALUES (?, ?, ?, ?, NOW(), 0)
+    `, [conversationId, buyerId, senderUsername, message]);
+    
+    res.json({ 
+      success: true, 
+      conversation_id: conversationId 
+    });
+  } catch (error) {
+    console.error('Error starting conversation:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Create a new conversation from messages page
+app.post('/api/conversations', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const { seller_email, initial_message } = req.body;
+    const buyerId = req.session.user.user_id;
+    
+    // Find the seller by email
+    const [sellers] = await connection.execute(`
+      SELECT user_id FROM users WHERE email = ?
+    `, [seller_email]);
+    
+    if (sellers.length === 0) {
+      return res.status(404).json({ error: 'User not found with that email' });
+    }
+    
+    const sellerId = sellers[0].user_id;
+    
+    if (sellerId === buyerId) {
+      return res.status(400).json({ error: 'You cannot start a conversation with yourself' });
+    }
+    
+    // Create new conversation
+    const [result] = await connection.execute(`
+      INSERT INTO conversations (buyer_id, seller_id, created_at)
+      VALUES (?, ?, NOW())
+    `, [buyerId, sellerId]);
+    
+    const conversationId = result.insertId;
+    
+    // Get sender username
+    const [senderInfo] = await connection.execute(`
+      SELECT username FROM user_information WHERE user_id = ?
+    `, [buyerId]);
+    
+    const senderUsername = senderInfo.length > 0 ? senderInfo[0].username : 'Unknown';
+    
+    // Send the initial message
+    await connection.execute(`
+      INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read)
+      VALUES (?, ?, ?, ?, NOW(), 0)
+    `, [conversationId, buyerId, senderUsername, initial_message]);
+    
+    res.json({ 
+      success: true, 
+      conversation_id: conversationId 
+    });
+  } catch (error) {
+    console.error('Error creating conversation:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== OTHER ROUTES ==========
+
+// Test routes
+app.get('/product-details', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'product-details.html'));
+});
+
+// API route to get all users (for testing)
+app.get('/api/users', async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const [users] = await connection.execute(`
+      SELECT 
+        u.user_id, 
+        u.email, 
+        u.role,
+        ui.first_name,
+        ui.last_name,
+        ui.username
+      FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+    `);
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// API route to get all listings (for testing)
+app.get('/api/listings', async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const [listings] = await connection.execute(`
+      SELECT 
+        l.*, 
+        u.email,
+        ui.first_name,
+        ui.last_name,
+        ui.username
+      FROM listings l 
+      JOIN users u ON l.user_id = u.user_id 
+      LEFT JOIN user_information ui ON l.user_id = ui.user_id
+      WHERE l.status = 'active'
+      ORDER BY l.created_at DESC
+    `);
+    res.json(listings);
+  } catch (error) {
+    console.error('Error fetching listings:', error);
     res.status(500).json({ error: 'Server error' });
   } finally {
     if (connection) await connection.end();
@@ -2277,163 +2741,179 @@ app.post('/api/staff/qa/:id/answer', requireStaff, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
-    const qaId = req.params.id;
+    const { id } = req.params;
     const { answer_content } = req.body;
-    const staffId = req.session.user.user_id;
+    const userId = req.session.user.user_id;
     
     if (!answer_content || answer_content.trim() === '') {
-      return res.status(400).json({ error: 'Answer content is required.' });
+      return res.status(400).json({ error: 'Answer content is required' });
     }
     
-    // Check for duplicate answers from the same staff member with similar content
-    const [duplicateCheck] = await connection.execute(`
+    // Check if question exists
+    const [questionCheck] = await connection.execute(`
+      SELECT * FROM qa WHERE qa_id = ?
+    `, [id]);
+    
+    if (questionCheck.length === 0) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    
+    // Check for duplicate answer from same staff member
+    const [existingAnswer] = await connection.execute(`
       SELECT * FROM qa_answers 
-      WHERE qa_id = ? AND answerer_id = ? AND answer_content = ?
-    `, [qaId, staffId, answer_content.trim()]);
+      WHERE qa_id = ? AND answerer_id = ?
+    `, [id, userId]);
     
-    if (duplicateCheck.length > 0) {
-      return res.status(400).json({ error: 'You have already submitted this answer' });
+    if (existingAnswer.length > 0) {
+      return res.status(400).json({ error: 'You have already answered this question' });
     }
     
-    // Get staff username
-    const [staffInfo] = await connection.execute(`
+    // Get user information
+    const [userInfo] = await connection.execute(`
       SELECT ui.username, u.email 
       FROM users u 
       LEFT JOIN user_information ui ON u.user_id = ui.user_id 
       WHERE u.user_id = ?
-    `, [staffId]);
+    `, [userId]);
     
-    const staffUsername = staffInfo[0]?.username || staffInfo[0]?.email || 'Staff';
+    const username = userInfo.length > 0 ? userInfo[0].username : 'Unknown';
     
-    // Insert new answer into qa_answers table
-    await connection.execute(`
+    // Insert answer into qa_answers table
+    const [result] = await connection.execute(`
       INSERT INTO qa_answers (qa_id, answerer_id, answerer_username, answer_content, answered_at)
       VALUES (?, ?, ?, ?, NOW())
-    `, [qaId, staffId, staffUsername, answer_content.trim()]);
+    `, [id, userId, username, answer_content.trim()]);
     
-    res.json({ success: true });
+    // Get the created answer with user info
+    const [newAnswer] = await connection.execute(`
+      SELECT 
+        qa_ans.*,
+        answerer.email as answerer_email,
+        answerer_info.first_name as answerer_first_name,
+        answerer_info.last_name as answerer_last_name,
+        answerer_info.username as answerer_username
+      FROM qa_answers qa_ans
+      LEFT JOIN users answerer ON qa_ans.answerer_id = answerer.user_id
+      LEFT JOIN user_information answerer_info ON qa_ans.answerer_id = answerer_info.user_id
+      WHERE qa_ans.answer_id = ?
+    `, [result.insertId]);
+    
+    res.status(201).json(newAnswer[0]);
   } catch (error) {
-    console.error('Staff answer error:', error);
-    res.status(500).json({ error: 'Server error.' });
+    console.error('Error submitting answer:', error);
+    res.status(500).json({ error: 'Server error' });
   } finally {
     if (connection) await connection.end();
   }
 });
 
-// Staff: Verify a question
-app.patch('/api/qa/:id/verify', requireStaff, async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const qaId = req.params.id;
-    
-    await connection.execute(`
-      UPDATE qa SET is_verified = 1 WHERE qa_id = ?
-    `, [qaId]);
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Staff verify error:', error);
-    res.status(500).json({ error: 'Server error.' });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Staff: Delete a question
-app.delete('/api/qa/:id', requireStaff, async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
-    const qaId = req.params.id;
-    
-    // Delete all answers first (foreign key constraint)
-    await connection.execute(`
-      DELETE FROM qa_answers WHERE qa_id = ?
-    `, [qaId]);
-    
-    // Delete all votes
-    await connection.execute(`
-      DELETE FROM qa_votes WHERE qa_id = ?
-    `, [qaId]);
-    
-    // Delete the question
-    await connection.execute(`
-      DELETE FROM qa WHERE qa_id = ?
-    `, [qaId]);
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Staff delete error:', error);
-    res.status(500).json({ error: 'Server error.' });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// ========== CLEANUP ROUTE FOR EXISTING DUPLICATES (OPTIONAL) ==========
-
-// Add this route to clean up existing duplicates - use once then remove
-app.get('/cleanup-duplicate-answers', requireStaff, async (req, res) => {
+// Staff: Get pending Q&A count
+app.get('/api/qa/pending-count', requireStaff, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
     
-    // Find duplicate answers (same qa_id, answerer_id, and answer_content)
-    const [duplicates] = await connection.execute(`
-      SELECT qa_id, answerer_id, answer_content, COUNT(*) as count, 
-             GROUP_CONCAT(answer_id ORDER BY answered_at ASC) as answer_ids
-      FROM qa_answers 
-      GROUP BY qa_id, answerer_id, answer_content
-      HAVING COUNT(*) > 1
+    const [result] = await connection.execute(`
+      SELECT COUNT(*) as pending_count 
+      FROM qa 
+      WHERE is_verified = 0
     `);
     
-    let deletedCount = 0;
-    
-    for (const duplicate of duplicates) {
-      // Keep the first answer, delete the rest
-      const answerIds = duplicate.answer_ids.split(',');
-      const idsToDelete = answerIds.slice(1); // Remove first ID, keep the rest for deletion
-      
-      if (idsToDelete.length > 0) {
-        await connection.execute(`
-          DELETE FROM qa_answers WHERE answer_id IN (${idsToDelete.map(() => '?').join(',')})
-        `, idsToDelete);
-        
-        deletedCount += idsToDelete.length;
-      }
-    }
-    
-    res.json({
-      message: `Cleanup completed successfully`,
-      duplicateGroups: duplicates.length,
-      answersDeleted: deletedCount,
-      details: duplicates.map(d => ({
-        qa_id: d.qa_id,
-        answerer_id: d.answerer_id,
-        duplicates_found: d.count,
-        answer_preview: d.answer_content.substring(0, 50) + '...'
-      }))
-    });
-    
+    res.json({ pending_count: result[0].pending_count });
   } catch (error) {
-    console.error('Error cleaning up duplicates:', error);
-    res.status(500).json({ error: 'Error during cleanup', details: error.message });
+    console.error('Error getting pending count:', error);
+    res.status(500).json({ error: 'Server error' });
   } finally {
     if (connection) await connection.end();
   }
 });
 
-// ========== STAFF DASHBOARD ROUTE ==========
-
-// Staff Dashboard route
-app.get('/staff/dashboard', requireStaff, (req, res) => {
-  res.render('staff/dashboard', {
-    title: 'Staff Dashboard - Vintique',
-    layout: 'staff',
-    activePage: 'dashboard',
-    user: req.session.user
-  });
+// Staff: Search Q&A questions
+app.get('/api/staff/qa/search', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const { search, status, category } = req.query;
+    
+    // Build the base query
+    let query = `
+      SELECT 
+        q.*,
+        asker.email as asker_email,
+        asker_info.first_name as asker_first_name,
+        asker_info.last_name as asker_last_name,
+        asker_info.username as asker_username,
+        COUNT(DISTINCT qv.vote_id) as helpful_count
+      FROM qa q
+      LEFT JOIN users asker ON q.asker_id = asker.user_id
+      LEFT JOIN user_information asker_info ON q.asker_id = asker_info.user_id
+      LEFT JOIN qa_votes qv ON q.qa_id = qv.qa_id
+    `;
+    
+    const whereConditions = [];
+    const params = [];
+    
+    // Add search filter
+    if (search && search.trim() !== '') {
+      const searchTerm = `%${search.trim()}%`;
+      whereConditions.push(`(
+        q.question_text LIKE ? OR 
+        q.details LIKE ? OR 
+        q.category LIKE ? OR
+        asker_info.username LIKE ? OR
+        asker.email LIKE ?
+      )`);
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+    }
+    
+    // Add status filter
+    if (status === 'pending') {
+      whereConditions.push('q.is_verified = 0');
+    } else if (status === 'verified') {
+      whereConditions.push('q.is_verified = 1');
+    }
+    
+    // Add category filter
+    if (category && category.trim() !== '') {
+      whereConditions.push('q.category = ?');
+      params.push(category.trim());
+    }
+    
+    // Combine WHERE conditions
+    if (whereConditions.length > 0) {
+      query += ' WHERE ' + whereConditions.join(' AND ');
+    }
+    
+    query += ' GROUP BY q.qa_id ORDER BY q.asked_at DESC';
+    
+    const [questions] = await connection.execute(query, params);
+    
+    // Fetch answers for each question
+    for (let question of questions) {
+      const [answers] = await connection.execute(`
+        SELECT 
+          qa_ans.*,
+          answerer.email as answerer_email,
+          answerer_info.first_name as answerer_first_name,
+          answerer_info.last_name as answerer_last_name,
+          answerer_info.username as answerer_username
+        FROM qa_answers qa_ans
+        LEFT JOIN users answerer ON qa_ans.answerer_id = answerer.user_id
+        LEFT JOIN user_information answerer_info ON qa_ans.answerer_id = answerer_info.user_id
+        WHERE qa_ans.qa_id = ?
+        ORDER BY qa_ans.answered_at ASC
+      `, [question.qa_id]);
+      
+      question.answers = answers;
+    }
+    
+    res.json(questions);
+  } catch (error) {
+    console.error('Error searching Q&A questions:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) await connection.end();
+  }
 });
 
 // ========== CART API ENDPOINTS ==========
@@ -2957,20 +3437,20 @@ app.listen(PORT, () => {
 });
 
 // Handle graceful shutdown on Ctrl+C
-process.on('SIGINT', () => {
-  console.log('\nReceived SIGINT (Ctrl+C). Shutting down gracefully...');
+// process.on('SIGINT', () => {
+//   console.log('\nReceived SIGINT (Ctrl+C). Shutting down gracefully...');
   
-  // Close database connection
-  if (connection) {
-    connection.end((err) => {
-      if (err) {
-        console.error('Error closing database connection:', err);
-      } else {
-        console.log('Database connection closed.');
-      }
-      process.exit(0);
-    });
-  } else {
-    process.exit(0);
-  }
-});
+//   // Close database connection
+//   if (connection) {
+//     connection.end((err) => {
+//       if (err) {
+//         console.error('Error closing database connection:', err);
+//       } else {
+//         console.log('Database connection closed.');
+//       }
+//       process.exit(0);
+//     });
+//   } else {
+//     process.exit(0);
+//   }
+// });

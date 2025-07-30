@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/assets/css/staff/dashboard.css" />
   <link rel="stylesheet" href="/assets/css/staff/user_management.css" />
   <link rel="stylesheet" href="/assets/css/staff/staff_management.css" />
+  <link rel="stylesheet" href="/assets/css/staff/qa_management.css" />
 </head>
 <body>
   <!-- Staff Navbar -->
@@ -26,7 +27,7 @@
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'user_management')}}active{{/if}}" href="/staff/user_management">Manage Users</a></li>
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'staff_management')}}active{{/if}}" href="/staff/staff_management">Manage Staff</a></li>
             <li class="nav-item"><a class="nav-link" href="/marketplace">View Marketplace</a></li>
-            <li class="nav-item"><a class="nav-link" href="/qa">Q&A Forum</a></li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="/staff/qa">Q&A Management</a></li>
             <li class="nav-item"><a class="nav-link" href="/logout">Logout</a></li>
           </ul>
         </div>

@@ -1,11 +1,11 @@
 {{!-- Complete Staff Q&A Management Template --}}
-<link rel="stylesheet" href="/assets/css/users/messages.css">
-<div class="container mt-5">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">Q&A Moderation</h1>
-    <div>
-      <span class="badge bg-warning me-2" id="pendingCount">Loading...</span>
-      <a href="/staff/dashboard" class="btn btn-secondary">Back to Dashboard</a>
+<div class="container mt-5 qa-management-container">
+  <div style="height: 32px;"></div>
+  <div class="header-bar">
+    <h3 class="mb-0">Q&A Moderation</h3>
+    <div class="search-container">
+      <i class="fas fa-search search-icon"></i>
+      <input type="text" id="qaSearch" placeholder="Search questions..." class="form-control">
     </div>
   </div>
   
@@ -121,25 +121,25 @@
                 <td class="text-center">
                   <span class="badge bg-info">{{helpful_count}}</span>
                 </td>
-                <td>
-                  <div class="btn-group-vertical btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-primary btn-sm mb-1" onclick="showAnswerModal({{qa_id}}, '{{question_text}}')">
-                      <i class="fas fa-reply me-1"></i>Answer
-                    </button>
-                    {{#if is_verified}}
-                      <button type="button" class="btn btn-outline-secondary btn-sm mb-1" disabled>
-                        <i class="fas fa-check me-1"></i>Verified
-                      </button>
-                    {{else}}
-                      <button type="button" class="btn btn-outline-success btn-sm mb-1" onclick="verifyQuestion({{qa_id}})">
-                        <i class="fas fa-check me-1"></i>Verify
-                      </button>
-                    {{/if}}
-                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteQuestion({{qa_id}})">
-                      <i class="fas fa-trash me-1"></i>Delete
-                    </button>
-                  </div>
-                </td>
+                                 <td>
+                   <div class="btn-group-vertical btn-group-sm" role="group">
+                     <button type="button" class="btn btn-outline-primary btn-sm mb-1" onclick="showAnswerModal({{qa_id}}, '{{question_text}}')">
+                       <i class="fas fa-reply"></i><span>Answer</span>
+                     </button>
+                     {{#if is_verified}}
+                       <button type="button" class="btn btn-outline-secondary btn-sm mb-1" disabled>
+                         <i class="fas fa-check"></i><span>Verified</span>
+                       </button>
+                     {{else}}
+                       <button type="button" class="btn btn-outline-success btn-sm mb-1" onclick="verifyQuestion({{qa_id}})">
+                         <i class="fas fa-check"></i><span>Verify</span>
+                       </button>
+                     {{/if}}
+                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteQuestion({{qa_id}})">
+                       <i class="fas fa-trash"></i><span>Delete</span>
+                     </button>
+                   </div>
+                 </td>
               </tr>
             {{else}}
               <tr><td colspan="8" class="text-center">No questions found.</td></tr>
@@ -169,83 +169,19 @@
           <textarea class="form-control" id="answerTextarea" rows="6" placeholder="Write your answer here..."></textarea>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="submitAnswer()">Submit Answer</button>
-      </div>
+             <div class="modal-footer">
+         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+           <span>Cancel</span>
+         </button>
+         <button type="button" class="btn btn-primary" onclick="submitAnswer()">
+           <span>Submit Answer</span>
+         </button>
+       </div>
     </div>
   </div>
 </div>
 
-<style>
-.question-details {
-  padding: 0.5rem;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  border-left: 3px solid #dee2e6;
-}
 
-.answers-column {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.answer-item {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6 !important;
-}
-
-.answer-item.bg-light {
-  background: #e3f2fd !important;
-  border-color: #2196f3 !important;
-}
-
-.answers-count {
-  text-align: center;
-}
-
-.user-info {
-  min-width: 120px;
-}
-
-.btn-group-vertical .btn {
-  margin-bottom: 2px;
-}
-
-.toggle-answer {
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.toggle-answer:hover {
-  text-decoration: underline;
-}
-
-.table td {
-  vertical-align: top;
-  padding: 0.75rem 0.5rem;
-}
-
-.answers-list {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-/* Highlight unverified questions */
-.table-info {
-  background-color: rgba(13, 202, 240, 0.1) !important;
-}
-
-.nav-tabs .nav-link {
-  color: #495057;
-}
-
-.nav-tabs .nav-link.active {
-  color: #495057;
-  background-color: #fff;
-  border-color: #dee2e6 #dee2e6 #fff;
-}
-</style>
 
 <script>
 let currentQuestionId = null;
@@ -262,6 +198,23 @@ document.addEventListener('DOMContentLoaded', function() {
       filterQuestionsByStatus(target);
     });
   });
+  
+  // Search functionality with debouncing
+  const searchInput = document.getElementById('qaSearch');
+  if (searchInput) {
+    let searchTimeout;
+    searchInput.addEventListener('input', function() {
+      const searchTerm = this.value;
+      
+      // Clear previous timeout
+      clearTimeout(searchTimeout);
+      
+      // Set new timeout for debouncing
+      searchTimeout = setTimeout(() => {
+        filterQuestionsBySearch(searchTerm);
+      }, 300); // 300ms delay
+    });
+  }
 });
 
 function updatePendingCount() {
@@ -269,45 +222,226 @@ function updatePendingCount() {
     .then(response => response.json())
     .then(data => {
       const pendingCount = data.pending_count || 0;
-      document.getElementById('pendingCount').textContent = `${pendingCount} Pending Questions`;
-      document.getElementById('pendingBadge').textContent = pendingCount;
+      const pendingBadge = document.getElementById('pendingBadge');
       
-      if (pendingCount > 0) {
-        document.getElementById('pendingCount').className = 'badge bg-warning me-2';
-        document.getElementById('pendingBadge').className = 'badge bg-danger ms-1';
-      } else {
-        document.getElementById('pendingCount').className = 'badge bg-success me-2';
-        document.getElementById('pendingBadge').className = 'badge bg-secondary ms-1';
+      if (pendingBadge) {
+        pendingBadge.textContent = pendingCount;
+        
+        if (pendingCount > 0) {
+          pendingBadge.className = 'badge bg-danger ms-1';
+        } else {
+          pendingBadge.className = 'badge bg-secondary ms-1';
+        }
       }
     })
     .catch(error => {
       console.error('Error fetching pending count:', error);
-      document.getElementById('pendingCount').textContent = 'Error loading count';
     });
 }
 
-function filterQuestionsByStatus(activeTab) {
-  const rows = document.querySelectorAll('tbody tr[data-qa-id]');
-  
-  rows.forEach(row => {
-    const isVerified = row.dataset.verified === '1';
-    let showRow = true;
-    
-    switch(activeTab) {
-      case '#pending-questions':
-        showRow = !isVerified;
-        break;
-      case '#verified-questions':
-        showRow = isVerified;
-        break;
-      case '#all-questions':
-      default:
-        showRow = true;
-        break;
+async function filterQuestionsByStatus(activeTab) {
+  try {
+    // Show loading state
+    const tbody = document.querySelector('tbody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Loading...</td></tr>';
     }
     
-    row.style.display = showRow ? '' : 'none';
+    // Build query parameters
+    const params = new URLSearchParams();
+    
+    // Get current search term
+    const searchInput = document.getElementById('qaSearch');
+    if (searchInput && searchInput.value.trim() !== '') {
+      params.append('search', searchInput.value.trim());
+    }
+    
+    // Add status filter based on active tab
+    if (activeTab === '#pending-questions') {
+      params.append('status', 'pending');
+    } else if (activeTab === '#verified-questions') {
+      params.append('status', 'verified');
+    }
+    
+    // Make API call
+    const response = await fetch(`/api/staff/qa/search?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error('Filter request failed');
+    }
+    
+    const questions = await response.json();
+    
+    // Update the table with filtered results
+    updateQuestionsTable(questions);
+    
+  } catch (error) {
+    console.error('Error filtering questions:', error);
+    const tbody = document.querySelector('tbody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading filtered results</td></tr>';
+    }
+  }
+}
+
+async function filterQuestionsBySearch(searchTerm) {
+  try {
+    // Show loading state
+    const tbody = document.querySelector('tbody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</td></tr>';
+    }
+    
+    // Build query parameters
+    const params = new URLSearchParams();
+    if (searchTerm.trim() !== '') {
+      params.append('search', searchTerm);
+    }
+    
+    // Get current active tab for status filter
+    const activeTab = document.querySelector('#moderationTabs .nav-link.active');
+    if (activeTab) {
+      const tabId = activeTab.getAttribute('href');
+      if (tabId === '#pending-questions') {
+        params.append('status', 'pending');
+      } else if (tabId === '#verified-questions') {
+        params.append('status', 'verified');
+      }
+    }
+    
+    // Make API call
+    const response = await fetch(`/api/staff/qa/search?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error('Search request failed');
+    }
+    
+    const questions = await response.json();
+    
+    // Update the table with search results
+    updateQuestionsTable(questions);
+    
+  } catch (error) {
+    console.error('Error searching questions:', error);
+    const tbody = document.querySelector('tbody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading search results</td></tr>';
+    }
+  }
+}
+
+function updateQuestionsTable(questions) {
+  const tbody = document.querySelector('tbody');
+  if (!tbody) return;
+  
+  if (questions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center">No questions found.</td></tr>';
+    return;
+  }
+  
+  let tableHTML = '';
+  
+  questions.forEach(question => {
+    const isVerified = question.is_verified == 1;
+    const hasAnswers = question.answers && question.answers.length > 0;
+    
+    tableHTML += `
+      <tr class="${!hasAnswers ? 'table-warning' : ''} ${!isVerified ? 'table-info' : ''}" 
+          data-qa-id="${question.qa_id}" 
+          data-verified="${isVerified ? '1' : '0'}">
+        <td class="text-center">
+          ${isVerified ? 
+            '<span class="badge bg-success"><i class="fas fa-check-circle"></i> Verified</span>' :
+            '<span class="badge bg-warning"><i class="fas fa-clock"></i> Pending</span>'
+          }
+        </td>
+        <td style="max-width: 300px; white-space: pre-line;">
+          <div class="question-content">
+            <strong>${escapeHtml(question.question_text)}</strong>
+            ${question.details ? `<div class="question-details mt-2 text-muted small">${escapeHtml(question.details)}</div>` : ''}
+            ${!isVerified ? `
+              <div class="mt-2">
+                <small class="text-warning">
+                  <i class="fas fa-exclamation-triangle"></i> 
+                  This question is not visible to users yet
+                </small>
+              </div>
+            ` : ''}
+          </div>
+        </td>
+        <td><span class="badge bg-secondary">${escapeHtml(question.category)}</span></td>
+        <td>
+          <div class="user-info">
+            <strong>${question.asker_username || 'Guest'}</strong>
+            <br><small class="text-muted">${escapeHtml(question.asker_email)}</small>
+          </div>
+        </td>
+        <td><small>${formatDate(question.asked_at)}</small></td>
+        <td>
+          <div class="answers-column">
+            ${hasAnswers ? `
+              <div class="answers-count mb-2">
+                <span class="badge bg-success">${question.answers.length} Answer${question.answers.length > 1 ? 's' : ''}</span>
+              </div>
+              <div class="answers-list">
+                ${question.answers.map(answer => `
+                  <div class="answer-item mb-2 p-2 border rounded ${answer === question.answers[0] ? 'bg-light' : ''}">
+                    <div class="answer-header d-flex justify-content-between align-items-start mb-1">
+                      <small class="text-primary fw-bold">
+                        ${answer.answerer_username ? '@' + escapeHtml(answer.answerer_username) : escapeHtml(answer.answerer_email)}
+                      </small>
+                      <small class="text-muted">${formatDate(answer.answered_at)}</small>
+                    </div>
+                    <div class="answer-content small">
+                      ${answer.answer_content.length > 100 ? 
+                        `<span class="answer-preview">${escapeHtml(answer.answer_content.substring(0, 100))}...</span>
+                         <span class="answer-full" style="display: none;">${escapeHtml(answer.answer_content)}</span>
+                         <a href="#" class="text-primary small toggle-answer" onclick="toggleAnswerView(this); return false;">Show More</a>` :
+                        escapeHtml(answer.answer_content)
+                      }
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : '<span class="text-danger">No Answers Yet</span>'}
+          </div>
+        </td>
+        <td class="text-center">
+          <span class="badge bg-info">${question.helpful_count || 0}</span>
+        </td>
+        <td>
+          <div class="btn-group-vertical btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-primary btn-sm mb-1" onclick="showAnswerModal(${question.qa_id}, '${escapeHtml(question.question_text)}')">
+              <i class="fas fa-reply"></i><span>Answer</span>
+            </button>
+            ${isVerified ? 
+              `<button type="button" class="btn btn-outline-secondary btn-sm mb-1" disabled>
+                <i class="fas fa-check"></i><span>Verified</span>
+              </button>` :
+              `<button type="button" class="btn btn-outline-success btn-sm mb-1" onclick="verifyQuestion(${question.qa_id})">
+                <i class="fas fa-check"></i><span>Verify</span>
+              </button>`
+            }
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteQuestion(${question.qa_id})">
+              <i class="fas fa-trash"></i><span>Delete</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
   });
+  
+  tbody.innerHTML = tableHTML;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 }
 
 function toggleAnswerView(link) {
@@ -357,7 +491,7 @@ async function submitAnswer() {
   submitBtn.textContent = 'Submitting...';
   
   try {
-    const response = await fetch(`/api/staff/qa/${currentQuestionId}/answer`, {
+    const response = await fetch(`/api/qa/${currentQuestionId}/answer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

@@ -1,6 +1,11 @@
 <div class="container">
   <div class="signup-container mt-5">
     <div class="signup-title">Create Your Account</div>
+    {{#if error}}
+      <div class="alert alert-danger" role="alert">
+        {{error}}
+      </div>
+    {{/if}}
     <form action="/register" method="POST" id="signupForm">
       <div class="mb-3">
         <label for="firstname" class="form-label">First Name</label>
@@ -28,31 +33,12 @@
       </div>
       <div class="mb-3">
         <label for="confirmPassword" class="form-label">Re-enter Password</label>
-        <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" placeholder="Re-enter your password" required />
+        <input type="password" class="form-control" id="confirmPassword" name="confirm_password" placeholder="Re-enter your password" required />
       </div>
       <button type="submit" class="login-form-btn">Sign Up</button>
+      <div class="text-center mt-3">
+        <p>Already have an account? <a href="/login">Login here</a></p>
+      </div>
     </form>
   </div>
 </div>
-
-<!-- Footer copied from login page for identical layout and styling -->
-<footer class="footer">
-    <div class="footer-content">
-        <div class="footer-links">
-            <a href="#" class="footer-link">About Us</a>
-            <a href="#" class="footer-link">Contact</a>
-            <a href="#" class="footer-link">Privacy Policy</a>
-            <a href="#" class="footer-link">Terms of Service</a>
-            <a href="#" class="footer-link">FAQ</a>
-        </div>
-        <div class="footer-social">
-            <a href="#" class="social-icon"><i class="fab fa-facebook"></i></a>
-            <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
-            <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
-            <a href="#" class="social-icon"><i class="fab fa-pinterest"></i></a>
-        </div>
-        <div class="footer-copyright">
-            &copy; 2024 Vintique. All rights reserved. | Dress Well. Live Green.
-        </div>
-    </div>
-</footer>
