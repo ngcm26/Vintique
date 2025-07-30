@@ -14,7 +14,12 @@
     <div class="col-lg-3">
       <div class="account-container">
         <div class="profile-section text-center">
-          <img id="profileImagePreview" src="/assets/Profile.webp" alt="Profile Picture" class="profile-picture mb-3">
+          <div id="profileImageContainer" class="profile-image-container mb-3">
+            <img id="profileImagePreview" src="/assets/Profile.webp" alt="Profile Picture" class="profile-picture">
+            <div id="profilePlaceholder" class="profile-placeholder" style="display: none;">
+              <i class="fas fa-user"></i>
+            </div>
+          </div>
           <form id="profileImageForm" enctype="multipart/form-data">
             <input type="file" name="profile_image" id="profileImageInput" accept="image/*" class="form-control mb-2">
             <input type="hidden" name="current_profile_image_url" id="currentProfileImageUrl">
@@ -165,27 +170,132 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const currentUrlEl = document.getElementById('currentProfileImageUrl');
       if (currentUrlEl) currentUrlEl.value = data.profile_image_url || '';
-      if (data.profile_image_url) {
-        const img = document.getElementById('profileImagePreview');
-        if (img) img.src = data.profile_image_url;
+      
+      // Handle profile image display
+      const profileImg = document.getElementById('profileImagePreview');
+      const profilePlaceholder = document.getElementById('profilePlaceholder');
+      
+      if (data.profile_image_url && data.profile_image_url !== '/assets/Profile.webp') {
+        // Show actual profile image
+        if (profileImg) {
+          profileImg.src = data.profile_image_url;
+          profileImg.style.display = 'block';
+        }
+        if (profilePlaceholder) {
+          profilePlaceholder.style.display = 'none';
+        }
+      } else {
+        // Show placeholder icon
+        if (profileImg) {
+          profileImg.style.display = 'none';
+        }
+        if (profilePlaceholder) {
+          profilePlaceholder.style.display = 'flex';
+        }
       }
     });
 
   // ------------------ Profile image upload ------------------
   const profileImageForm = document.getElementById('profileImageForm');
+  const profileImageInput = document.getElementById('profileImageInput');
+  
+  // Add file validation
+  profileImageInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        this.value = '';
+        return;
+      }
+      
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file');
+        this.value = '';
+        return;
+      }
+      
+      // Show preview immediately
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const profileImg = document.getElementById('profileImagePreview');
+        const profilePlaceholder = document.getElementById('profilePlaceholder');
+        
+        if (profileImg) {
+          profileImg.src = e.target.result;
+          profileImg.style.display = 'block';
+        }
+        if (profilePlaceholder) {
+          profilePlaceholder.style.display = 'none';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+  
   profileImageForm.addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    const file = profileImageInput.files[0];
+    if (!file) {
+      alert('Please select an image to upload');
+      return;
+    }
+    
     const formData = new FormData(profileImageForm);
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    // Show loading state
+    submitBtn.textContent = 'Uploading...';
+    submitBtn.disabled = true;
+    
     fetch('/account-settings/api', { method: 'POST', body: formData })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.profile_image_url) {
-          document.getElementById('profileImagePreview').src = data.profile_image_url;
+          const profileImg = document.getElementById('profileImagePreview');
+          const profilePlaceholder = document.getElementById('profilePlaceholder');
+          
+          if (profileImg) {
+            profileImg.src = data.profile_image_url;
+            profileImg.style.display = 'block';
+          }
+          if (profilePlaceholder) {
+            profilePlaceholder.style.display = 'none';
+          }
+          
           document.getElementById('currentProfileImageUrl').value = data.profile_image_url;
-          alert('Profile image updated!');
+          
+          // Show success message
+          const successMsg = document.createElement('div');
+          successMsg.className = 'alert alert-success mt-2';
+          successMsg.textContent = 'Profile image updated successfully!';
+          profileImageForm.appendChild(successMsg);
+          
+          // Remove success message after 3 seconds
+          setTimeout(() => {
+            if (successMsg.parentNode) {
+              successMsg.remove();
+            }
+          }, 3000);
+          
+          // Clear the file input
+          profileImageInput.value = '';
         } else {
-          alert('Failed to update profile image.');
+          alert('Failed to update profile image: ' + (data.error || 'Unknown error'));
         }
+      })
+      .catch(error => {
+        console.error('Upload error:', error);
+        alert('Failed to upload profile image. Please try again.');
+      })
+      .finally(() => {
+        // Reset button state
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
       });
   });
 

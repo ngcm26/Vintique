@@ -1,0 +1,690 @@
+<!-- Product Detail Page -->
+<link rel="stylesheet" href="/assets/css/users/product_detail.css">
+
+{{#if error}}
+<div class="container mt-5">
+  <div class="alert alert-danger" role="alert">
+    <h4 class="alert-heading">Error</h4>
+    <p>{{error}}</p>
+    <hr>
+    <p class="mb-0">
+      <a href="/marketplace" class="btn btn-primary">Back to Marketplace</a>
+    </p>
+  </div>
+</div>
+{{else}}
+<div class="container">
+  <!-- Breadcrumb -->
+  <div class="breadcrumb-section">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/home">Home</a></li>
+        <li class="breadcrumb-item"><a href="/marketplace">Shop</a></li>
+        <li class="breadcrumb-item">{{listing.category}}</li>
+        <li class="breadcrumb-item active" aria-current="page">{{listing.title}}</li>
+      </ol>
+    </nav>
+    <a href="/marketplace" class="back-button">
+      <i class="fas fa-arrow-left"></i>
+      Back to Shop
+    </a>
+  </div>
+
+  <div class="product-detail-container">
+    <div class="row">
+        <!-- Product Images Section -->
+        <div class="col-lg-6">
+          <div class="product-image-section">
+            <div class="image-carousel">
+              <div class="carousel-container">
+                <div class="carousel-slide active">
+                  <img id="mainImage" src="{{listing.image_url}}" alt="{{listing.title}}" class="main-product-image">
+                </div>
+                {{#each listing.additional_images}}
+                  <div class="carousel-slide">
+                    <img src="{{this}}" alt="{{../listing.title}}" class="main-product-image">
+                  </div>
+                {{/each}}
+              </div>
+              
+              <!-- Carousel Navigation -->
+              {{#if listing.additional_images}}
+                <button class="carousel-btn prev-btn" onclick="changeSlide(-1)">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="carousel-btn next-btn" onclick="changeSlide(1)">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              {{/if}}
+              
+              <!-- Carousel Indicators -->
+              {{#if listing.additional_images}}
+                <div class="carousel-indicators">
+                  <span class="indicator active" onclick="goToSlide(0)"></span>
+                  {{#each listing.additional_images}}
+                    <span class="indicator" onclick="goToSlide({{add @index 1}})"></span>
+                  {{/each}}
+                </div>
+              {{/if}}
+            </div>
+          </div>
+        </div>
+
+        <!-- Product Information Section -->
+        <div class="col-lg-6">
+          <div class="product-info-section">
+            <div class="product-category">{{listing.category}}</div>
+            <h1 class="product-title">{{listing.title}}</h1>
+            
+            <div class="product-seller">
+              Sold by <a href="#" onclick="contactSeller('{{listing.username}}', '{{listing.title}}')">@{{listing.username}}</a>
+            </div>
+            
+            <div class="product-price">${{listing.price}}</div>
+            <div class="product-condition">{{listing.item_condition}}</div>
+            {{#if (eq listing.status 'sold')}}
+              <div class="product-status sold">
+                <i class="fas fa-check-circle"></i> SOLD
+              </div>
+            {{/if}}
+
+            <div class="product-actions">
+              {{#if user}}
+                {{#if (eq user.user_id listing.user_id)}}
+                  <!-- Owner actions -->
+                  <button class="btn-purchase" onclick="window.location.href='/edit_listing/{{listing.listing_id}}'">
+                    <i class="fas fa-edit"></i> Edit Listing
+                  </button>
+                  <button class="btn-cart" onclick="markAsSold({{listing.listing_id}})">
+                    <i class="fas fa-check"></i> Mark as Sold
+                  </button>
+                  <button class="btn-message" onclick="deleteListing({{listing.listing_id}})">
+                    <i class="fas fa-trash"></i> Delete
+                  </button>
+                {{else}}
+                  <!-- Buyer actions -->
+                  <button class="btn-purchase" onclick="buyNow()">
+                    <i class="fas fa-credit-card"></i> Buy Now
+                  </button>
+                  <button class="btn-cart" onclick="addToCart()">
+                    <i class="fas fa-shopping-cart"></i> Add to Cart
+                  </button>
+                  <button class="btn-message" onclick="contactSeller('{{listing.username}}', '{{listing.title}}')">
+                    <i class="fas fa-comment"></i> Message Seller
+                  </button>
+                {{/if}}
+              {{else}}
+                <button class="btn-purchase" onclick="window.location.href='/login'">
+                  <i class="fas fa-sign-in-alt"></i> Login to Purchase
+                </button>
+                <button class="btn-message" onclick="window.location.href='/login'">
+                  <i class="fas fa-sign-in-alt"></i> Login to Message
+                </button>
+              {{/if}}
+            </div>
+
+            <!-- Quick Info -->
+            <div class="delivery-info">
+              <div class="info-card">
+                <i class="fas fa-shipping-fast"></i>
+                <h5>Fast Delivery</h5>
+                <p>2-3 business days</p>
+              </div>
+              <div class="info-card">
+                <i class="fas fa-undo"></i>
+                <h5>Easy Returns</h5>
+                <p>30-day return policy</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product Tabs -->
+      <div class="product-tabs">
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="showTab('description', event)">Description</button>
+          <button class="tab-btn" onclick="showTab('delivery', event)">Delivery & Returns</button>
+          <button class="tab-btn" onclick="showTab('sustainability', event)">Sustainability Impact</button>
+          <button class="tab-btn" onclick="showTab('reviews', event)">Reviews</button>
+        </div>
+
+        <!-- Description Tab -->
+        <div class="tab-content active" id="description">
+          <div class="description-content">
+            <h4>Product Description</h4>
+            <p>{{listing.description}}</p>
+            
+            <h4>Key Features</h4>
+            <ul>
+              <li>Brand: {{listing.brand}}</li>
+              <li>Size: {{listing.size}}</li>
+              <li>Category: {{listing.category}}</li>
+              <li>Condition: {{listing.item_condition}}</li>
+              <li>Listed on: {{formatDate listing.created_at}}</li>
+            </ul>
+
+            <h4>Size & Measurements</h4>
+            <div>
+              <p><strong>Size:</strong> {{listing.size}}</p>
+              <p><strong>Brand:</strong> {{listing.brand}}</p>
+              <p><strong>Category:</strong> {{listing.category}}</p>
+              <p><strong>Condition:</strong> {{listing.item_condition}}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delivery Tab -->
+        <div class="tab-content" id="delivery">
+          <div class="delivery-info">
+            <div class="info-card">
+              <i class="fas fa-truck"></i>
+              <h5>Standard Delivery</h5>
+              <p>2-3 business days<br>Free shipping over $50</p>
+            </div>
+            <div class="info-card">
+              <i class="fas fa-bolt"></i>
+              <h5>Express Delivery</h5>
+              <p>Next business day<br>$9.99 additional fee</p>
+            </div>
+            <div class="info-card">
+              <i class="fas fa-shield-alt"></i>
+              <h5>Secure Packaging</h5>
+              <p>Eco-friendly packaging<br>Tracking included</p>
+            </div>
+          </div>
+
+          <h4>Return Policy</h4>
+          <ul>
+            <li>30-day return window from delivery date</li>
+            <li>Items must be in original condition</li>
+            <li>Free returns for defective items</li>
+            <li>Return shipping fee: $5.99 (deducted from refund)</li>
+            <li>Refunds processed within 5-7 business days</li>
+          </ul>
+
+          <h4>Exchange Policy</h4>
+          <ul>
+            <li>Size exchanges available within 14 days</li>
+            <li>One free exchange per order</li>
+            <li>Subject to availability</li>
+          </ul>
+        </div>
+
+        <!-- Sustainability Tab -->
+        <div class="tab-content" id="sustainability">
+          <h4>Environmental Impact Score: <span style="color: #27ae60; font-weight: 700;">85%</span></h4>
+          
+          <div class="sustainability-metrics">
+            <div class="metric-card">
+              <div class="metric-value">2.3kg</div>
+              <div class="metric-label">CO2 Saved</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-value">450L</div>
+              <div class="metric-label">Water Saved</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-value">78%</div>
+              <div class="metric-label">Less Waste</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-value">92%</div>
+              <div class="metric-label">Eco Materials</div>
+            </div>
+          </div>
+
+          <h4>Sustainability Features</h4>
+          <ul>
+            <li><strong>Circular Fashion:</strong> Extends product lifecycle by 5+ years</li>
+            <li><strong>Water Conservation:</strong> Saves 450 liters compared to new production</li>
+            <li><strong>Carbon Footprint:</strong> 78% lower CO2 emissions through reuse</li>
+            <li><strong>Local Impact:</strong> Supports local circular economy</li>
+            <li><strong>Eco Packaging:</strong> Shipped in biodegradable materials</li>
+          </ul>
+
+          <h4>Certifications</h4>
+          <div class="d-flex gap-3 mt-3">
+            <span class="badge bg-success">Circular Fashion</span>
+            <span class="badge bg-success">Carbon Neutral</span>
+            <span class="badge bg-success">Eco Friendly</span>
+          </div>
+        </div>
+
+        <!-- Reviews Tab -->
+        <div class="tab-content" id="reviews">
+          <div class="reviews-section">
+            <div class="review-summary">
+              <div class="overall-rating">
+                <div class="rating-number">4.8</div>
+                <div class="rating-stars">
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                </div>
+                <div class="rating-count">Based on 24 reviews</div>
+              </div>
+              
+              <div class="rating-breakdown">
+                <div class="rating-row">
+                  <span>5 stars</span>
+                  <div class="rating-bar">
+                    <div class="rating-fill" style="width: 75%"></div>
+                  </div>
+                  <span>18</span>
+                </div>
+                <div class="rating-row">
+                  <span>4 stars</span>
+                  <div class="rating-bar">
+                    <div class="rating-fill" style="width: 20%"></div>
+                  </div>
+                  <span>5</span>
+                </div>
+                <div class="rating-row">
+                  <span>3 stars</span>
+                  <div class="rating-bar">
+                    <div class="rating-fill" style="width: 4%"></div>
+                  </div>
+                  <span>1</span>
+                </div>
+                <div class="rating-row">
+                  <span>2 stars</span>
+                  <div class="rating-bar">
+                    <div class="rating-fill" style="width: 0%"></div>
+                  </div>
+                  <span>0</span>
+                </div>
+                <div class="rating-row">
+                  <span>1 star</span>
+                  <div class="rating-bar">
+                    <div class="rating-fill" style="width: 0%"></div>
+                  </div>
+                  <span>0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Individual Reviews -->
+            <div class="individual-review">
+              <div class="review-header">
+                <div class="reviewer-info">
+                  <div class="reviewer-avatar">SJ</div>
+                  <div class="reviewer-details">
+                    <h6>Sarah Johnson</h6>
+                    <p>Verified Buyer • 2 days ago</p>
+                  </div>
+                </div>
+                <div class="review-rating">
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                </div>
+              </div>
+              <div class="review-text">
+                This item exceeded my expectations! The condition was even better than described. 
+                Love supporting sustainable fashion. Will definitely buy from @{{listing.username}} again!
+              </div>
+            </div>
+
+            <div class="individual-review">
+              <div class="review-header">
+                <div class="reviewer-info">
+                  <div class="reviewer-avatar">MR</div>
+                  <div class="reviewer-details">
+                    <h6>Maria Rodriguez</h6>
+                    <p>Verified Buyer • 1 week ago</p>
+                  </div>
+                </div>
+                <div class="review-rating">
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                  <i class="fas fa-star"></i>
+                </div>
+              </div>
+              <div class="review-text">
+                Beautiful item! Fits perfectly and the quality is so good. 
+                Fast shipping and great communication from the seller.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{{/if}}
+
+<script>
+let currentSlide = 0;
+const slides = document.querySelectorAll('.carousel-slide');
+const indicators = document.querySelectorAll('.indicator');
+
+function showSlide(index) {
+  // Hide all slides
+  slides.forEach(slide => slide.classList.remove('active'));
+  indicators.forEach(indicator => indicator.classList.remove('active'));
+  
+  // Show current slide
+  if (slides[index]) {
+    slides[index].classList.add('active');
+  }
+  if (indicators[index]) {
+    indicators[index].classList.add('active');
+  }
+  
+  currentSlide = index;
+}
+
+function changeSlide(direction) {
+  let newIndex = currentSlide + direction;
+  
+  // Loop around
+  if (newIndex >= slides.length) {
+    newIndex = 0;
+  } else if (newIndex < 0) {
+    newIndex = slides.length - 1;
+  }
+  
+  showSlide(newIndex);
+}
+
+function goToSlide(index) {
+  showSlide(index);
+}
+
+// Auto-advance carousel every 5 seconds
+setInterval(() => {
+  if (slides.length > 1) {
+    changeSlide(1);
+  }
+}, 5000);
+
+function showTab(tabName, event) {
+  // Hide all tabs
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  
+  // Remove active class from all buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  // Show selected tab
+  const selectedTab = document.getElementById(tabName);
+  if (selectedTab) {
+    selectedTab.classList.add('active');
+  }
+  
+  // Add active class to clicked button
+  if (event && event.target) {
+    event.target.classList.add('active');
+  }
+}
+
+function contactSeller(seller, product) {
+  // Redirect to messages page with seller info
+  window.location.href = `/messages?seller=${encodeURIComponent(seller)}&product=${encodeURIComponent(product)}`;
+}
+
+async function addToCart() {
+  const listingId = window.location.pathname.split('/').pop(); // Get listing ID from URL
+  const productTitle = document.querySelector('.product-title').textContent;
+  const cartBtn = document.querySelector('.btn-cart');
+  const originalText = cartBtn.innerHTML;
+  
+  // Show loading state
+  cartBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+  cartBtn.disabled = true;
+  
+  try {
+    const response = await fetch('/api/cart', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        listing_id: listingId,
+        quantity: 1
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Success - show success state
+      cartBtn.style.transform = 'scale(0.95)';
+      cartBtn.innerHTML = '<i class="fas fa-check"></i> Added!';
+      cartBtn.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+      cartBtn.style.color = 'white';
+      
+      showNotification(data.message || `"${productTitle}" added to cart!`);
+      
+      // Update cart badge
+      if (window.updateCartBadge) {
+        window.updateCartBadge();
+      }
+      
+      // Reset button after 2 seconds
+      setTimeout(() => {
+        cartBtn.style.transform = '';
+        cartBtn.innerHTML = originalText;
+        cartBtn.style.background = '';
+        cartBtn.style.color = '';
+        cartBtn.disabled = false;
+      }, 2000);
+      
+    } else {
+      // Error - show error state
+      cartBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+      cartBtn.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+      cartBtn.style.color = 'white';
+      
+      showNotification(data.error || 'Error adding item to cart', 'error');
+      
+      // Reset button after 3 seconds
+      setTimeout(() => {
+        cartBtn.innerHTML = originalText;
+        cartBtn.style.background = '';
+        cartBtn.style.color = '';
+        cartBtn.disabled = false;
+      }, 3000);
+    }
+  } catch (error) {
+    console.error('Error adding to cart:', error);
+    
+    // Show error state
+    cartBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+    cartBtn.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+    cartBtn.style.color = 'white';
+    
+    showNotification('Error adding item to cart', 'error');
+    
+    // Reset button after 3 seconds
+    setTimeout(() => {
+      cartBtn.innerHTML = originalText;
+      cartBtn.style.background = '';
+      cartBtn.style.color = '';
+      cartBtn.disabled = false;
+    }, 3000);
+  }
+}
+
+async function buyNow() {
+  const listingId = window.location.pathname.split('/').pop(); // Get listing ID from URL
+  const buyBtn = document.querySelector('.btn-purchase');
+  const originalText = buyBtn.innerHTML;
+  
+  // Show loading state
+  buyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+  buyBtn.disabled = true;
+  
+  try {
+    // Create order in database
+    const response = await fetch('/api/checkout/single', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        listing_id: listingId
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // STRIPE INTEGRATION - Create payment session
+      const paymentResponse = await fetch('/api/stripe/create-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          order_id: data.order_id,
+          amount: data.total
+        })
+      });
+      
+      if (paymentResponse.ok) {
+        const paymentData = await paymentResponse.json();
+        
+        // Redirect to Stripe Checkout
+        const stripe = Stripe(paymentData.publishableKey);
+        const { error } = await stripe.redirectToCheckout({
+          sessionId: paymentData.sessionId
+        });
+        
+        if (error) {
+          console.error('Stripe error:', error);
+          alert('Payment error: ' + error.message);
+          
+          // Reset button
+          buyBtn.innerHTML = originalText;
+          buyBtn.disabled = false;
+        }
+      } else {
+        const paymentError = await paymentResponse.json();
+        if (paymentResponse.status === 503) {
+          alert('Payment processing is currently unavailable. Please contact support.');
+        } else {
+          alert('Error setting up payment: ' + paymentError.error);
+        }
+        
+        // Reset button
+        buyBtn.innerHTML = originalText;
+        buyBtn.disabled = false;
+      }
+      
+    } else {
+      const error = await response.json();
+      alert('Error creating order: ' + error.error);
+      
+      // Reset button
+      buyBtn.innerHTML = originalText;
+      buyBtn.disabled = false;
+    }
+  } catch (error) {
+    console.error('Error during buy now:', error);
+    alert('Error during purchase. Please try again.');
+    
+    // Reset button
+    buyBtn.innerHTML = originalText;
+    buyBtn.disabled = false;
+  }
+}
+
+function markAsSold(listingId) {
+  if (confirm('Are you sure you want to mark this item as sold?')) {
+    fetch(`/listings/${listingId}/mark_sold`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showNotification('Item marked as sold!');
+        window.location.reload();
+      } else {
+        showNotification('Error marking item as sold', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      showNotification('Error marking item as sold', 'error');
+    });
+  }
+}
+
+function deleteListing(listingId) {
+  if (confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
+    fetch(`/listings/${listingId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showNotification('Listing deleted successfully!');
+        window.location.href = '/my_listing';
+      } else {
+        showNotification('Error deleting listing', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      showNotification('Error deleting listing', 'error');
+    });
+  }
+}
+
+function showNotification(message, type = 'success') {
+  // Create notification element if it doesn't exist
+  let notification = document.getElementById('notification');
+  if (!notification) {
+    notification = document.createElement('div');
+    notification.id = 'notification';
+    notification.className = 'notification';
+    notification.innerHTML = `
+      <span id="notification-text"></span>
+      <button class="close-btn" onclick="hideNotification()">&times;</button>
+    `;
+    document.body.appendChild(notification);
+  }
+  
+  const notificationText = document.getElementById('notification-text');
+  if (notificationText) {
+    notificationText.textContent = message;
+  }
+  
+  // Set notification color based on type
+  if (type === 'error') {
+    notification.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+  } else {
+    notification.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+  }
+  
+  notification.classList.add('show');
+  
+  // Auto hide after 5 seconds
+  setTimeout(() => {
+    hideNotification();
+  }, 5000);
+}
+
+function hideNotification() {
+  const notification = document.getElementById('notification');
+  if (notification) {
+    notification.classList.remove('show');
+  }
+}
+</script>
