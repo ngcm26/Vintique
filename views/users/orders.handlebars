@@ -1,0 +1,106 @@
+<div class="container py-5">
+  <h1 class="mb-4 fw-bold">My Orders</h1>
+  <ul class="nav nav-tabs mb-4" id="ordersTab" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="purchases-tab" data-bs-toggle="tab" data-bs-target="#purchases" type="button" role="tab" aria-controls="purchases" aria-selected="true">
+        <i class="bi bi-bag"></i> Purchases
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales" type="button" role="tab" aria-controls="sales" aria-selected="false">
+        <i class="bi bi-cash-stack"></i> Sales
+      </button>
+    </li>
+  </ul>
+  <div class="tab-content" id="ordersTabContent">
+    <!-- Purchases -->
+    <div class="tab-pane fade show active" id="purchases" role="tabpanel" aria-labelledby="purchases-tab">
+      {{#if purchases.length}}
+        <div class="row g-4">
+          {{#each purchases}}
+            <div class="col-12">
+              <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body">
+                  <div class="row">
+                    <div class="col-md-8">
+                      <h5 class="card-title mb-2 fw-semibold">{{listing_title}}</h5>
+                      <ul class="list-unstyled mb-2">
+                        <li><span class="fw-semibold text-secondary">Order ID:</span> #{{order_id}}</li>
+                        <li><span class="fw-semibold text-secondary">Status:</span>
+                          <span class="badge
+                            {{#if (eq status 'pending')}}bg-secondary{{/if}}
+                            {{#if (eq status 'paid')}}bg-info{{/if}}
+                            {{#if (eq status 'shipped')}}bg-primary{{/if}}
+                            {{#if (eq status 'completed')}}bg-success{{/if}}
+                            {{#if (eq status 'cancelled')}}bg-danger{{/if}}">{{status}}</span>
+                        </li>
+                        <li><span class="fw-semibold text-secondary">Seller:</span> {{seller_email}}</li>
+                        <li><span class="fw-semibold text-secondary">Quantity:</span> {{quantity}}</li>
+                        <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
+                        <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
+                      </ul>
+                    </div>
+                    <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
+                      {{#if listing_image}}
+                        <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm" style="max-width:220px; max-height:180px; object-fit:cover;">
+                      {{else}}
+                        <span class="text-muted">No image</span>
+                      {{/if}}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {{/each}}
+        </div>
+      {{else}}
+        <div class="alert alert-info rounded-4">No purchases yet.</div>
+      {{/if}}
+    </div>
+
+    <!-- Sales -->
+    <div class="tab-pane fade" id="sales" role="tabpanel" aria-labelledby="sales-tab">
+      {{#if sales.length}}
+        <div class="row g-4">
+          {{#each sales}}
+            <div class="col-12">
+              <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body">
+                  <div class="row">
+                    <div class="col-md-8">
+                      <h5 class="card-title mb-2 fw-semibold">{{listing_title}}</h5>
+                      <ul class="list-unstyled mb-2">
+                        <li><span class="fw-semibold text-secondary">Order ID:</span> #{{order_id}}</li>
+                        <li><span class="fw-semibold text-secondary">Status:</span>
+                          <span class="badge
+                            {{#if (eq status 'pending')}}bg-secondary{{/if}}
+                            {{#if (eq status 'paid')}}bg-info{{/if}}
+                            {{#if (eq status 'shipped')}}bg-primary{{/if}}
+                            {{#if (eq status 'completed')}}bg-success{{/if}}
+                            {{#if (eq status 'cancelled')}}bg-danger{{/if}}">{{status}}</span>
+                        </li>
+                        <li><span class="fw-semibold text-secondary">Buyer:</span> {{buyer_email}}</li>
+                        <li><span class="fw-semibold text-secondary">Quantity:</span> {{quantity}}</li>
+                        <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
+                        <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
+                      </ul>
+                    </div>
+                    <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
+                      {{#if listing_image}}
+                        <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm" style="max-width:220px; max-height:180px; object-fit:cover;">
+                      {{else}}
+                        <span class="text-muted">No image</span>
+                      {{/if}}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {{/each}}
+        </div>
+      {{else}}
+        <div class="alert alert-info rounded-4">No sales yet.</div>
+      {{/if}}
+    </div>
+  </div>
+</div>

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <title>Vintique</title>
@@ -8,18 +9,19 @@
   <link rel="stylesheet" href="/assets/css/users/usernavbar.css">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
   {{#if (eq activePage 'register')}}
-    <link rel="stylesheet" href="/assets/css/users/register.css">
+  <link rel="stylesheet" href="/assets/css/users/register.css">
   {{/if}}
   {{#if (eq activePage 'login')}}
-    <link rel="stylesheet" href="/assets/css/users/login.css">
+  <link rel="stylesheet" href="/assets/css/users/login.css">
   {{/if}}
   {{#if (eq activePage 'shop')}}
-    <link rel="stylesheet" href="/assets/css/users/marketplace.css">
+  <link rel="stylesheet" href="/assets/css/users/marketplace.css">
   {{/if}}
   {{#if (eq activePage 'cart')}}
-    <link rel="stylesheet" href="/assets/css/users/cart.css">
+  <link rel="stylesheet" href="/assets/css/users/cart.css">
   {{/if}}
 </head>
+
 <body>
   <!-- Navbar for guests and users -->
   <nav class="navbar navbar-expand-lg user-navbar">
@@ -30,43 +32,52 @@
         </a>
         <div class="collapse navbar-collapse justify-content-center" id="navbarNav">
           <ul class="navbar-nav">
-            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'home')}}active{{/if}}" href="/home">Home</a></li>
-            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'shop')}}active{{/if}}" href="/marketplace">Shop</a></li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'home')}}active{{/if}}" href="/home">Home</a>
+            </li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'shop')}}active{{/if}}"
+                href="/marketplace">Shop</a></li>
             {{#if user}}
-              <li class="nav-item">
-                <a class="nav-link{{#if (eq activePage 'sell')}} active{{/if}}" href="/post_product">Sell</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link{{#if (eq activePage 'mylistings')}} active{{/if}}" href="/my_listing">My Listings</a>
-              </li>
-              <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="/qa">Q&amp;A</a></li>
-              <li class="nav-item"><a class="nav-link {{#if (eq activePage 'messages')}}active{{/if}}" href="/messages">Messages</a></li>
+            <li class="nav-item">
+              <a class="nav-link{{#if (eq activePage 'sell')}} active{{/if}}" href="/post_product">Sell</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link{{#if (eq activePage 'mylistings')}} active{{/if}}" href="/my_listing">My Listings</a>
+            </li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="/qa">Q&amp;A</a>
+            </li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'messages')}}active{{/if}}"
+                href="/messages">Messages</a></li>
             {{/if}}
-            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'about')}}active{{/if}}" href="#">About</a></li>
-            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'feedback')}}active{{/if}}" href="#">Feedback</a></li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'about')}}active{{/if}}" href="#">About</a>
+            </li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'feedback')}}active{{/if}}"
+                href="#">Feedback</a></li>
             {{#if user}}
-              <li class="nav-item">
-                <a class="nav-link {{#if (eq activePage 'cart')}}active{{/if}}" href="/cart" id="cartNavLink">
-                  <i class="fas fa-shopping-cart"></i>
-                  <span class="cart-badge" id="cartBadge" style="display: none;">0</span>
-                </a>
-              </li>
-              <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle {{#if (eq activePage 'account')}}active{{/if}}" href="#" id="accountDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                  Account
-                </a>
-                <ul class="dropdown-menu" aria-labelledby="accountDropdown">
-                  <li><a class="dropdown-item" href="#">Orders</a></li>
-                  <li><a class="dropdown-item" href="/account-settings">Account Settings</a></li>
-                  <li><hr class="dropdown-divider"></li>
-                  <li><a class="dropdown-item" href="/logout">Log Out</a></li>
-                </ul>
-              </li>
+            <li class="nav-item">
+              <a class="nav-link {{#if (eq activePage 'cart')}}active{{/if}}" href="/cart" id="cartNavLink">
+                <i class="fas fa-shopping-cart"></i>
+                <span class="cart-badge" id="cartBadge" style="display: none;">0</span>
+              </a>
+            </li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle {{#if (eq activePage 'account')}}active{{/if}}" href="#"
+                id="accountDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                Account
+              </a>
+              <ul class="dropdown-menu" aria-labelledby="accountDropdown">
+                <li><a class="dropdown-item" href="/orders">Orders</a></li>
+                <li><a class="dropdown-item" href="/account-settings">Account Settings</a></li>
+                <li>
+                  <hr class="dropdown-divider">
+                </li>
+                <li><a class="dropdown-item" href="/logout">Log Out</a></li>
+              </ul>
+            </li>
             {{else}}
-              <li class="nav-item d-flex align-items-center gap-2">
-                <a class="btn btn-signup me-2" href="/register">Sign Up</a>
-                <a class="btn btn-login" href="/login">Login</a>
-              </li>
+            <li class="nav-item d-flex align-items-center gap-2">
+              <a class="btn btn-signup me-2" href="/register">Sign Up</a>
+              <a class="btn btn-login" href="/login">Login</a>
+            </li>
             {{/if}}
           </ul>
         </div>
@@ -80,37 +91,145 @@
     {{{body}}}
   </div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  
+
   <!-- Cart Badge Update Script -->
   <script>
-  // Function to update cart badge
-  async function updateCartBadge() {
-    try {
-      const response = await fetch('/api/cart');
-      if (response.ok) {
-        const data = await response.json();
-        const cartBadge = document.getElementById('cartBadge');
-        const itemCount = data.items ? data.items.length : 0;
-        
-        if (itemCount > 0) {
-          cartBadge.textContent = itemCount;
-          cartBadge.style.display = 'flex';
-        } else {
-          cartBadge.style.display = 'none';
+    // Function to update cart badge
+    async function updateCartBadge() {
+      try {
+        const response = await fetch('/api/cart');
+        if (response.ok) {
+          const data = await response.json();
+          const cartBadge = document.getElementById('cartBadge');
+          const itemCount = data.items ? data.items.length : 0;
+
+          if (itemCount > 0) {
+            cartBadge.textContent = itemCount;
+            cartBadge.style.display = 'flex';
+          } else {
+            cartBadge.style.display = 'none';
+          }
         }
+      } catch (error) {
+        console.error('Error updating cart badge:', error);
       }
-    } catch (error) {
-      console.error('Error updating cart badge:', error);
     }
-  }
 
-  // Update cart badge on page load
-  document.addEventListener('DOMContentLoaded', function() {
-    updateCartBadge();
-  });
+    // Update cart badge on page load
+    document.addEventListener('DOMContentLoaded', function () {
+      updateCartBadge();
+    });
 
-  // Make function globally available for other pages to call
-  window.updateCartBadge = updateCartBadge;
+    // Make function globally available for other pages to call
+    window.updateCartBadge = updateCartBadge;
   </script>
+
+
+  <!-- Floating Chat Button -->
+  <div id="chatbot-button"
+    style="position: fixed; bottom: 30px; right: 30px; background: #FFD600; color: #222; border-radius: 50%; width: 56px; height: 56px; box-shadow: 0 2px 12px #bbb; display: flex; align-items: center; justify-content: center; font-size: 1.9rem; cursor: pointer; z-index: 9999;">
+    <i class="fa-solid fa-comments"></i>
+  </div>
+
+  <!-- Chatbot Modal -->
+  <div id="chatbot-modal"
+    style="display: none; position: fixed; bottom: 98px; right: 30px; width: 340px; max-width: 95vw; height: 410px; background: #fffbe7; border-radius: 1.2rem; box-shadow: 0 8px 24px #aaa; z-index: 9999; flex-direction: column; overflow: hidden; border: 2px solid #FFD600;">
+    <div
+      style="padding: 0.7rem 1rem; background: #FFD600; color: #222; font-weight: bold; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center;">
+      <span>Vintique Assistant</span>
+      <button id="chatbot-close"
+        style="background: none; border: none; font-size: 1.3rem; cursor: pointer;">&times;</button>
+    </div>
+    <div id="chatbot-messages"
+      style="flex: 1; padding: 1rem; overflow-y: auto; font-size: 1rem; display: flex; flex-direction: column; gap: 0.6rem;">
+    </div>
+    <div style="display: flex; gap: 0.5rem; padding: 0.8rem; background: #fffde9;">
+      <input id="chatbot-input" type="text" placeholder="Type your message..."
+        style="flex: 1; border-radius: 1rem; border: 1px solid #FFD600; padding: 0.6rem 1rem; outline: none;">
+      <button id="chatbot-send"
+        style="background: #FFD600; color: #222; border: none; border-radius: 1rem; padding: 0.6rem 1.1rem; font-weight: bold; cursor: pointer;">Send
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const chatbotBtn = document.getElementById('chatbot-button');
+    const chatbotModal = document.getElementById('chatbot-modal');
+    const chatbotClose = document.getElementById('chatbot-close');
+    const chatbotMessages = document.getElementById('chatbot-messages');
+    const chatbotInput = document.getElementById('chatbot-input');
+    const chatbotSend = document.getElementById('chatbot-send');
+
+    chatbotBtn.onclick = () => {
+      chatbotModal.style.display = 'flex';
+      setTimeout(() => chatbotInput.focus(), 120);
+    };
+    chatbotClose.onclick = () => {
+      chatbotModal.style.display = 'none';
+    };
+
+    function addMessage(text, fromUser) {
+      const msgDiv = document.createElement('div');
+      msgDiv.textContent = text;
+      msgDiv.style.background = fromUser ? "#FFF176" : "#f1f1f1";
+      msgDiv.style.alignSelf = fromUser ? "flex-end" : "flex-start";
+      msgDiv.style.padding = "0.55rem 1rem";
+      msgDiv.style.borderRadius = "1.1rem";
+      msgDiv.style.maxWidth = "82%";
+      msgDiv.style.boxShadow = "0 1px 4px #eee";
+      msgDiv.style.marginBottom = "2px";
+      chatbotMessages.appendChild(msgDiv);
+      chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+    }
+
+    function sendMessage() {
+      const text = chatbotInput.value.trim();
+      if (!text) return;
+      addMessage(text, true);
+      chatbotInput.value = '';
+      addMessage("...", false); // Typing indicator
+
+      fetch('/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+        credentials: 'same-origin'
+      })
+        .then(res => res.json())
+        .then(data => {
+          // Remove typing indicator
+          const typing = chatbotMessages.querySelector('div:last-child');
+          if (typing && typing.textContent === "...") chatbotMessages.removeChild(typing);
+
+          // Add the reply text
+          addMessage(data.reply, false);
+
+          // Add the image if available
+          if (data.image) {
+            const img = document.createElement('img');
+            img.src = data.image;
+            img.alt = "Order item";
+            img.style.maxWidth = "120px";
+            img.style.borderRadius = "0.7rem";
+            img.style.marginTop = "0.5rem";
+            chatbotMessages.appendChild(img);
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+          }
+        })
+        .catch(() => {
+          const typing = chatbotMessages.querySelector('div:last-child');
+          if (typing && typing.textContent === "...") chatbotMessages.removeChild(typing);
+          addMessage("Sorry, something went wrong. Try again.", false);
+        });
+    }
+
+    chatbotSend.onclick = sendMessage;
+    chatbotInput.addEventListener('keydown', function (e) {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+
+
 </body>
-</html> 
+
+</html>

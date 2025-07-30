@@ -3454,3 +3454,79 @@ app.listen(PORT, () => {
 //     process.exit(0);
 //   }
 // });
+
+
+
+// In index.js (or routes/orders.js if you modularize)
+// Requires: express-session (for req.session), and a MySQL connection function (e.g. createConnection)
+
+
+app.get('/orders', async (req, res) => {
+  if (!req.session.user || !req.session.user.user_id) {
+    // Not logged in, redirect to login
+    return res.redirect('/login');
+  }
+  const userId = req.session.user.user_id;
+  let connection;
+  try {
+    connection = await createConnection();
+
+
+    // Purchases: Orders where user is buyer
+    const [purchases] = await connection.execute(`
+  SELECT o.*,
+         oi.order_item_id, oi.listing_id, oi.quantity, oi.price,
+         l.title AS listing_title, l.user_id AS seller_id,
+         u.email AS seller_email,
+         li.image_url AS listing_image
+  FROM orders o
+  JOIN order_items oi ON o.order_id = oi.order_id
+  JOIN listings l ON oi.listing_id = l.listing_id
+  JOIN users u ON l.user_id = u.user_id
+  LEFT JOIN listing_images li ON li.listing_id = l.listing_id AND li.is_main = 1
+  WHERE o.user_id = ?
+  ORDER BY o.created_at DESC, o.order_id DESC
+`, [userId]);
+
+
+
+
+    // Sales: Orders where user is the seller
+    const [sales] = await connection.execute(`
+  SELECT o.*,
+         oi.order_item_id, oi.listing_id, oi.quantity, oi.price,
+         l.title AS listing_title, l.user_id AS seller_id,
+         ou.email AS buyer_email,
+         li.image_url AS listing_image
+  FROM order_items oi
+  JOIN orders o ON oi.order_id = o.order_id
+  JOIN listings l ON oi.listing_id = l.listing_id
+  JOIN users ou ON o.user_id = ou.user_id
+  LEFT JOIN listing_images li ON li.listing_id = l.listing_id AND li.is_main = 1
+  WHERE l.user_id = ?
+  ORDER BY o.created_at DESC, o.order_id DESC
+`, [userId]);
+
+
+    res.render('users/orders', {
+      purchases,
+      sales,
+      user: req.session.user,
+      layout: 'user', 
+    });
+
+
+    await connection.end();
+  } catch (error) {
+    console.error('Orders page error:', error);
+    if (connection) await connection.end();
+    res.status(500).send('Server error loading orders page.');
+  }
+});
+
+
+const chatbotRoutes = require('./routes/chatbot');
+app.use('/chat', chatbotRoutes);
+
+// Serve static files from 'public' folder
+app.use(express.static('public'));
