@@ -35,7 +35,7 @@
     <div class="conversations-list" id="conversationsList">
       {{#if conversations}}
         {{#each conversations}}
-          <div class="conversation-item" data-status="active" data-conversation-id="{{this.conversation_id}}" onclick="selectConversation({{this.conversation_id}}, '{{this.other_user_name}}', '{{this.listing_title}}')">
+          <div class="conversation-item" data-status="active" data-conversation-id="{{this.conversation_id}}" data-listing-id="{{this.listing_id}}" onclick="selectConversation({{this.conversation_id}}, '{{this.other_user_name}}', '{{this.listing_title}}', {{this.listing_id}})">
             <div class="conversation-header">
               <span class="conversation-name">{{this.other_user_name}}</span>
               <span class="conversation-time">
@@ -195,6 +195,7 @@
 let conversations = {{{conversationsJson}}};
 let currentUser = {{{userJson}}};
 let currentConversationId = null;
+let currentListingId = null;
 let selectedImage = null;
 
 console.log('Loaded conversations:', conversations);
@@ -252,7 +253,11 @@ document.addEventListener('DOMContentLoaded', function() {
   if (conversationId) {
     const convElement = document.querySelector(`[data-conversation-id="${conversationId}"]`);
     if (convElement) {
-      convElement.click();
+      const listingId = convElement.getAttribute('data-listing-id');
+      const otherUser = convElement.querySelector('.conversation-name')?.textContent || 'Unknown User';
+      const productTitle = convElement.querySelector('.product-tag')?.textContent.replace('Re: ', '') || null;
+      
+      selectConversation(conversationId, otherUser, productTitle, listingId);
     }
   }
 
@@ -275,13 +280,14 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
-async function selectConversation(conversationId, otherUser, productTitle) {
+async function selectConversation(conversationId, otherUser, productTitle, listingId = null) {
   if (!currentUser) {
     showNotification('Please log in to view messages', 'error');
     return;
   }
 
   currentConversationId = conversationId;
+  currentListingId = listingId;
   
   document.querySelectorAll('.conversation-item').forEach(item => {
     item.classList.remove('active');
@@ -319,13 +325,22 @@ async function loadMessages(conversationId) {
     
     const messages = await response.json();
     
-    // If the first message has a listing_id, fetch and display the product card
-    if (messages.length > 0 && messages[0].listing_id) {
-      const listingId = messages[0].listing_id;
-      const product = await fetchProductInfo(listingId);
-      displayProductCard(product);
+    // Check if we have a listing ID to show product card
+    if (currentListingId) {
+      const product = await fetchProductInfo(currentListingId);
+      if (product) {
+        displayProductCard(product);
+      }
     } else {
-      removeProductCard();
+      // Check if the first message has a listing_id
+      if (messages.length > 0 && messages[0].listing_id) {
+        const product = await fetchProductInfo(messages[0].listing_id);
+        if (product) {
+          displayProductCard(product);
+        }
+      } else {
+        removeProductCard();
+      }
     }
     
     displayMessages(messages);
@@ -337,11 +352,18 @@ async function loadMessages(conversationId) {
 
 async function fetchProductInfo(listingId) {
   try {
-    const response = await fetch(`/api/listings`);
-    if (!response.ok) return null;
-    const listings = await response.json();
-    return listings.find(l => l.listing_id == listingId);
+    // Create a specific endpoint for fetching a single listing
+    const response = await fetch(`/api/listings/${listingId}`);
+    if (!response.ok) {
+      // Fallback to fetching all listings and filtering
+      const allListingsResponse = await fetch(`/api/listings`);
+      if (!allListingsResponse.ok) return null;
+      const listings = await allListingsResponse.json();
+      return listings.find(l => l.listing_id == listingId);
+    }
+    return await response.json();
   } catch (e) {
+    console.error('Error fetching product info:', e);
     return null;
   }
 }
@@ -349,19 +371,31 @@ async function fetchProductInfo(listingId) {
 function displayProductCard(product) {
   removeProductCard();
   if (!product) return;
+  
   const messagesArea = document.getElementById('messagesArea');
   const card = document.createElement('div');
   card.className = 'chat-product-card';
-  card.style = 'background: #fffbe6; border-radius: 16px; margin-bottom: 1rem; padding: 1rem; display: flex; align-items: center; box-shadow: 0 2px 8px rgba(255,215,0,0.10);';
   card.innerHTML = `
-    <img src="${product.image_url || '/assets/logo.png'}" alt="${product.title}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; margin-right: 1rem;">
-    <div>
-      <div style="font-weight: bold; font-size: 1.1rem;">${product.title}</div>
-      <div style="color: #888; font-size: 0.95rem;">${product.category} • $${product.price}</div>
-      <div style="color: #666; font-size: 0.9rem;">${product.brand ? product.brand + ' • ' : ''}${product.item_condition}</div>
+    <div style="background: linear-gradient(135deg, #fff8e1 0%, #ffe0b2 100%); border-radius: 16px; margin-bottom: 1rem; padding: 1.5rem; display: flex; align-items: center; box-shadow: 0 4px 12px rgba(255,193,7,0.15); border: 1px solid rgba(255,193,7,0.2);">
+      <div style="width: 80px; height: 80px; border-radius: 12px; overflow: hidden; margin-right: 1.5rem; flex-shrink: 0;">
+        <img src="${product.image_url || '/assets/logo.png'}" alt="${product.title}" style="width: 100%; height: 100%; object-fit: cover;">
+      </div>
+      <div style="flex: 1;">
+        <div style="font-weight: 700; font-size: 1.1rem; color: #333; margin-bottom: 0.25rem;">${escapeHtml(product.title)}</div>
+        <div style="color: #666; font-size: 0.95rem; margin-bottom: 0.25rem;">${escapeHtml(product.category)} • <span style="font-weight: 600; color: #27ae60;">$${product.price}</span></div>
+        <div style="color: #888; font-size: 0.9rem;">${product.brand ? escapeHtml(product.brand) + ' • ' : ''}${escapeHtml(product.item_condition)}</div>
+      </div>
+      <div style="margin-left: 1rem;">
+        <button onclick="viewProductDetails(${product.listing_id})" style="background: linear-gradient(135deg, #FFD700, #FFA500); border: none; padding: 0.5rem 1rem; border-radius: 20px; color: #333; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
+          View Item
+        </button>
+      </div>
     </div>
   `;
-  messagesArea.prepend(card);
+  
+  // Insert the card at the beginning of messages area
+  const firstChild = messagesArea.firstChild;
+  messagesArea.insertBefore(card, firstChild);
 }
 
 function removeProductCard() {
@@ -386,18 +420,20 @@ function displayMessages(messages) {
   const messagesArea = document.getElementById('messagesArea');
   
   if (!messages || messages.length === 0) {
-    messagesArea.innerHTML = `
+    const emptyChat = document.createElement('div');
+    emptyChat.innerHTML = `
       <div class="empty-chat">
         <i class="fas fa-comments"></i>
         <h5>No messages yet</h5>
         <p>Start the conversation by sending a message!</p>
       </div>
     `;
+    messagesArea.appendChild(emptyChat);
     return;
   }
   
   const currentUserId = currentUser ? currentUser.user_id : null;
-  messagesArea.innerHTML = messages.map(message => {
+  const messagesHTML = messages.map(message => {
     const isOwn = message.sender_id === currentUserId;
     const messageClass = isOwn ? 'sent' : 'received';
     const senderName = isOwn ? 'You' : `${message.first_name || ''} ${message.last_name || ''}`.trim();
@@ -428,6 +464,11 @@ function displayMessages(messages) {
       </div>
     `;
   }).join('');
+  
+  // Append messages after any existing product card
+  const messagesContainer = document.createElement('div');
+  messagesContainer.innerHTML = messagesHTML;
+  messagesArea.appendChild(messagesContainer);
   
   messagesArea.scrollTop = messagesArea.scrollHeight;
 }
@@ -463,7 +504,7 @@ async function sendMessage() {
     
     const response = await fetch(`/api/conversations/${currentConversationId}/messages`, {
       method: 'POST',
-      body: formData // Don't set Content-Type header, let browser set it for FormData
+      body: formData
     });
     
     const data = await response.json();
@@ -471,7 +512,7 @@ async function sendMessage() {
     if (response.ok) {
       messageInput.value = '';
       messageInput.style.height = 'auto';
-      removeImagePreview(); // Clear image preview
+      removeImagePreview();
       await loadMessages(currentConversationId);
     } else {
       console.error('Error sending message:', data.error);
@@ -868,7 +909,13 @@ window.startConversationFromListing = async function(listingId, sellerEmail, pro
   }
 };
 
-function viewProductDetails() {
+function viewProductDetails(listingId = null) {
+  if (listingId) {
+    // Redirect to listing details page with the specific listing ID
+    window.location.href = `/listing/${listingId}`;
+    return;
+  }
+  
   const currentProduct = document.getElementById('chatSubtitle').textContent.replace('About: ', '');
   
   if (currentProduct === 'General conversation' || currentProduct === 'New Conversation') {

@@ -1,10 +1,31 @@
-{{!-- Staff Q&A Forum --}}
+{{!-- Complete Staff Q&A Management Template --}}
 <link rel="stylesheet" href="/assets/css/users/messages.css">
 <div class="container mt-5">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="mb-0">Q&A Moderation</h1>
-    <a href="/staff/dashboard" class="btn btn-secondary">Back to Dashboard</a>
+    <div>
+      <span class="badge bg-warning me-2" id="pendingCount">Loading...</span>
+      <a href="/staff/dashboard" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
   </div>
+  
+  <!-- Filter Tabs -->
+  <div class="mb-3">
+    <ul class="nav nav-tabs" id="moderationTabs">
+      <li class="nav-item">
+        <a class="nav-link active" id="all-tab" data-bs-toggle="tab" href="#all-questions">All Questions</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="pending-tab" data-bs-toggle="tab" href="#pending-questions">
+          Pending Verification <span class="badge bg-danger ms-1" id="pendingBadge">0</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="verified-tab" data-bs-toggle="tab" href="#verified-questions">Verified</a>
+      </li>
+    </ul>
+  </div>
+  
   <div class="card shadow-sm">
     <div class="card-body">
       <h5 class="card-title">All Questions</h5>
@@ -15,38 +36,113 @@
         <table class="table table-bordered table-hover align-middle">
           <thead class="table-light">
             <tr>
-              <th>Question</th>
-              <th>Category</th>
-              <th>Asked By</th>
-              <th>Asked At</th>
-              <th>Answer</th>
-              <th>Answered By</th>
-              <th>Answered At</th>
-              <th>Helpful Votes</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th style="width: 5%;">Status</th>
+              <th style="width: 25%;">Question</th>
+              <th style="width: 10%;">Category</th>
+              <th style="width: 12%;">Asked By</th>
+              <th style="width: 10%;">Asked At</th>
+              <th style="width: 20%;">Answers</th>
+              <th style="width: 8%;">Helpful Votes</th>
+              <th style="width: 10%;">Actions</th>
             </tr>
           </thead>
           <tbody>
             {{#each questions}}
-              <tr class="{{#unless answer_content}}table-warning{{/unless}}" data-qa-id="{{qa_id}}">
-                <td style="max-width: 300px; white-space: pre-line;">{{question_text}}</td>
-                <td>{{category}}</td>
-                <td>{{asker_username}}<br><small>{{asker_email}}</small></td>
-                <td>{{formatDate asked_at}}</td>
-                <td style="max-width: 300px; white-space: pre-line;">{{#if answer_content}}{{answer_content}}{{else}}<span class="text-danger">Unanswered</span>{{/if}}</td>
-                <td>{{answerer_username}}<br><small>{{answerer_email}}</small></td>
-                <td>{{#if answered_at}}{{formatDate answered_at}}{{/if}}</td>
-                <td>{{helpful_count}}</td>
-                <td>{{#if is_verified}}<span class="badge bg-success">Verified</span>{{else}}<span class="badge bg-secondary">Pending</span>{{/if}}</td>
+              <tr class="{{#unless (gt answers.length 0)}}table-warning{{/unless}} {{#unless is_verified}}table-info{{/unless}}" 
+                  data-qa-id="{{qa_id}}" 
+                  data-verified="{{is_verified}}">
+                <td class="text-center">
+                  {{#if is_verified}}
+                    <span class="badge bg-success">
+                      <i class="fas fa-check-circle"></i> Verified
+                    </span>
+                  {{else}}
+                    <span class="badge bg-warning">
+                      <i class="fas fa-clock"></i> Pending
+                    </span>
+                  {{/if}}
+                </td>
+                <td style="max-width: 300px; white-space: pre-line;">
+                  <div class="question-content">
+                    <strong>{{question_text}}</strong>
+                    {{#if details}}
+                      <div class="question-details mt-2 text-muted small">{{details}}</div>
+                    {{/if}}
+                    {{#unless is_verified}}
+                      <div class="mt-2">
+                        <small class="text-warning">
+                          <i class="fas fa-exclamation-triangle"></i> 
+                          This question is not visible to users yet
+                        </small>
+                      </div>
+                    {{/unless}}
+                  </div>
+                </td>
+                <td><span class="badge bg-secondary">{{category}}</span></td>
                 <td>
-                  <a href="#" class="btn btn-sm btn-outline-primary mb-1">Answer</a>
-                  <a href="#" class="btn btn-sm btn-outline-success mb-1">Verify</a>
-                  <a href="#" class="btn btn-sm btn-outline-danger mb-1">Delete</a>
+                  <div class="user-info">
+                    <strong>{{#if asker_username}}{{asker_username}}{{else}}Guest{{/if}}</strong>
+                    <br><small class="text-muted">{{asker_email}}</small>
+                  </div>
+                </td>
+                <td><small>{{formatDate asked_at}}</small></td>
+                <td>
+                  <div class="answers-column">
+                    {{#if (gt answers.length 0)}}
+                      <div class="answers-count mb-2">
+                        <span class="badge bg-success">{{answers.length}} Answer{{#if (gt answers.length 1)}}s{{/if}}</span>
+                      </div>
+                      <div class="answers-list">
+                        {{#each answers}}
+                          <div class="answer-item mb-2 p-2 border rounded {{#if @first}}bg-light{{/if}}">
+                            <div class="answer-header d-flex justify-content-between align-items-start mb-1">
+                              <small class="text-primary fw-bold">
+                                {{#if this.answerer_username}}@{{this.answerer_username}}{{else}}{{this.answerer_email}}{{/if}}
+                              </small>
+                              <small class="text-muted">{{formatDate this.answered_at}}</small>
+                            </div>
+                            <div class="answer-content small">
+                              {{#if (gt this.answer_content.length 100)}}
+                                <span class="answer-preview">{{substring this.answer_content 0 100}}...</span>
+                                <span class="answer-full" style="display: none;">{{this.answer_content}}</span>
+                                <a href="#" class="text-primary small toggle-answer" onclick="toggleAnswerView(this); return false;">Show More</a>
+                              {{else}}
+                                {{this.answer_content}}
+                              {{/if}}
+                            </div>
+                          </div>
+                        {{/each}}
+                      </div>
+                    {{else}}
+                      <span class="text-danger">No Answers Yet</span>
+                    {{/if}}
+                  </div>
+                </td>
+                <td class="text-center">
+                  <span class="badge bg-info">{{helpful_count}}</span>
+                </td>
+                <td>
+                  <div class="btn-group-vertical btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-primary btn-sm mb-1" onclick="showAnswerModal({{qa_id}}, '{{question_text}}')">
+                      <i class="fas fa-reply me-1"></i>Answer
+                    </button>
+                    {{#if is_verified}}
+                      <button type="button" class="btn btn-outline-secondary btn-sm mb-1" disabled>
+                        <i class="fas fa-check me-1"></i>Verified
+                      </button>
+                    {{else}}
+                      <button type="button" class="btn btn-outline-success btn-sm mb-1" onclick="verifyQuestion({{qa_id}})">
+                        <i class="fas fa-check me-1"></i>Verify
+                      </button>
+                    {{/if}}
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteQuestion({{qa_id}})">
+                      <i class="fas fa-trash me-1"></i>Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             {{else}}
-              <tr><td colspan="10" class="text-center">No questions found.</td></tr>
+              <tr><td colspan="8" class="text-center">No questions found.</td></tr>
             {{/each}}
           </tbody>
         </table>
@@ -54,70 +150,360 @@
     </div>
   </div>
 </div>
+
+<!-- Answer Modal -->
+<div class="modal fade" id="answerModal" tabindex="-1" aria-labelledby="answerModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="answerModalLabel">Answer Question</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-bold">Question:</label>
+          <div class="p-3 bg-light rounded" id="modalQuestionText"></div>
+        </div>
+        <div class="mb-3">
+          <label for="answerTextarea" class="form-label fw-bold">Your Answer:</label>
+          <textarea class="form-control" id="answerTextarea" rows="6" placeholder="Write your answer here..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitAnswer()">Submit Answer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.question-details {
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #dee2e6;
+}
+
+.answers-column {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.answer-item {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6 !important;
+}
+
+.answer-item.bg-light {
+  background: #e3f2fd !important;
+  border-color: #2196f3 !important;
+}
+
+.answers-count {
+  text-align: center;
+}
+
+.user-info {
+  min-width: 120px;
+}
+
+.btn-group-vertical .btn {
+  margin-bottom: 2px;
+}
+
+.toggle-answer {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.toggle-answer:hover {
+  text-decoration: underline;
+}
+
+.table td {
+  vertical-align: top;
+  padding: 0.75rem 0.5rem;
+}
+
+.answers-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Highlight unverified questions */
+.table-info {
+  background-color: rgba(13, 202, 240, 0.1) !important;
+}
+
+.nav-tabs .nav-link {
+  color: #495057;
+}
+
+.nav-tabs .nav-link.active {
+  color: #495057;
+  background-color: #fff;
+  border-color: #dee2e6 #dee2e6 #fff;
+}
+</style>
+
 <script>
+let currentQuestionId = null;
+
 document.addEventListener('DOMContentLoaded', function() {
-  // Answer button
-  document.querySelectorAll('.btn-outline-primary').forEach(btn => {
-    btn.addEventListener('click', async function(e) {
-      e.preventDefault();
-      const row = btn.closest('tr');
-      const qaId = row.getAttribute('data-qa-id') || row.dataset.qaId || row.querySelector('[data-qa-id]')?.dataset.qaId;
-      const currentAnswer = row.querySelector('td:nth-child(5)').textContent.trim();
-      const answer = prompt('Enter your answer:', currentAnswer === 'Unanswered' ? '' : currentAnswer);
-      if (answer === null) return;
-      if (answer.trim() === '') { alert('Answer cannot be empty.'); return; }
-      btn.disabled = true;
-      const res = await fetch(`/api/qa/${qaId}/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer_content: answer })
-      });
-      btn.disabled = false;
-      if (res.ok) {
-        row.querySelector('td:nth-child(5)').innerHTML = answer;
-        row.classList.remove('table-warning');
-        alert('Answer submitted!');
-      } else {
-        alert('Failed to submit answer.');
-      }
-    });
-  });
-
-  // Verify button
-  document.querySelectorAll('.btn-outline-success').forEach(btn => {
-    btn.addEventListener('click', async function(e) {
-      e.preventDefault();
-      const row = btn.closest('tr');
-      const qaId = row.getAttribute('data-qa-id') || row.dataset.qaId || row.querySelector('[data-qa-id]')?.dataset.qaId;
-      btn.disabled = true;
-      const res = await fetch(`/api/qa/${qaId}/verify`, { method: 'PATCH' });
-      btn.disabled = false;
-      if (res.ok) {
-        row.querySelector('td:nth-child(9)').innerHTML = '<span class=\"badge bg-success\">Verified</span>';
-        alert('Question verified!');
-      } else {
-        alert('Failed to verify question.');
-      }
-    });
-  });
-
-  // Delete button
-  document.querySelectorAll('.btn-outline-danger').forEach(btn => {
-    btn.addEventListener('click', async function(e) {
-      e.preventDefault();
-      const row = btn.closest('tr');
-      const qaId = row.getAttribute('data-qa-id') || row.dataset.qaId || row.querySelector('[data-qa-id]')?.dataset.qaId;
-      if (!confirm('Are you sure you want to delete this question?')) return;
-      btn.disabled = true;
-      const res = await fetch(`/api/qa/${qaId}`, { method: 'DELETE' });
-      btn.disabled = false;
-      if (res.ok) {
-        row.remove();
-        alert('Question deleted!');
-      } else {
-        alert('Failed to delete question.');
-      }
+  console.log('Staff Q&A page loaded');
+  updatePendingCount();
+  
+  // Tab filtering functionality
+  const tabs = document.querySelectorAll('#moderationTabs a[data-bs-toggle="tab"]');
+  tabs.forEach(tab => {
+    tab.addEventListener('shown.bs.tab', function (e) {
+      const target = e.target.getAttribute('href');
+      filterQuestionsByStatus(target);
     });
   });
 });
-</script> 
+
+function updatePendingCount() {
+  fetch('/api/qa/pending-count')
+    .then(response => response.json())
+    .then(data => {
+      const pendingCount = data.pending_count || 0;
+      document.getElementById('pendingCount').textContent = `${pendingCount} Pending Questions`;
+      document.getElementById('pendingBadge').textContent = pendingCount;
+      
+      if (pendingCount > 0) {
+        document.getElementById('pendingCount').className = 'badge bg-warning me-2';
+        document.getElementById('pendingBadge').className = 'badge bg-danger ms-1';
+      } else {
+        document.getElementById('pendingCount').className = 'badge bg-success me-2';
+        document.getElementById('pendingBadge').className = 'badge bg-secondary ms-1';
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching pending count:', error);
+      document.getElementById('pendingCount').textContent = 'Error loading count';
+    });
+}
+
+function filterQuestionsByStatus(activeTab) {
+  const rows = document.querySelectorAll('tbody tr[data-qa-id]');
+  
+  rows.forEach(row => {
+    const isVerified = row.dataset.verified === '1';
+    let showRow = true;
+    
+    switch(activeTab) {
+      case '#pending-questions':
+        showRow = !isVerified;
+        break;
+      case '#verified-questions':
+        showRow = isVerified;
+        break;
+      case '#all-questions':
+      default:
+        showRow = true;
+        break;
+    }
+    
+    row.style.display = showRow ? '' : 'none';
+  });
+}
+
+function toggleAnswerView(link) {
+  const answerItem = link.closest('.answer-item');
+  const preview = answerItem.querySelector('.answer-preview');
+  const full = answerItem.querySelector('.answer-full');
+  
+  if (preview && full) {
+    if (preview.style.display === 'none') {
+      preview.style.display = 'inline';
+      full.style.display = 'none';
+      link.textContent = 'Show More';
+    } else {
+      preview.style.display = 'none';
+      full.style.display = 'inline';
+      link.textContent = 'Show Less';
+    }
+  }
+}
+
+function showAnswerModal(qaId, questionText) {
+  currentQuestionId = qaId;
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = questionText;
+  document.getElementById('modalQuestionText').textContent = tempDiv.textContent || tempDiv.innerText || "";
+  document.getElementById('answerTextarea').value = '';
+  
+  const modal = new bootstrap.Modal(document.getElementById('answerModal'));
+  modal.show();
+}
+
+async function submitAnswer() {
+  if (!currentQuestionId) {
+    alert('Error: Question ID not found');
+    return;
+  }
+  
+  const answerContent = document.getElementById('answerTextarea').value.trim();
+  if (!answerContent) {
+    alert('Please write an answer before submitting.');
+    return;
+  }
+  
+  const submitBtn = document.querySelector('#answerModal .btn-primary');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting...';
+  
+  try {
+    const response = await fetch(`/api/staff/qa/${currentQuestionId}/answer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        answer_content: answerContent
+      })
+    });
+    
+    if (response.ok) {
+      const modal = bootstrap.Modal.getInstance(document.getElementById('answerModal'));
+      modal.hide();
+      
+      showNotification('Answer submitted successfully!', 'success');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } else {
+      const data = await response.json();
+      alert('Failed to submit answer: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error submitting answer:', error);
+    alert('Network error while submitting answer');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
+}
+
+async function verifyQuestion(qaId) {
+  if (!confirm('Are you sure you want to verify and publish this question?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/qa/${qaId}/verify`, {
+      method: 'PATCH'
+    });
+    
+    if (response.ok) {
+      showNotification('Question verified and published successfully!', 'success');
+      
+      // Update the UI immediately
+      const row = document.querySelector(`tr[data-qa-id="${qaId}"]`);
+      if (row) {
+        row.dataset.verified = '1';
+        row.classList.remove('table-info');
+        
+        // Update status badge
+        const statusCell = row.querySelector('td:first-child');
+        statusCell.innerHTML = '<span class="badge bg-success"><i class="fas fa-check-circle"></i> Verified</span>';
+        
+        // Update verify button
+        const verifyBtn = row.querySelector('.btn-outline-success');
+        if (verifyBtn) {
+          verifyBtn.className = 'btn btn-outline-secondary btn-sm mb-1';
+          verifyBtn.disabled = true;
+          verifyBtn.innerHTML = '<i class="fas fa-check me-1"></i>Verified';
+          verifyBtn.setAttribute('onclick', '');
+        }
+        
+        // Remove warning message
+        const warningMsg = row.querySelector('.text-warning');
+        if (warningMsg && warningMsg.parentElement) {
+          warningMsg.parentElement.remove();
+        }
+      }
+      
+      updatePendingCount();
+    } else {
+      const data = await response.json();
+      alert('Failed to verify question: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error verifying question:', error);
+    alert('Network error while verifying question');
+  }
+}
+
+async function deleteQuestion(qaId) {
+  if (!confirm('Are you sure you want to delete this question? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/qa/${qaId}`, {
+      method: 'DELETE'
+    });
+    
+    if (response.ok) {
+      showNotification('Question deleted successfully!', 'success');
+      
+      const row = document.querySelector(`tr[data-qa-id="${qaId}"]`);
+      if (row) {
+        row.remove();
+      }
+      
+      updatePendingCount();
+    } else {
+      const data = await response.json();
+      alert('Failed to delete question: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error deleting question:', error);
+    alert('Network error while deleting question');
+  }
+}
+
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 300px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    font-weight: 500;
+  `;
+  notification.innerHTML = `
+    ${message}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (notification.parentElement) {
+      notification.classList.add('fade');
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 150);
+    }
+  }, 5000);
+  
+  const closeBtn = notification.querySelector('.btn-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      notification.remove();
+    });
+  }
+}
+</script>

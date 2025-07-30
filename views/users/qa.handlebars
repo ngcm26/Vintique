@@ -1,4 +1,4 @@
-<!-- FAQ Page - Handlebars Template -->
+<!-- Complete User Q&A Template -->
 <link rel="stylesheet" href="/assets/css/users/faq.css">
 
 <!-- Hero Section - Full Width -->
@@ -30,7 +30,7 @@
       <div class="stat-number" id="answeredCount">
         {{#if questions}}
           {{#each questions}}
-            {{#if this.answer_content}}1{{else}}0{{/if}}
+            {{#if this.answers}}{{#if (gt this.answers.length 0)}}1{{else}}0{{/if}}{{else}}0{{/if}}
           {{/each}}
         {{else}}0{{/if}}
       </div>
@@ -52,12 +52,17 @@
       <button class="ask-btn" data-bs-toggle="modal" data-bs-target="#askQuestionModal">
         <i class="fas fa-plus me-2"></i>Ask a Question
       </button>
+      <p class="text-muted mb-0">Have a question about sustainable fashion, product care, or anything Vintique-related? Ask our community!</p>
+      <small class="text-info">
+        <i class="fas fa-info-circle me-1"></i>
+        Questions are reviewed by our moderators before being published to ensure quality and relevance.
+      </small>
     {{else}}
       <a href="/login" class="ask-btn">
         <i class="fas fa-sign-in-alt me-2"></i>Login to Ask Questions
       </a>
+      <p class="text-muted mb-0">Have a question about sustainable fashion, product care, or anything Vintique-related? Ask our community!</p>
     {{/if}}
-    <p class="text-muted mb-0">Have a question about sustainable fashion, product care, or anything Vintique-related? Ask our community!</p>
   </div>
 
   <!-- Filters Section -->
@@ -98,28 +103,53 @@
   <div class="qa-grid" id="qaGrid">
     {{#if questions}}
       {{#each questions}}
-        <div class="qa-card" data-category="{{this.category}}" data-status="{{#if this.answer_content}}answered{{else}}pending{{/if}}" data-helpful="{{#if this.helpful_count}}{{this.helpful_count}}{{else}}0{{/if}}" data-question-id="{{this.qa_id}}">
+        <div class="qa-card" data-category="{{this.category}}" data-status="{{#if this.answers}}{{#if (gt this.answers.length 0)}}answered{{else}}pending{{/if}}{{else}}pending{{/if}}" data-helpful="{{#if this.helpful_count}}{{this.helpful_count}}{{else}}0{{/if}}" data-question-id="{{this.qa_id}}">
           <div class="qa-header">
             <div>
               <span class="qa-category">{{this.category}}</span>
-              <span class="qa-status {{#if this.answer_content}}status-answered{{else}}status-pending{{/if}}">
-                {{#if this.answer_content}}Answered{{else}}Pending Answer{{/if}}
+              <span class="qa-status {{#if this.answers}}{{#if (gt this.answers.length 0)}}status-answered{{else}}status-pending{{/if}}{{else}}status-pending{{/if}}">
+                {{#if this.answers}}{{#if (gt this.answers.length 0)}}Answered ({{this.answers.length}} {{#if (eq this.answers.length 1)}}reply{{else}}replies{{/if}}){{else}}Pending Answer{{/if}}{{else}}Pending Answer{{/if}}
               </span>
             </div>
             <div class="qa-date">{{timeAgo this.asked_at}}</div>
           </div>
           
           <div class="question">{{this.question_text}}</div>
+          {{#if this.details}}
+            <div class="question-details">{{this.details}}</div>
+          {{/if}}
           <div class="questioner">Asked by {{#if this.asker_username}}@{{this.asker_username}}{{else}}{{this.asker_email}}{{/if}}</div>
           
-          {{#if this.answer_content}}
-            <div class="answer">
-              <div class="answerer">
-                <i class="fas fa-check-circle me-1"></i>
-                Answered by {{#if this.answerer_username}}@{{this.answerer_username}}{{else}}{{this.answerer_email}}{{/if}}
+          {{#if this.answers}}
+            {{#if (gt this.answers.length 0)}}
+              <div class="answers-section">
+                <div class="answers-header">
+                  <h6><i class="fas fa-comments me-2"></i>{{this.answers.length}} {{#if (eq this.answers.length 1)}}Answer{{else}}Answers{{/if}}</h6>
+                  {{#if (gt this.answers.length 1)}}
+                    <div class="answers-toggle">
+                      <button class="toggle-answers-btn" onclick="toggleAllAnswers(this)" data-show-all="false">
+                        <span class="show-text">Show All Answers</span>
+                        <span class="hide-text" style="display: none;">Show Latest Only</span>
+                        <i class="fas fa-chevron-down ms-1"></i>
+                      </button>
+                    </div>
+                  {{/if}}
+                </div>
+                
+                <div class="answers-container">
+                  {{#each this.answers}}
+                    <div class="answer {{#if @first}}latest-answer{{else}}older-answer{{/if}}" {{#unless @first}}style="display: none;"{{/unless}}>
+                      <div class="answerer">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Answered by {{#if this.answerer_username}}@{{this.answerer_username}}{{else}}{{this.answerer_email}}{{/if}}
+                        <span class="answer-date">{{timeAgo this.answered_at}}</span>
+                      </div>
+                      <div class="answer-text">{{this.answer_content}}</div>
+                    </div>
+                  {{/each}}
+                </div>
               </div>
-              <div class="answer-text">{{this.answer_content}}</div>
-            </div>
+            {{/if}}
           {{/if}}
           
           <div class="qa-actions">
@@ -131,7 +161,7 @@
             </div>
             {{#if ../user}}
               <button class="reply-btn" onclick="showReplyForm(this, {{this.qa_id}})">
-                <i class="fas fa-reply me-1"></i>{{#if this.answer_content}}Reply{{else}}Answer{{/if}}
+                <i class="fas fa-reply me-1"></i>Add Answer
               </button>
             {{/if}}
           </div>
@@ -162,6 +192,10 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-4">
+        <div class="alert alert-info mb-3">
+          <i class="fas fa-info-circle me-2"></i>
+          <strong>Before submitting:</strong> Your question will be reviewed by our moderators before being published. This helps maintain quality and ensures relevant content for our community.
+        </div>
         <form id="askQuestionForm">
           <div class="mb-3">
             <label for="questionCategory" class="form-label">Category</label>
@@ -184,7 +218,7 @@
           </div>
           <div class="d-flex gap-2">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-primary">Post Question</button>
+            <button type="submit" class="btn btn-primary">Submit for Review</button>
           </div>
         </form>
       </div>
@@ -192,6 +226,157 @@
   </div>
 </div>
 {{/if}}
+
+<style>
+.answers-section {
+  margin-top: 1rem;
+  border-top: 1px solid #e9ecef;
+  padding-top: 1rem;
+}
+
+.answers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.answers-header h6 {
+  margin: 0;
+  color: #495057;
+  font-weight: 600;
+}
+
+.toggle-answers-btn {
+  background: none;
+  border: none;
+  color: #007bff;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.toggle-answers-btn:hover {
+  background-color: #f8f9fa;
+}
+
+.answers-container {
+  space-y: 1rem;
+}
+
+.answer {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.latest-answer {
+  border-left: 4px solid #28a745;
+}
+
+.older-answer {
+  border-left: 4px solid #6c757d;
+}
+
+.answerer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  color: #495057;
+  font-weight: 500;
+}
+
+.answer-date {
+  color: #6c757d;
+  font-weight: 400;
+  margin-left: auto;
+}
+
+.answer-text {
+  color: #212529;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.question-details {
+  color: #6c757d;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #dee2e6;
+}
+
+/* Reply form styles */
+.reply-form {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.reply-form.show {
+  opacity: 1;
+  max-height: 300px;
+  margin-bottom: 1rem;
+}
+
+.reply-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  resize: vertical;
+  margin-bottom: 1rem;
+}
+
+.reply-form-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-submit-reply {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.btn-submit-reply:hover {
+  background-color: #0056b3;
+}
+
+.btn-cancel-reply {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.btn-cancel-reply:hover {
+  background-color: #545b62;
+}
+</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -224,7 +409,61 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
+  // Load user's vote status
+  {{#if user}}
+  loadUserVoteStatus();
+  {{/if}}
 });
+
+{{#if user}}
+async function loadUserVoteStatus() {
+  try {
+    const response = await fetch('/api/qa/votes/status');
+    if (response.ok) {
+      const votedQuestions = await response.json();
+      votedQuestions.forEach(qaId => {
+        const voteBtn = document.querySelector(`[onclick*="voteHelpful"][onclick*="${qaId}"]`);
+        if (voteBtn) {
+          voteBtn.classList.add('active');
+          voteBtn.dataset.voted = 'true';
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error loading vote status:', error);
+  }
+}
+{{/if}}
+
+function toggleAllAnswers(button) {
+  const answersContainer = button.closest('.answers-section').querySelector('.answers-container');
+  const olderAnswers = answersContainer.querySelectorAll('.older-answer');
+  const showText = button.querySelector('.show-text');
+  const hideText = button.querySelector('.hide-text');
+  const icon = button.querySelector('i');
+  const isShowingAll = button.dataset.showAll === 'true';
+  
+  if (isShowingAll) {
+    // Hide older answers
+    olderAnswers.forEach(answer => {
+      answer.style.display = 'none';
+    });
+    showText.style.display = 'inline';
+    hideText.style.display = 'none';
+    icon.className = 'fas fa-chevron-down ms-1';
+    button.dataset.showAll = 'false';
+  } else {
+    // Show all answers
+    olderAnswers.forEach(answer => {
+      answer.style.display = 'block';
+    });
+    showText.style.display = 'none';
+    hideText.style.display = 'inline';
+    icon.className = 'fas fa-chevron-up ms-1';
+    button.dataset.showAll = 'true';
+  }
+}
 
 function searchQA() {
   const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -233,8 +472,11 @@ function searchQA() {
   
   qaCards.forEach(card => {
     const question = card.querySelector('.question').textContent.toLowerCase();
-    const answer = card.querySelector('.answer-text');
-    const answerText = answer ? answer.textContent.toLowerCase() : '';
+    const answers = card.querySelectorAll('.answer-text');
+    let answerText = '';
+    answers.forEach(answer => {
+      answerText += answer.textContent.toLowerCase() + ' ';
+    });
     const category = card.querySelector('.qa-category').textContent.toLowerCase();
     
     if (question.includes(searchTerm) || answerText.includes(searchTerm) || category.includes(searchTerm)) {
@@ -346,14 +588,13 @@ async function voteHelpful(button, questionId) {
     if (response.ok) {
       button.classList.toggle('active');
       const helpfulSpan = button.parentElement.querySelector('.helpful-count');
-      const currentCount = parseInt(helpfulSpan.textContent.match(/\d+/)[0]) || 0;
       
       if (data.voted) {
-        helpfulSpan.textContent = `${currentCount + 1} found this helpful`;
-        button.parentElement.parentElement.parentElement.dataset.helpful = currentCount + 1;
+        helpfulSpan.textContent = `${data.vote_count} found this helpful`;
+        button.parentElement.parentElement.parentElement.dataset.helpful = data.vote_count;
       } else {
-        helpfulSpan.textContent = `${Math.max(0, currentCount - 1)} found this helpful`;
-        button.parentElement.parentElement.parentElement.dataset.helpful = Math.max(0, currentCount - 1);
+        helpfulSpan.textContent = `${data.vote_count} found this helpful`;
+        button.parentElement.parentElement.parentElement.dataset.helpful = data.vote_count;
       }
       button.dataset.voted = data.voted;
     } else {
@@ -427,6 +668,11 @@ async function submitReply(button, questionId) {
     return;
   }
   
+  // Disable button during submission
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Submitting...';
+  
   try {
     const response = await fetch(`/api/qa/${questionId}/answer`, {
       method: 'POST',
@@ -442,13 +688,20 @@ async function submitReply(button, questionId) {
     
     if (response.ok) {
       // Reload the page to show the new answer
-      window.location.reload();
+      showSuccess('Answer submitted successfully!');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } else {
       showError(data.error || 'Failed to submit answer');
     }
   } catch (error) {
     console.error('Error submitting answer:', error);
     showError('Network error while submitting answer');
+  } finally {
+    // Re-enable button
+    button.disabled = false;
+    button.textContent = originalText;
   }
 }
 
@@ -461,6 +714,12 @@ async function submitQuestion() {
     alert('Please fill in the required fields.');
     return;
   }
+  
+  // Disable submit button to prevent double submission
+  const submitBtn = document.querySelector('#askQuestionModal .btn-primary');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting...';
   
   try {
     const response = await fetch('/api/qa', {
@@ -478,21 +737,26 @@ async function submitQuestion() {
     const data = await response.json();
     
     if (response.ok) {
-      // Close modal and reload page
+      // Close modal
       const modal = bootstrap.Modal.getInstance(document.getElementById('askQuestionModal'));
       modal.hide();
       
-      showSuccess('Question submitted successfully!');
+      // Reset form
+      document.getElementById('askQuestionForm').reset();
       
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Show success message with moderation notice
+      showSuccess('Question submitted successfully! Your question will be reviewed by our moderators and published once approved. You will be able to see it in the Q&A section after verification.');
+      
     } else {
       showError(data.error || 'Failed to submit question');
     }
   } catch (error) {
     console.error('Error submitting question:', error);
     showError('Network error while submitting question');
+  } finally {
+    // Re-enable submit button
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 }
 
