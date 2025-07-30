@@ -1,0 +1,106 @@
+<div class="container">
+  <div class="verification-container mt-5">
+    <div class="verification-title">Email Verification</div>
+    
+    {{#if error}}
+      <div class="alert alert-danger" role="alert">
+        {{error}}
+      </div>
+    {{/if}}
+    
+    {{#if success}}
+      <div class="alert alert-success" role="alert">
+        {{success}}
+      </div>
+    {{/if}}
+    
+    {{#if message}}
+      <div class="alert alert-info" role="alert">
+        {{message}}
+      </div>
+    {{/if}}
+    
+    <div class="verification-content">
+      <p class="verification-text">
+        We've sent a 6-digit verification code to <strong>{{email}}</strong>
+      </p>
+      <p class="verification-subtext">
+        Please check your email and enter the code below to verify your account.
+      </p>
+      
+      <form action="/verify-email" method="POST" id="verificationForm">
+        <div class="mb-3">
+          <label for="email" class="form-label">Email Address</label>
+          <input type="email" class="form-control" id="email" name="email" value="{{email}}" readonly />
+        </div>
+        
+        <div class="mb-3">
+          <label for="otp" class="form-label">Verification Code</label>
+          <input type="text" class="form-control" id="otp" name="otp" placeholder="Enter 6-digit code" maxlength="6" required />
+        </div>
+        
+        <button type="submit" class="verification-btn">Verify Email</button>
+      </form>
+      
+      <div class="resend-section">
+        <p class="resend-text">Didn't receive the code?</p>
+        <button type="button" class="resend-btn" onclick="resendVerification()">Resend Code</button>
+      </div>
+      
+      <div class="login-link">
+        <p>Already verified? <a href="/login">Login here</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function resendVerification() {
+  const email = document.getElementById('email').value;
+  const resendBtn = document.querySelector('.resend-btn');
+  
+  // Disable button and show loading
+  resendBtn.disabled = true;
+  resendBtn.textContent = 'Sending...';
+  
+  fetch('/resend-verification', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email: email })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert('Verification code sent successfully!');
+    } else {
+      alert(data.error || 'Failed to send verification code.');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Failed to send verification code. Please try again.');
+  })
+  .finally(() => {
+    // Re-enable button
+    resendBtn.disabled = false;
+    resendBtn.textContent = 'Resend Code';
+  });
+}
+
+// Auto-focus on OTP input
+document.addEventListener('DOMContentLoaded', function() {
+  const otpInput = document.getElementById('otp');
+  if (otpInput) {
+    otpInput.focus();
+  }
+});
+
+// Auto-submit when 6 digits are entered
+document.getElementById('otp').addEventListener('input', function() {
+  if (this.value.length === 6) {
+    document.getElementById('verificationForm').submit();
+  }
+});
+</script> 

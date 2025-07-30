@@ -6,6 +6,11 @@
         {{error}}
       </div>
     {{/if}}
+    {{#if message}}
+      <div class="alert alert-success" role="alert">
+        {{message}}
+      </div>
+    {{/if}}
     <form action="/login" method="POST">
       <div class="mb-3">
         <label for="email" class="form-label">Email address</label>
