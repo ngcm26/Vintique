@@ -3,9 +3,11 @@
 <div class="header-bar">
   <h3 class="mb-0">Staff & Admin Management</h3>
   <div style="display: flex; gap: 8px; align-items: center;">
+    {{#if isAdmin}}
     <button class="btn-add-staff" data-bs-toggle="modal" data-bs-target="#addStaffModal">
       <i class="fas fa-plus"></i> Add Staff Member
     </button>
+    {{/if}}
     <input type="text" class="form-control" id="staffSearch" style="width: 250px;" placeholder="Search staff...">
     <select id="statusFilter" class="form-control" style="width: 140px;">
       <option value="all">All Statuses</option>
@@ -54,14 +56,18 @@
             <button class="btn btn-sm btn-danger" disabled title="You cannot delete your own account">Delete</button>
             <span class="text-muted small">(Your account)</span>
           {{else}}
-            <!-- Other staff members - show active buttons -->
-            {{#if (eq this.status 'active')}}
-              <button class="btn btn-sm btn-warning" onclick="toggleStaffStatus(this)">Suspend</button>
+            <!-- Other staff members - show active buttons only for admins -->
+            {{#if ../isAdmin}}
+              {{#if (eq this.status 'active')}}
+                <button class="btn btn-sm btn-warning" onclick="toggleStaffStatus(this)">Suspend</button>
+              {{else}}
+                <button class="btn btn-sm btn-success" onclick="toggleStaffStatus(this)">Activate</button>
+              {{/if}}
+              <button class="btn btn-sm btn-secondary" onclick="editStaff(this)">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteStaff(this)">Delete</button>
             {{else}}
-              <button class="btn btn-sm btn-success" onclick="toggleStaffStatus(this)">Activate</button>
+              <span class="text-muted small">(Admin only)</span>
             {{/if}}
-            <button class="btn btn-sm btn-secondary" onclick="editStaff(this)">Edit</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteStaff(this)">Delete</button>
           {{/if}}
         </td>
       </tr>
@@ -156,8 +162,14 @@
 <script>
   let editingStaffRow;
   const currentUserId = {{currentUser.user_id}};
+  const isAdmin = {{isAdmin}};
 
   function editStaff(btn) {
+    if (!isAdmin) {
+      alert('Only admins can edit staff members');
+      return;
+    }
+    
     editingStaffRow = btn.closest('tr');
     const staffId = editingStaffRow.cells[0].textContent;
     
@@ -174,6 +186,11 @@
   }
 
   function saveStaffChanges() {
+    if (!isAdmin) {
+      alert('Only admins can edit staff members');
+      return;
+    }
+    
     const staffId = document.getElementById('editStaffId').value;
     const email = document.getElementById('editStaffEmail').value;
     const phone = document.getElementById('editStaffPhone').value;
@@ -222,6 +239,11 @@
   }
 
   function toggleStaffStatus(btn) {
+    if (!isAdmin) {
+      alert('Only admins can change staff status');
+      return;
+    }
+    
     const row = btn.closest('tr');
     const staffId = row.cells[0].textContent;
     
@@ -263,6 +285,11 @@
   }
 
   function deleteStaff(btn) {
+    if (!isAdmin) {
+      alert('Only admins can delete staff members');
+      return;
+    }
+    
     const row = btn.closest('tr');
     const staffId = row.cells[0].textContent;
     const staffEmail = row.cells[1].textContent;
@@ -285,6 +312,11 @@
   }
 
   function addStaffMember() {
+    if (!isAdmin) {
+      alert('Only admins can add staff members');
+      return;
+    }
+    
     const email = document.getElementById('staffEmail').value;
     const role = document.getElementById('staffRole').value;
     const phone = document.getElementById('staffPhone').value;

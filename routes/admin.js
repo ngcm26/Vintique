@@ -39,12 +39,12 @@ router.get('/admin/user_management', (req, res) => {
   }
   
   const usersQuery = `
-    SELECT u.user_id, u.email, u.role, u.status, u.created_at,
+    SELECT u.user_id, u.email, u.role, u.status, u.date_joined,
            ui.first_name, ui.last_name, ui.username
     FROM users u
     LEFT JOIN user_information ui ON u.user_id = ui.user_id
     WHERE u.role = 'user'
-    ORDER BY u.created_at DESC
+    ORDER BY u.date_joined DESC
   `;
   
   callbackConnection.query(usersQuery, (err, users) => {
@@ -53,10 +53,16 @@ router.get('/admin/user_management', (req, res) => {
       return res.status(500).send('Database error');
     }
     
+    // Transform the data to include created_at alias
+    const transformedUsers = users.map(user => ({
+      ...user,
+      created_at: user.date_joined // Add alias for consistency
+    }));
+    
     res.render('staff/user_management', {
       layout: 'admin',
       activePage: 'user_management',
-      users: users
+      users: transformedUsers
     });
   });
 });
@@ -68,12 +74,12 @@ router.get('/admin/staff_management', (req, res) => {
   }
   
   const staffQuery = `
-    SELECT u.user_id, u.email, u.role, u.status, u.created_at,
+    SELECT u.user_id, u.email, u.role, u.status, u.date_joined,
            ui.first_name, ui.last_name, ui.username
     FROM users u
     LEFT JOIN user_information ui ON u.user_id = ui.user_id
     WHERE u.role IN ('staff', 'admin')
-    ORDER BY u.created_at DESC
+    ORDER BY u.date_joined DESC
   `;
   
   callbackConnection.query(staffQuery, (err, staff) => {
@@ -82,10 +88,16 @@ router.get('/admin/staff_management', (req, res) => {
       return res.status(500).send('Database error');
     }
     
+    // Transform the data to include created_at alias
+    const transformedStaff = staff.map(member => ({
+      ...member,
+      created_at: member.date_joined // Add alias for consistency
+    }));
+    
     res.render('staff/staff_management', {
       layout: 'admin',
       activePage: 'staff_management',
-      staff: staff
+      staff: transformedStaff
     });
   });
 });

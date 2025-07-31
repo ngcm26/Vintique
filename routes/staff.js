@@ -5,11 +5,7 @@ const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 
 // Staff Dashboard
-router.get('/staff/dashboard', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.redirect('/login');
-  }
-  
+router.get('/staff/dashboard', requireStaff, (req, res) => {
   // Get basic stats for dashboard
   const statsQuery = `
     SELECT 
@@ -32,19 +28,15 @@ router.get('/staff/dashboard', (req, res) => {
   });
 });
 
-// User Management
-router.get('/staff/user_management', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.redirect('/login');
-  }
-  
+// User Management - accessible to both staff and admin
+router.get('/staff/user_management', requireStaff, (req, res) => {
   const usersQuery = `
-    SELECT u.user_id, u.email, u.role, u.status, u.created_at,
-           ui.first_name, ui.last_name, ui.username
+    SELECT u.user_id, u.email, u.role, u.status, u.date_joined,
+           ui.first_name, ui.last_name, ui.username, ui.phone_number
     FROM users u
     LEFT JOIN user_information ui ON u.user_id = ui.user_id
     WHERE u.role = 'user'
-    ORDER BY u.created_at DESC
+    ORDER BY u.date_joined DESC
   `;
   
   callbackConnection.query(usersQuery, (err, users) => {
@@ -53,27 +45,31 @@ router.get('/staff/user_management', (req, res) => {
       return res.status(500).send('Database error');
     }
     
+    // Transform the data to match the template expectations
+    const transformedUsers = users.map(user => ({
+      ...user,
+      phone: user.phone_number || 'N/A',
+      isBanned: user.status === 'suspended',
+      created_at: user.date_joined // Add alias for consistency
+    }));
+    
     res.render('staff/user_management', {
       layout: 'staff',
       activePage: 'user_management',
-      users: users
+      users: transformedUsers
     });
   });
 });
 
-// Staff Management
-router.get('/staff/staff_management', (req, res) => {
-  if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.redirect('/login');
-  }
-  
+// Staff Management - accessible to both staff and admin, but with different permissions
+router.get('/staff/staff_management', requireStaff, (req, res) => {
   const staffQuery = `
-    SELECT u.user_id, u.email, u.role, u.status, u.created_at,
-           ui.first_name, ui.last_name, ui.username
+    SELECT u.user_id, u.email, u.role, u.status, u.date_joined,
+           ui.first_name, ui.last_name, ui.username, ui.phone_number
     FROM users u
     LEFT JOIN user_information ui ON u.user_id = ui.user_id
     WHERE u.role IN ('staff', 'admin')
-    ORDER BY u.created_at DESC
+    ORDER BY u.date_joined DESC
   `;
   
   callbackConnection.query(staffQuery, (err, staff) => {
@@ -82,20 +78,24 @@ router.get('/staff/staff_management', (req, res) => {
       return res.status(500).send('Database error');
     }
     
+    // Transform the data to include created_at alias
+    const transformedStaff = staff.map(member => ({
+      ...member,
+      created_at: member.date_joined // Add alias for consistency
+    }));
+    
     res.render('staff/staff_management', {
       layout: 'staff',
       activePage: 'staff_management',
-      staff: staff
+      staffMembers: transformedStaff,
+      currentUser: req.session.user,
+      isAdmin: req.session.user.role === 'admin'
     });
   });
 });
 
-// Q&A Management - FIXED VERSION WITH ANSWER_ID
-router.get('/staff/qa', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.redirect('/login');
-  }
-  
+// Q&A Management - accessible to both staff and admin
+router.get('/staff/qa', requireStaff, (req, res) => {
   const qaQuery = `
     SELECT 
       q.qa_id,
@@ -181,11 +181,7 @@ router.get('/staff/qa', (req, res) => {
 // ========== Q&A API ROUTES FOR STAFF ==========
 
 // Get pending count for badge
-router.get('/api/qa/pending-count', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+router.get('/api/qa/pending-count', requireStaff, (req, res) => {
   const query = 'SELECT COUNT(*) as pending_count FROM qa WHERE is_verified = 0';
   
   callbackConnection.query(query, (err, result) => {
@@ -199,11 +195,7 @@ router.get('/api/qa/pending-count', (req, res) => {
 });
 
 // Search/filter questions for staff - FIXED VERSION WITH ANSWER_ID
-router.get('/api/staff/qa/search', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+router.get('/api/staff/qa/search', requireStaff, (req, res) => {
   const { search, status } = req.query;
   let whereConditions = [];
   let params = [];
@@ -291,11 +283,7 @@ router.get('/api/staff/qa/search', (req, res) => {
 });
 
 // Submit answer to question (staff)
-router.post('/api/qa/:qaId/answer', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+router.post('/api/qa/:qaId/answer', requireStaff, (req, res) => {
   const qaId = req.params.qaId;
   const { answer_content } = req.body;
 
@@ -331,11 +319,7 @@ router.post('/api/qa/:qaId/answer', (req, res) => {
 });
 
 // NEW: Delete individual answer
-router.delete('/api/qa/answers/:answerId', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+router.delete('/api/qa/answers/:answerId', requireStaff, (req, res) => {
   const answerId = req.params.answerId;
 
   console.log(`Staff ${req.session.user.email} attempting to delete answer ${answerId}`);
@@ -384,11 +368,7 @@ router.delete('/api/qa/answers/:answerId', (req, res) => {
 });
 
 // Verify question (make it visible to public)
-router.patch('/api/qa/:qaId/verify', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+router.patch('/api/qa/:qaId/verify', requireStaff, (req, res) => {
   const qaId = req.params.qaId;
   const updateQuery = 'UPDATE qa SET is_verified = 1 WHERE qa_id = ?';
 
@@ -410,11 +390,7 @@ router.patch('/api/qa/:qaId/verify', (req, res) => {
 });
 
 // Delete question
-router.delete('/api/qa/:qaId', (req, res) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+router.delete('/api/qa/:qaId', requireStaff, (req, res) => {
   const qaId = req.params.qaId;
 
   // Start transaction to delete question and related data
@@ -561,7 +537,7 @@ router.get('/staff/feedback_management/:id', requireStaff, (req, res) => {
   );
 });
 
-router.patch('/feedback/:id', (req, res) => {
+router.patch('/feedback/:id', requireStaff, (req, res) => {
   const feedbackId = req.params.id;
   const { subject, message, replied } = req.body;
 
@@ -585,9 +561,7 @@ router.patch('/feedback/:id', (req, res) => {
   );
 });
 
-
-
-router.post('/feedback/reply', (req, res) => {
+router.post('/feedback/reply', requireStaff, (req, res) => {
   const { feedbackID, message } = req.body;
   const userID = req.session?.user?.user_id;
 
@@ -625,4 +599,221 @@ router.post('/feedback/reply', (req, res) => {
     });
   });
 });
+
+// ========== STAFF MANAGEMENT API ROUTES ==========
+
+// Create new staff member
+router.post('/staff', requireAdmin, (req, res) => {
+  const { email, role, phone, password } = req.body;
+
+  if (!email || !role || !phone || !password) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  if (!['staff', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  // Check if email already exists
+  const checkEmailQuery = 'SELECT user_id FROM users WHERE email = ?';
+  callbackConnection.query(checkEmailQuery, [email], (err, existingUsers) => {
+    if (err) {
+      console.error('Error checking email:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (existingUsers.length > 0) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+
+    // Create user
+    const createUserQuery = 'INSERT INTO users (email, password, role, status) VALUES (?, ?, ?, ?)';
+    callbackConnection.query(createUserQuery, [email, password, role, 'active'], (err, result) => {
+      if (err) {
+        console.error('Error creating user:', err);
+        return res.status(500).json({ error: 'Failed to create user' });
+      }
+
+      const userId = result.insertId;
+
+      // Create user information
+      const createUserInfoQuery = 'INSERT INTO user_information (user_id, phone_number) VALUES (?, ?)';
+      callbackConnection.query(createUserInfoQuery, [userId, phone], (err) => {
+        if (err) {
+          console.error('Error creating user info:', err);
+          return res.status(500).json({ error: 'Failed to create user information' });
+        }
+
+        res.json({ success: true, message: 'Staff member created successfully' });
+      });
+    });
+  });
+});
+
+// Update staff member
+router.patch('/staff/:staffId', requireAdmin, (req, res) => {
+  const staffId = req.params.staffId;
+  const { email, phone, role } = req.body;
+
+  if (!email || !phone || !role) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  if (!['staff', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  // Update user
+  const updateUserQuery = 'UPDATE users SET email = ?, role = ? WHERE user_id = ?';
+  callbackConnection.query(updateUserQuery, [email, role, staffId], (err, result) => {
+    if (err) {
+      console.error('Error updating user:', err);
+      return res.status(500).json({ error: 'Failed to update user' });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Staff member not found' });
+    }
+
+    // Update user information
+    const updateUserInfoQuery = 'UPDATE user_information SET phone_number = ? WHERE user_id = ?';
+    callbackConnection.query(updateUserInfoQuery, [phone, staffId], (err) => {
+      if (err) {
+        console.error('Error updating user info:', err);
+        return res.status(500).json({ error: 'Failed to update user information' });
+      }
+
+      res.json({ success: true, message: 'Staff member updated successfully' });
+    });
+  });
+});
+
+// Toggle staff status
+router.patch('/staff/:staffId/status', requireAdmin, (req, res) => {
+  const staffId = req.params.staffId;
+  const { status } = req.body;
+
+  if (!['active', 'suspended'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+
+  const updateQuery = 'UPDATE users SET status = ? WHERE user_id = ?';
+  callbackConnection.query(updateQuery, [status, staffId], (err, result) => {
+    if (err) {
+      console.error('Error updating status:', err);
+      return res.status(500).json({ error: 'Failed to update status' });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Staff member not found' });
+    }
+
+    res.json({ success: true, message: `Staff member ${status === 'active' ? 'activated' : 'suspended'} successfully` });
+  });
+});
+
+// Delete staff member
+router.delete('/staff/:staffId', requireAdmin, (req, res) => {
+  const staffId = req.params.staffId;
+
+  // Check if trying to delete self
+  if (parseInt(staffId) === req.session.user.user_id) {
+    return res.status(400).json({ error: 'You cannot delete your own account' });
+  }
+
+  const deleteQuery = 'DELETE FROM users WHERE user_id = ?';
+  callbackConnection.query(deleteQuery, [staffId], (err, result) => {
+    if (err) {
+      console.error('Error deleting staff member:', err);
+      return res.status(500).json({ error: 'Failed to delete staff member' });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Staff member not found' });
+    }
+
+    res.json({ success: true, message: 'Staff member deleted successfully' });
+  });
+});
+
+// ========== USER MANAGEMENT API ROUTES ==========
+
+// Toggle user ban status
+router.patch('/users/:userId/ban', requireStaff, (req, res) => {
+  const userId = req.params.userId;
+  const { banned } = req.body;
+
+  const newStatus = banned ? 'suspended' : 'active';
+  const updateQuery = 'UPDATE users SET status = ? WHERE user_id = ? AND role = "user"';
+  
+  callbackConnection.query(updateQuery, [newStatus, userId], (err, result) => {
+    if (err) {
+      console.error('Error updating user status:', err);
+      return res.status(500).json({ error: 'Failed to update user status' });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: `User ${banned ? 'suspended' : 'activated'} successfully` 
+    });
+  });
+});
+
+// Update user information
+router.patch('/users/:userId', requireStaff, (req, res) => {
+  const userId = req.params.userId;
+  const { username, email, phone } = req.body;
+
+  if (!username || !email) {
+    return res.status(400).json({ error: 'Username and email are required' });
+  }
+
+  // Update user information
+  const updateUserInfoQuery = 'UPDATE user_information SET username = ?, phone_number = ? WHERE user_id = ?';
+  callbackConnection.query(updateUserInfoQuery, [username, phone || null, userId], (err) => {
+    if (err) {
+      console.error('Error updating user info:', err);
+      return res.status(500).json({ error: 'Failed to update user information' });
+    }
+
+    // Update user email
+    const updateUserQuery = 'UPDATE users SET email = ? WHERE user_id = ? AND role = "user"';
+    callbackConnection.query(updateUserQuery, [email, userId], (err, result) => {
+      if (err) {
+        console.error('Error updating user:', err);
+        return res.status(500).json({ error: 'Failed to update user' });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      res.json({ success: true, message: 'User updated successfully' });
+    });
+  });
+});
+
+// Delete user
+router.delete('/users/:userId', requireStaff, (req, res) => {
+  const userId = req.params.userId;
+
+  const deleteQuery = 'DELETE FROM users WHERE user_id = ? AND role = "user"';
+  callbackConnection.query(deleteQuery, [userId], (err, result) => {
+    if (err) {
+      console.error('Error deleting user:', err);
+      return res.status(500).json({ error: 'Failed to delete user' });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ success: true, message: 'User deleted successfully' });
+  });
+});
+
 module.exports = router;

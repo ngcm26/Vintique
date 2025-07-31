@@ -106,12 +106,11 @@
     const username = document.getElementById('editUsername').value;
     const email = document.getElementById('editEmail').value;
     const phone = document.getElementById('editPhone').value;
-    // Get status from badge in table
-    const status = editingRow.querySelector('td:nth-child(5) span').classList.contains('status-banned') ? 'suspended' : 'active';
+    
     fetch(`/users/${userId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, phone, status })
+      body: JSON.stringify({ username, email, phone })
     })
     .then(res => res.json())
     .then(data => {
@@ -120,6 +119,7 @@
         editingRow.cells[2].textContent = email;
         editingRow.cells[3].textContent = phone;
         bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+        alert('User updated successfully!');
       } else {
         alert(data.error || 'Failed to update user.');
       }
@@ -132,12 +132,13 @@
     const userId = row.cells[0].textContent;
     const statusCell = row.querySelector('td:nth-child(5) span');
     const isBanned = statusCell.classList.contains('status-banned');
-    const newStatus = isBanned ? 'active' : 'suspended';
+    
     if (!confirm(`Are you sure you want to ${isBanned ? 'unsuspend' : 'suspend'} this user?`)) return;
-    fetch(`/users/${userId}/status`, {
+    
+    fetch(`/users/${userId}/ban`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
+      body: JSON.stringify({ banned: !isBanned })
     })
     .then(res => res.json())
     .then(data => {
@@ -157,6 +158,7 @@
           btn.classList.add('btn-success');
           btn.textContent = 'Unsuspend';
         }
+        alert(`User ${isBanned ? 'activated' : 'suspended'} successfully!`);
       } else {
         alert(data.error || 'Failed to change status.');
       }
@@ -167,7 +169,10 @@
   function deleteUser(btn) {
     const row = btn.closest('tr');
     const userId = row.cells[0].textContent;
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+    const userEmail = row.cells[2].textContent;
+    
+    if (!confirm(`Are you sure you want to delete user with email "${userEmail}"? This action cannot be undone.`)) return;
+    
     fetch(`/users/${userId}`, {
       method: 'DELETE'
     })
@@ -175,6 +180,7 @@
     .then(data => {
       if (data.success) {
         row.remove();
+        alert('User deleted successfully!');
       } else {
         alert(data.error || 'Failed to delete user.');
       }
