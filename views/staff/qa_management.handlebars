@@ -13,15 +13,15 @@
   <div class="mb-3">
     <ul class="nav nav-tabs" id="moderationTabs">
       <li class="nav-item">
-        <a class="nav-link active" id="all-tab" data-bs-toggle="tab" href="#all-questions">All Questions</a>
+        <a class="nav-link active" id="all-tab" href="#all-questions">All Questions</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" id="pending-tab" data-bs-toggle="tab" href="#pending-questions">
+        <a class="nav-link" id="pending-tab" href="#pending-questions">
           Pending Verification <span class="badge bg-danger ms-1" id="pendingBadge">0</span>
         </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" id="verified-tab" data-bs-toggle="tab" href="#verified-questions">Verified</a>
+        <a class="nav-link" id="verified-tab" href="#verified-questions">Verified</a>
       </li>
     </ul>
   </div>
@@ -121,25 +121,25 @@
                 <td class="text-center">
                   <span class="badge bg-info">{{helpful_count}}</span>
                 </td>
-                                 <td>
-                   <div class="btn-group-vertical btn-group-sm" role="group">
-                     <button type="button" class="btn btn-outline-primary btn-sm mb-1" onclick="showAnswerModal({{qa_id}}, '{{question_text}}')">
-                       <i class="fas fa-reply"></i><span>Answer</span>
-                     </button>
-                     {{#if is_verified}}
-                       <button type="button" class="btn btn-outline-secondary btn-sm mb-1" disabled>
-                         <i class="fas fa-check"></i><span>Verified</span>
-                       </button>
-                     {{else}}
-                       <button type="button" class="btn btn-outline-success btn-sm mb-1" onclick="verifyQuestion({{qa_id}})">
-                         <i class="fas fa-check"></i><span>Verify</span>
-                       </button>
-                     {{/if}}
-                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteQuestion({{qa_id}})">
-                       <i class="fas fa-trash"></i><span>Delete</span>
-                     </button>
-                   </div>
-                 </td>
+                <td>
+                  <div class="btn-group-vertical btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-primary btn-sm mb-1" onclick="showAnswerModal({{qa_id}}, '{{question_text}}')">
+                      <i class="fas fa-reply"></i><span>Answer</span>
+                    </button>
+                    {{#if is_verified}}
+                      <button type="button" class="btn btn-outline-secondary btn-sm mb-1" disabled>
+                        <i class="fas fa-check"></i><span>Verified</span>
+                      </button>
+                    {{else}}
+                      <button type="button" class="btn btn-outline-success btn-sm mb-1" onclick="verifyQuestion({{qa_id}})">
+                        <i class="fas fa-check"></i><span>Verify</span>
+                      </button>
+                    {{/if}}
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteQuestion({{qa_id}})">
+                      <i class="fas fa-trash"></i><span>Delete</span>
+                    </button>
+                  </div>
+                </td>
               </tr>
             {{else}}
               <tr><td colspan="8" class="text-center">No questions found.</td></tr>
@@ -169,19 +169,17 @@
           <textarea class="form-control" id="answerTextarea" rows="6" placeholder="Write your answer here..."></textarea>
         </div>
       </div>
-             <div class="modal-footer">
-         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-           <span>Cancel</span>
-         </button>
-         <button type="button" class="btn btn-primary" onclick="submitAnswer()">
-           <span>Submit Answer</span>
-         </button>
-       </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <span>Cancel</span>
+        </button>
+        <button type="button" class="btn btn-primary" onclick="submitAnswer()">
+          <span>Submit Answer</span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
-
-
 
 <script>
 let currentQuestionId = null;
@@ -190,11 +188,24 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('Staff Q&A page loaded');
   updatePendingCount();
   
-  // Tab filtering functionality
-  const tabs = document.querySelectorAll('#moderationTabs a[data-bs-toggle="tab"]');
+  // FIXED: Simple tab functionality without Bootstrap dependency
+  const tabs = document.querySelectorAll('#moderationTabs .nav-link');
   tabs.forEach(tab => {
-    tab.addEventListener('shown.bs.tab', function (e) {
-      const target = e.target.getAttribute('href');
+    tab.addEventListener('click', function(e) {
+      e.preventDefault();
+      
+      // Remove active class from all tabs
+      tabs.forEach(t => t.classList.remove('active'));
+      
+      // Add active class to clicked tab
+      this.classList.add('active');
+      
+      // Get the target from href
+      const target = this.getAttribute('href');
+      
+      console.log('Tab clicked:', target);
+      
+      // Filter questions based on tab
       filterQuestionsByStatus(target);
     });
   });
@@ -214,6 +225,20 @@ document.addEventListener('DOMContentLoaded', function() {
         filterQuestionsBySearch(searchTerm);
       }, 300); // 300ms delay
     });
+  }
+  
+  // Handle direct navigation to tabs (if URL has hash)
+  const hash = window.location.hash;
+  if (hash) {
+    const targetTab = document.querySelector(`#moderationTabs a[href="${hash}"]`);
+    if (targetTab) {
+      // Remove active from all tabs
+      tabs.forEach(t => t.classList.remove('active'));
+      // Add active to target tab
+      targetTab.classList.add('active');
+      // Filter questions
+      filterQuestionsByStatus(hash);
+    }
   }
 });
 
@@ -239,7 +264,10 @@ function updatePendingCount() {
     });
 }
 
+// FIXED: Improved filterQuestionsByStatus function
 async function filterQuestionsByStatus(activeTab) {
+  console.log('Filtering by status:', activeTab);
+  
   try {
     // Show loading state
     const tbody = document.querySelector('tbody');
@@ -259,31 +287,49 @@ async function filterQuestionsByStatus(activeTab) {
     // Add status filter based on active tab
     if (activeTab === '#pending-questions') {
       params.append('status', 'pending');
+      console.log('Filtering for pending questions');
     } else if (activeTab === '#verified-questions') {
       params.append('status', 'verified');
+      console.log('Filtering for verified questions');
+    } else {
+      console.log('Showing all questions');
     }
     
     // Make API call
-    const response = await fetch(`/api/staff/qa/search?${params.toString()}`);
+    const url = `/api/staff/qa/search?${params.toString()}`;
+    console.log('Making API call to:', url);
+    
+    const response = await fetch(url);
     if (!response.ok) {
-      throw new Error('Filter request failed');
+      throw new Error(`Filter request failed: ${response.status} ${response.statusText}`);
     }
     
     const questions = await response.json();
+    console.log('Received questions:', questions.length);
     
     // Update the table with filtered results
     updateQuestionsTable(questions);
+    
+    // Update URL hash without triggering page reload
+    if (activeTab !== '#all-questions') {
+      window.history.replaceState(null, '', window.location.pathname + activeTab);
+    } else {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
     
   } catch (error) {
     console.error('Error filtering questions:', error);
     const tbody = document.querySelector('tbody');
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading filtered results</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Error loading filtered results: ${error.message}</td></tr>`;
     }
   }
 }
 
+// FIXED: Improved search function
 async function filterQuestionsBySearch(searchTerm) {
+  console.log('Searching for:', searchTerm);
+  
   try {
     // Show loading state
     const tbody = document.querySelector('tbody');
@@ -309,12 +355,16 @@ async function filterQuestionsBySearch(searchTerm) {
     }
     
     // Make API call
-    const response = await fetch(`/api/staff/qa/search?${params.toString()}`);
+    const url = `/api/staff/qa/search?${params.toString()}`;
+    console.log('Search API call to:', url);
+    
+    const response = await fetch(url);
     if (!response.ok) {
-      throw new Error('Search request failed');
+      throw new Error(`Search request failed: ${response.status} ${response.statusText}`);
     }
     
     const questions = await response.json();
+    console.log('Search results:', questions.length);
     
     // Update the table with search results
     updateQuestionsTable(questions);
@@ -323,7 +373,7 @@ async function filterQuestionsBySearch(searchTerm) {
     console.error('Error searching questions:', error);
     const tbody = document.querySelector('tbody');
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading search results</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Error loading search results: ${error.message}</td></tr>`;
     }
   }
 }
@@ -462,15 +512,128 @@ function toggleAnswerView(link) {
   }
 }
 
+// FIXED: Multiple fallback methods for the Answer button
 function showAnswerModal(qaId, questionText) {
+  console.log('showAnswerModal called with:', qaId, questionText);
+  
   currentQuestionId = qaId;
+  
+  // Clean the question text and set it in the modal
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = questionText;
-  document.getElementById('modalQuestionText').textContent = tempDiv.textContent || tempDiv.innerText || "";
+  const cleanText = tempDiv.textContent || tempDiv.innerText || "";
+  
+  document.getElementById('modalQuestionText').textContent = cleanText;
   document.getElementById('answerTextarea').value = '';
   
-  const modal = new bootstrap.Modal(document.getElementById('answerModal'));
-  modal.show();
+  const modalElement = document.getElementById('answerModal');
+  
+  // Method 1: Try Bootstrap 5
+  if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+    console.log('Using Bootstrap 5 Modal');
+    try {
+      const modal = new bootstrap.Modal(modalElement);
+      modal.show();
+      return;
+    } catch (error) {
+      console.error('Bootstrap 5 failed:', error);
+    }
+  }
+  
+  // Method 2: Try jQuery Bootstrap
+  if (typeof $ !== 'undefined' && $.fn.modal) {
+    console.log('Using jQuery Bootstrap Modal');
+    try {
+      $(modalElement).modal('show');
+      return;
+    } catch (error) {
+      console.error('jQuery Bootstrap failed:', error);
+    }
+  }
+  
+  // Method 3: Manual modal display (fallback)
+  console.log('Using manual modal display');
+  
+  // Show modal manually
+  modalElement.style.display = 'block';
+  modalElement.classList.add('show');
+  modalElement.setAttribute('aria-modal', 'true');
+  modalElement.setAttribute('role', 'dialog');
+  modalElement.removeAttribute('aria-hidden');
+  
+  // Add backdrop
+  let backdrop = document.getElementById('manual-backdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop fade show';
+    backdrop.id = 'manual-backdrop';
+    backdrop.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1040;
+      width: 100vw;
+      height: 100vh;
+      background-color: #000;
+      opacity: 0.5;
+    `;
+    document.body.appendChild(backdrop);
+  }
+  
+  // Add modal-open class to body
+  document.body.classList.add('modal-open');
+  document.body.style.overflow = 'hidden';
+  
+  // Add close functionality
+  const closeButtons = modalElement.querySelectorAll('[data-bs-dismiss="modal"], .btn-close');
+  closeButtons.forEach(btn => {
+    btn.onclick = function() {
+      closeManualModal();
+    };
+  });
+  
+  // Close on backdrop click
+  backdrop.onclick = function() {
+    closeManualModal();
+  };
+  
+  // Close on Escape key
+  document.addEventListener('keydown', function escapeHandler(e) {
+    if (e.key === 'Escape') {
+      closeManualModal();
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  });
+  
+  // Focus on textarea
+  setTimeout(() => {
+    const textarea = document.getElementById('answerTextarea');
+    if (textarea) {
+      textarea.focus();
+    }
+  }, 100);
+}
+
+// Function to close manual modal
+function closeManualModal() {
+  const modalElement = document.getElementById('answerModal');
+  const backdrop = document.getElementById('manual-backdrop');
+  
+  // Hide modal
+  modalElement.style.display = 'none';
+  modalElement.classList.remove('show');
+  modalElement.setAttribute('aria-hidden', 'true');
+  modalElement.removeAttribute('aria-modal');
+  modalElement.removeAttribute('role');
+  
+  // Remove backdrop
+  if (backdrop) {
+    backdrop.remove();
+  }
+  
+  // Remove modal-open class from body
+  document.body.classList.remove('modal-open');
+  document.body.style.overflow = '';
 }
 
 async function submitAnswer() {
@@ -502,8 +665,15 @@ async function submitAnswer() {
     });
     
     if (response.ok) {
-      const modal = bootstrap.Modal.getInstance(document.getElementById('answerModal'));
-      modal.hide();
+      // Close modal using appropriate method
+      if (typeof bootstrap !== 'undefined') {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('answerModal'));
+        if (modal) modal.hide();
+      } else if (typeof $ !== 'undefined') {
+        $('#answerModal').modal('hide');
+      } else {
+        closeManualModal();
+      }
       
       showNotification('Answer submitted successfully!', 'success');
       
