@@ -1,4 +1,4 @@
-{{!-- Complete Staff Q&A Management Template --}}
+{{!-- Complete Staff Q&A Management Template with Delete Answer Feature --}}
 <div class="container mt-5 qa-management-container">
   <div style="height: 32px;"></div>
   <div class="header-bar">
@@ -94,12 +94,19 @@
                       </div>
                       <div class="answers-list">
                         {{#each answers}}
-                          <div class="answer-item mb-2 p-2 border rounded {{#if @first}}bg-light{{/if}}">
+                          <div class="answer-item mb-2 p-2 border rounded {{#if @first}}bg-light{{/if}}" data-answer-id="{{this.answer_id}}">
                             <div class="answer-header d-flex justify-content-between align-items-start mb-1">
                               <small class="text-primary fw-bold">
                                 {{#if this.answerer_username}}@{{this.answerer_username}}{{else}}{{this.answerer_email}}{{/if}}
                               </small>
-                              <small class="text-muted">{{formatDate this.answered_at}}</small>
+                              <div class="d-flex align-items-center gap-2">
+                                <small class="text-muted">{{formatDate this.answered_at}}</small>
+                                <button type="button" class="btn btn-outline-danger btn-xs delete-answer-btn" 
+                                        onclick="deleteAnswer({{this.answer_id}}, {{../qa_id}})" 
+                                        title="Delete this answer">
+                                  <i class="fas fa-trash"></i>
+                                </button>
+                              </div>
                             </div>
                             <div class="answer-content small">
                               {{#if (gt this.answer_content.length 100)}}
@@ -180,6 +187,38 @@
     </div>
   </div>
 </div>
+
+<style>
+/* Add styles for delete answer button */
+.delete-answer-btn {
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  border-radius: 3px;
+  min-width: auto;
+  height: auto;
+  line-height: 1;
+}
+
+.delete-answer-btn:hover {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: #fff;
+}
+
+.answer-header {
+  position: relative;
+}
+
+.answer-item {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.answer-item.removing {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+</style>
 
 <script>
 let currentQuestionId = null;
@@ -433,12 +472,19 @@ function updateQuestionsTable(questions) {
               </div>
               <div class="answers-list">
                 ${question.answers.map(answer => `
-                  <div class="answer-item mb-2 p-2 border rounded ${answer === question.answers[0] ? 'bg-light' : ''}">
+                  <div class="answer-item mb-2 p-2 border rounded ${answer === question.answers[0] ? 'bg-light' : ''}" data-answer-id="${answer.answer_id}">
                     <div class="answer-header d-flex justify-content-between align-items-start mb-1">
                       <small class="text-primary fw-bold">
                         ${answer.answerer_username ? '@' + escapeHtml(answer.answerer_username) : escapeHtml(answer.answerer_email)}
                       </small>
-                      <small class="text-muted">${formatDate(answer.answered_at)}</small>
+                      <div class="d-flex align-items-center gap-2">
+                        <small class="text-muted">${formatDate(answer.answered_at)}</small>
+                        <button type="button" class="btn btn-outline-danger btn-xs delete-answer-btn" 
+                                onclick="deleteAnswer(${answer.answer_id}, ${question.qa_id})" 
+                                title="Delete this answer">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
                     </div>
                     <div class="answer-content small">
                       ${answer.answer_content.length > 100 ? 
@@ -508,6 +554,84 @@ function toggleAnswerView(link) {
       preview.style.display = 'none';
       full.style.display = 'inline';
       link.textContent = 'Show Less';
+    }
+  }
+}
+
+// NEW: Delete individual answer function
+async function deleteAnswer(answerId, questionId) {
+  if (!confirm('Are you sure you want to delete this answer? This action cannot be undone.')) {
+    return;
+  }
+  
+  console.log('Deleting answer:', answerId, 'from question:', questionId);
+  
+  // Find the answer element and add removing class for visual feedback
+  const answerElement = document.querySelector(`[data-answer-id="${answerId}"]`);
+  if (answerElement) {
+    answerElement.classList.add('removing');
+  }
+  
+  try {
+    const response = await fetch(`/api/qa/answers/${answerId}`, {
+      method: 'DELETE'
+    });
+    
+    if (response.ok) {
+      // Remove the answer element from DOM
+      if (answerElement) {
+        answerElement.remove();
+      }
+      
+      // Update answer count and status
+      updateAnswerCountAfterDeletion(questionId);
+      
+      showNotification('Answer deleted successfully!', 'success');
+      
+      console.log(`Answer ${answerId} deleted successfully`);
+    } else {
+      const data = await response.json();
+      console.error('Failed to delete answer:', data.error);
+      
+      // Remove removing class if deletion failed
+      if (answerElement) {
+        answerElement.classList.remove('removing');
+      }
+      
+      alert('Failed to delete answer: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error deleting answer:', error);
+    
+    // Remove removing class if deletion failed
+    if (answerElement) {
+      answerElement.classList.remove('removing');
+    }
+    
+    alert('Network error while deleting answer');
+  }
+}
+
+// Helper function to update answer count after deletion
+function updateAnswerCountAfterDeletion(questionId) {
+  const questionRow = document.querySelector(`tr[data-qa-id="${questionId}"]`);
+  if (!questionRow) return;
+  
+  const answersColumn = questionRow.querySelector('.answers-column');
+  const remainingAnswers = answersColumn.querySelectorAll('.answer-item').length;
+  
+  const answersCountBadge = answersColumn.querySelector('.answers-count .badge');
+  
+  if (remainingAnswers === 0) {
+    // No more answers - update the entire answers column
+    answersColumn.innerHTML = '<span class="text-danger">No Answers Yet</span>';
+    
+    // Add table-warning class to highlight unanswered questions
+    questionRow.classList.add('table-warning');
+  } else {
+    // Update the count badge
+    if (answersCountBadge) {
+      answersCountBadge.textContent = `${remainingAnswers} Answer${remainingAnswers > 1 ? 's' : ''}`;
     }
   }
 }

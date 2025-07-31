@@ -1,10 +1,8 @@
 // ========== STAFF ROUTES ==========
 const express = require('express');
 const router = express.Router();
-const { callbackConnection, createConnection } = require('../config/database'); // Add createConnection import
+const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
-
-// ... rest of your existing code stays exactly the same ...
 
 // Staff Dashboard
 router.get('/staff/dashboard', (req, res) => {
@@ -92,7 +90,7 @@ router.get('/staff/staff_management', (req, res) => {
   });
 });
 
-// Q&A Management - COMPLETELY FIXED VERSION
+// Q&A Management - FIXED VERSION WITH ANSWER_ID
 router.get('/staff/qa', (req, res) => {
   if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
     return res.redirect('/login');
@@ -134,10 +132,11 @@ router.get('/staff/qa', (req, res) => {
       });
     }
 
-    // Get answers for all questions
+    // Get answers for all questions - INCLUDE answer_id!
     const questionIds = questions.map(q => q.qa_id);
     const answersQuery = `
       SELECT 
+        answer_id,
         qa_id,
         answerer_id,
         answerer_username,
@@ -199,7 +198,7 @@ router.get('/api/qa/pending-count', (req, res) => {
   });
 });
 
-// Search/filter questions for staff
+// Search/filter questions for staff - FIXED VERSION WITH ANSWER_ID
 router.get('/api/staff/qa/search', (req, res) => {
   if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -250,10 +249,11 @@ router.get('/api/staff/qa/search', (req, res) => {
       return res.json([]);
     }
 
-    // Get answers for filtered questions
+    // Get answers for filtered questions - INCLUDE answer_id!
     const questionIds = questions.map(q => q.qa_id);
     const answersQuery = `
       SELECT 
+        answer_id,
         qa_id,
         answerer_id,
         answerer_username,
@@ -326,6 +326,59 @@ router.post('/api/qa/:qaId/answer', (req, res) => {
       success: true, 
       message: 'Answer submitted successfully',
       answer_id: result.insertId
+    });
+  });
+});
+
+// NEW: Delete individual answer
+router.delete('/api/qa/answers/:answerId', (req, res) => {
+  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const answerId = req.params.answerId;
+
+  console.log(`Staff ${req.session.user.email} attempting to delete answer ${answerId}`);
+
+  // First, check if the answer exists
+  const checkAnswerQuery = 'SELECT answer_id, qa_id FROM qa_answers WHERE answer_id = ?';
+  
+  callbackConnection.query(checkAnswerQuery, [answerId], (err, answers) => {
+    if (err) {
+      console.error('Error checking answer existence:', err);
+      return res.status(500).json({ error: 'Database error while checking answer' });
+    }
+
+    if (answers.length === 0) {
+      console.log(`Answer ${answerId} not found`);
+      return res.status(404).json({ error: 'Answer not found' });
+    }
+
+    const answer = answers[0];
+    const qaId = answer.qa_id;
+
+    // Delete the answer
+    const deleteAnswerQuery = 'DELETE FROM qa_answers WHERE answer_id = ?';
+    
+    callbackConnection.query(deleteAnswerQuery, [answerId], (err, result) => {
+      if (err) {
+        console.error('Error deleting answer:', err);
+        return res.status(500).json({ error: 'Failed to delete answer' });
+      }
+
+      if (result.affectedRows === 0) {
+        console.log(`No rows affected when deleting answer ${answerId}`);
+        return res.status(404).json({ error: 'Answer not found or already deleted' });
+      }
+
+      console.log(`Answer ${answerId} deleted successfully by staff ${req.session.user.email}`);
+
+      res.json({ 
+        success: true, 
+        message: 'Answer deleted successfully',
+        answer_id: answerId,
+        qa_id: qaId
+      });
     });
   });
 });
@@ -426,11 +479,7 @@ router.delete('/api/qa/:qaId', (req, res) => {
   });
 });
 
-module.exports = router;
-
-
-
-// --------------- Staff Feedback -------------------------
+// Staff Feedback Management
 router.get('/staff/feedback_management', requireStaff, (req, res) => {
   callbackConnection.query(`
     SELECT feedbackID, fullName, email, subject, message, createdAt, replied
@@ -451,7 +500,7 @@ router.get('/staff/feedback_management', requireStaff, (req, res) => {
       const createdAt = new Date(item.createdAt);
       const now = new Date();
       const diffTime = now - createdAt;
-      const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24)); // ms to days
+      const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
       return {
         id: item.feedbackID,
@@ -485,15 +534,13 @@ router.delete('/feedback/:id', requireStaff, (req, res) => {
       }
 
       if (result.affectedRows === 1) {
-        res.sendStatus(200); // success
+        res.sendStatus(200);
       } else {
         res.status(404).send('Feedback not found');
       }
     }
   );
 });
-
-
 
 router.get('/staff/feedback_management/:id', requireStaff, (req, res) => {
   const id = req.params.id;
@@ -513,8 +560,6 @@ router.get('/staff/feedback_management/:id', requireStaff, (req, res) => {
     }
   );
 });
-
-
 
 router.patch('/feedback/:id', (req, res) => {
   const feedbackId = req.params.id;
@@ -540,6 +585,49 @@ router.patch('/feedback/:id', (req, res) => {
   );
 });
 
+
+
+router.post('/feedback/reply', (req, res) => {
+  const { feedbackID, message } = req.body;
+  const userID = req.session?.user?.user_id;
+
+  if (!feedbackID || !message || !userID) {
+    return res.status(400).json({ error: 'Missing feedback ID, message, or user ID' });
+  }
+
+  const insertQuery = `
+    INSERT INTO feedback_reply (message, feedbackID, userID)
+    VALUES (?, ?, ?)
+  `;
+
+  callbackConnection.query(insertQuery, [message, feedbackID, userID], (err, result) => {
+    if (err) {
+      console.error('Error saving reply:', err);
+      return res.status(500).json({ error: 'Database error saving reply' });
+    }
+
+    // Now update the 'replied' column in the feedback table
+    const updateQuery = `
+      UPDATE feedback SET replied = ? WHERE feedbackID = ?
+    `;
+
+    callbackConnection.query(updateQuery, [message, feedbackID], (updateErr, updateResult) => {
+      if (updateErr) {
+        console.error('Error updating replied column:', updateErr);
+        return res.status(500).json({ error: 'Failed to update feedback replied status.' });
+      }
+
+      res.status(200).json({
+        success: true,
+        replyID: result.insertId,
+        updated: updateResult.affectedRows
+      });
+    });
+  });
+});
+module.exports = router;
+
+module.exports = router;
 
 
 router.post('/feedback/reply', (req, res) => {
