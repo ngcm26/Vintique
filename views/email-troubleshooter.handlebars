@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Troubleshooter - Vintique</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            padding: 30px;
+            text-align: center;
+            color: #333;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 1.2em;
+            opacity: 0.8;
+        }
+        .content {
+            padding: 30px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .summary h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+        .summary-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .summary-value {
+            color: #6c757d;
+        }
+        .logs {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .solution {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #2196f3;
+        }
+        .solution h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .solution ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .solution li {
+            margin: 5px 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #333;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Email Troubleshooter</h1>
+            <p>Diagnosing Gmail server connection issues</p>
+        </div>
+        
+        <div class="content">
+            <div id="loading" class="status warning">
+                🔄 Running diagnostics... Please wait...
+            </div>
+            
+            <div id="results" style="display: none;">
+                <div id="status-section"></div>
+                <div id="summary-section"></div>
+                <div id="logs-section"></div>
+                <div id="solution-section"></div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="/test-email" class="btn">🧪 Test Email</a>
+                    <a href="/check-env" class="btn">📋 Check Environment</a>
+                    <a href="/" class="btn">🏠 Back to Home</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Run the troubleshooter when page loads
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('/troubleshoot-email');
+                const data = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+                
+                // Display status
+                const statusSection = document.getElementById('status-section');
+                if (data.success) {
+                    statusSection.innerHTML = `
+                        <div class="status success">
+                            ✅ Troubleshooter completed successfully
+                        </div>
+                    `;
+                } else {
+                    statusSection.innerHTML = `
+                        <div class="status error">
+                            ❌ Troubleshooter failed: ${data.error}
+                        </div>
+                    `;
+                }
+                
+                // Display summary
+                if (data.summary) {
+                    const summarySection = document.getElementById('summary-section');
+                    summarySection.innerHTML = `
+                        <div class="summary">
+                            <h3>📊 Summary</h3>
+                            <div class="summary-item">
+                                <span class="summary-label">Email User:</span>
+                                <span class="summary-value">${data.summary.emailUser}</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Email Password:</span>
+                                <span class="summary-value">${data.summary.emailPass}</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Is Gmail:</span>
+                                <span class="summary-value">${data.summary.isGmail ? '✅ Yes' : '❌ No'}</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Timeout Errors:</span>
+                                <span class="summary-value">${data.summary.hasTimeoutErrors ? '❌ Yes' : '✅ No'}</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Auth Errors:</span>
+                                <span class="summary-value">${data.summary.hasAuthErrors ? '❌ Yes' : '✅ No'}</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Connection Errors:</span>
+                                <span class="summary-value">${data.summary.hasConnectionErrors ? '❌ Yes' : '✅ No'}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Display logs
+                if (data.logs && data.logs.length > 0) {
+                    const logsSection = document.getElementById('logs-section');
+                    logsSection.innerHTML = `
+                        <h3>📝 Detailed Logs</h3>
+                        <div class="logs">${data.logs.join('\n')}</div>
+                    `;
+                }
+                
+                // Display solutions based on errors
+                const solutionSection = document.getElementById('solution-section');
+                let solutions = [];
+                
+                if (data.summary) {
+                    if (data.summary.hasTimeoutErrors) {
+                        solutions.push('⏰ <strong>Connection Timeout:</strong> Your network is blocking SMTP connections to Gmail. Try:');
+                        solutions.push('- Temporarily disable firewall/antivirus');
+                        solutions.push('- Try from a different network (mobile hotspot)');
+                        solutions.push('- Check your internet connection');
+                    }
+                    
+                    if (data.summary.hasAuthErrors) {
+                        solutions.push('🔐 <strong>Authentication Error:</strong> Check your email credentials:');
+                        solutions.push('- Use App Password instead of regular password');
+                        solutions.push('- Enable 2-Factor Authentication on Google account');
+                        solutions.push('- Generate App Password: Google Account → Security → 2-Step Verification → App passwords');
+                    }
+                    
+                    if (data.summary.hasConnectionErrors) {
+                        solutions.push('🌐 <strong>Connection Error:</strong> Network connectivity issues:');
+                        solutions.push('- Check your internet connection');
+                        solutions.push('- Try from a different network');
+                        solutions.push('- Contact your network administrator');
+                    }
+                    
+                    if (solutions.length === 0) {
+                        solutions.push('✅ <strong>No major issues detected!</strong>');
+                        solutions.push('- Your email configuration looks good');
+                        solutions.push('- Try the test email function');
+                    }
+                }
+                
+                if (solutions.length > 0) {
+                    solutionSection.innerHTML = `
+                        <div class="solution">
+                            <h3>💡 Solutions</h3>
+                            <ul>
+                                ${solutions.map(solution => `<li>${solution}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                document.getElementById('loading').innerHTML = `
+                    <div class="status error">
+                        ❌ Failed to run troubleshooter: ${error.message}
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html> 

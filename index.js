@@ -144,6 +144,130 @@ app.use('/', staffRoutes);
 app.use('/', adminRoutes);
 app.use('/chat', chatbotRoutes);
 
+// ========== TEST EMAIL ROUTE (REMOVE IN PRODUCTION) ==========
+app.get('/test-email', async (req, res) => {
+  const { sendVerificationEmail } = require('./utils/helpers');
+  
+  console.log('🧪 Testing email configuration...');
+  console.log('📧 Environment variables:', {
+    EMAIL_USER: process.env.EMAIL_USER ? 'SET' : 'NOT SET',
+    EMAIL_PASS: process.env.EMAIL_PASS ? 'SET' : 'NOT SET'
+  });
+  
+  // Check .env file
+  const fs = require('fs');
+  const path = require('path');
+  const envPath = path.join(__dirname, '.env');
+  const envExists = fs.existsSync(envPath);
+  
+  console.log('📁 .env file exists:', envExists);
+  if (envExists) {
+    try {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      const lines = envContent.split('\n');
+      const emailUserLine = lines.find(line => line.startsWith('EMAIL_USER='));
+      const emailPassLine = lines.find(line => line.startsWith('EMAIL_PASS='));
+      
+      console.log('📝 .env file contents:');
+      console.log('  EMAIL_USER line:', emailUserLine ? 'FOUND' : 'NOT FOUND');
+      console.log('  EMAIL_PASS line:', emailPassLine ? 'FOUND' : 'NOT FOUND');
+    } catch (error) {
+      console.log('❌ Error reading .env file:', error.message);
+    }
+  }
+  
+  try {
+    const result = await sendVerificationEmail('test@example.com', '123456', 'TestUser');
+    res.json({ 
+      success: result, 
+      message: result ? 'Email sent successfully' : 'Email failed',
+      env: {
+        EMAIL_USER: process.env.EMAIL_USER ? 'SET' : 'NOT SET',
+        EMAIL_PASS: process.env.EMAIL_PASS ? 'SET' : 'NOT SET',
+        envFileExists: envExists
+      }
+    });
+  } catch (error) {
+    res.json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// ========== EMAIL TROUBLESHOOTER ROUTE (REMOVE IN PRODUCTION) ==========
+app.get('/troubleshoot-email', async (req, res) => {
+  console.log('🔍 Starting email troubleshooter...');
+  
+  // Capture console output
+  const originalLog = console.log;
+  const logs = [];
+  console.log = (...args) => {
+    logs.push(args.join(' '));
+    originalLog(...args);
+  };
+  
+  try {
+    const { troubleshootEmail } = require('./utils/email-troubleshooter');
+    await troubleshootEmail();
+    
+    // Restore console.log
+    console.log = originalLog;
+    
+    res.json({ 
+      success: true, 
+      message: 'Email troubleshooter completed.',
+      logs: logs,
+      summary: {
+        emailUser: process.env.EMAIL_USER ? 'SET' : 'NOT SET',
+        emailPass: process.env.EMAIL_PASS ? 'SET' : 'NOT SET',
+        isGmail: process.env.EMAIL_USER ? process.env.EMAIL_USER.includes('@gmail.com') : false,
+        hasTimeoutErrors: logs.some(log => log.includes('ETIMEDOUT')),
+        hasAuthErrors: logs.some(log => log.includes('EAUTH')),
+        hasConnectionErrors: logs.some(log => log.includes('ECONNECTION'))
+      }
+    });
+  } catch (error) {
+    // Restore console.log
+    console.log = originalLog;
+    
+    res.json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack,
+      logs: logs
+    });
+  }
+});
+
+// ========== EMAIL TROUBLESHOOTER PAGE (REMOVE IN PRODUCTION) ==========
+app.get('/email-troubleshooter', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'email-troubleshooter.handlebars'));
+});
+
+// ========== ENV CHECK ROUTE (REMOVE IN PRODUCTION) ==========
+app.get('/check-env', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const envPath = path.join(__dirname, '.env');
+  
+  res.json({
+    envVars: {
+      EMAIL_USER: process.env.EMAIL_USER ? 'SET' : 'NOT SET',
+      EMAIL_PASS: process.env.EMAIL_PASS ? 'SET' : 'NOT SET',
+      NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+      PORT: process.env.PORT || 'NOT SET'
+    },
+    envFile: {
+      exists: fs.existsSync(envPath),
+      path: envPath
+    },
+    currentDir: __dirname,
+    rootDir: path.dirname(__dirname)
+  });
+});
+
 // ========== ERROR HANDLING ==========
 // 404 handler
 app.use((req, res) => {
