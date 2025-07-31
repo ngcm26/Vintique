@@ -90,6 +90,11 @@ app.engine('handlebars', engine({
     capitalize: function(str) {
       if (typeof str !== 'string') return '';
       return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    },
+    // ADD THE MISSING SUBSTRING HELPER:
+    substring: function(str, start, end) {
+      if (typeof str !== 'string') return '';
+      return str.substring(start, end);
     }
   }
 }));
@@ -143,8 +148,6 @@ app.use('/', userRoutes);
 app.use('/', staffRoutes);
 app.use('/', adminRoutes);
 app.use('/chat', chatbotRoutes);
-
-
 
 // ========== ERROR HANDLING ==========
 // 404 handler
