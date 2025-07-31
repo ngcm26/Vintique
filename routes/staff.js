@@ -1,10 +1,10 @@
 // ========== STAFF ROUTES ==========
 const express = require('express');
 const router = express.Router();
-const { callbackConnection } = require('../config/database');
+const { callbackConnection, createConnection } = require('../config/database'); // Add createConnection import
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 
-
+// ... rest of your existing code stays exactly the same ...
 
 // Staff Dashboard
 router.get('/staff/dashboard', (req, res) => {

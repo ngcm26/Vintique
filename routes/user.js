@@ -1,7 +1,7 @@
 // ========== USER ROUTES ==========
 const express = require('express');
 const router = express.Router();
-const { callbackConnection } = require('../config/database');
+const { callbackConnection, createConnection } = require('../config/database'); // Add createConnection import
 const { upload } = require('../config/multer');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 
