@@ -3,6 +3,9 @@ const express = require('express');
 const router = express.Router();
 const { callbackConnection } = require('../config/database');
 const { upload } = require('../config/multer');
+const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
+
+
 
 // Home route
 router.get('/', (req, res) => {
@@ -209,3 +212,57 @@ router.get('/account-settings', (req, res) => {
 });
 
 module.exports = router;
+
+
+// --------------- User Feedback -------------------------
+router.get('/feedback', (req, res) => {
+  res.render('users/feedback', { 
+    title: 'Feedback - Vintique',
+    layout: 'user',
+    activePage: 'feedback'
+  });
+});
+
+router.post('/feedback', async (req, res) => {
+  const { fullName, email, subject, message } = req.body;
+
+  if (!fullName || !email || !subject || !message) {
+    return res.render('users/feedback', {
+      title: 'Feedback - Vintique',
+      layout: 'user',
+      activePage: 'feedback',
+      errorMessage: 'Please fill in all fields.'
+    });
+  }
+
+  try {
+    const connection = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME
+    });
+
+    const [result] = await connection.execute(
+      'INSERT INTO feedback (fullName, email, subject, message) VALUES (?, ?, ?, ?)',
+      [fullName, email, subject, message]
+    );
+
+    await connection.end();
+
+    res.render('users/feedback', {
+      title: 'Feedback - Vintique',
+      layout: 'user',
+      activePage: 'feedback',
+      successMessage: 'Thank you for your feedback!'
+    });
+  } catch (err) {
+    console.error(err);
+    res.render('users/feedback', {
+      title: 'Feedback - Vintique',
+      layout: 'user',
+      activePage: 'feedback',
+      errorMessage: 'Something went wrong. Please try again.'
+    });
+  }
+});
