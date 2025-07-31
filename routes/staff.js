@@ -459,6 +459,7 @@ router.get('/staff/feedback_management', requireStaff, (req, res) => {
         email: item.email,
         subject: item.subject,
         message: item.message,
+        replied: item.replied,
         CreatedAt: daysAgo === 0 ? 'Today' : `${daysAgo} day(s) ago`
       };
     });
@@ -537,4 +538,45 @@ router.patch('/feedback/:id', (req, res) => {
       res.json({ success: true });
     }
   );
+});
+
+
+
+router.post('/feedback/reply', (req, res) => {
+  const { feedbackID, message } = req.body;
+  const userID = req.session?.user?.user_id;
+
+  if (!feedbackID || !message || !userID) {
+    return res.status(400).json({ error: 'Missing feedback ID, message, or user ID' });
+  }
+
+  const insertQuery = `
+    INSERT INTO feedback_reply (message, feedbackID, userID)
+    VALUES (?, ?, ?)
+  `;
+
+  callbackConnection.query(insertQuery, [message, feedbackID, userID], (err, result) => {
+    if (err) {
+      console.error('Error saving reply:', err);
+      return res.status(500).json({ error: 'Database error saving reply' });
+    }
+
+    // Now update the 'replied' column in the feedback table
+    const updateQuery = `
+      UPDATE feedback SET replied = ? WHERE feedbackID = ?
+    `;
+
+    callbackConnection.query(updateQuery, [message, feedbackID], (updateErr, updateResult) => {
+      if (updateErr) {
+        console.error('Error updating replied column:', updateErr);
+        return res.status(500).json({ error: 'Failed to update feedback replied status.' });
+      }
+
+      res.status(200).json({
+        success: true,
+        replyID: result.insertId,
+        updated: updateResult.affectedRows
+      });
+    });
+  });
 });
