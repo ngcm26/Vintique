@@ -431,24 +431,27 @@ module.exports = router;
 
 
 // --------------- Staff Feedback -------------------------
-router.get('/staff/feedback_management', requireStaff, async (req, res) => {
-  let connection;
-  try {
-    connection = await createConnection();
+router.get('/staff/feedback_management', requireStaff, (req, res) => {
+  callbackConnection.query(`
+    SELECT feedbackID, fullName, email, subject, message, createdAt, replied
+    FROM feedback 
+    ORDER BY createdAt DESC
+  `, (error, feedbacks) => {
+    if (error) {
+      console.error('Error fetching feedback:', error);
+      return res.render('staff/feedback_management', {
+        layout: 'staff',
+        activePage: 'feedback_management',
+        error: 'Failed to load feedback.',
+        feedbackList: []
+      });
+    }
 
-    const [feedbacks] = await connection.execute(`
-      SELECT feedbackID, fullName, email, subject, message, createdAt, replied
-      FROM feedback 
-      ORDER BY createdAt DESC
-    `);
-    ///const [stats] = await connection.execute(`SELECT SUM(CASE WHEN replied != NULL) as totalReplied,SUM(*) as totalFeedback`);
-
-  
     const formattedFeedback = feedbacks.map(item => {
       const createdAt = new Date(item.createdAt);
       const now = new Date();
       const diffTime = now - createdAt;
-      const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24)); // convert ms to days
+      const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24)); // ms to days
 
       return {
         id: item.feedbackID,
@@ -459,72 +462,60 @@ router.get('/staff/feedback_management', requireStaff, async (req, res) => {
         CreatedAt: daysAgo === 0 ? 'Today' : `${daysAgo} day(s) ago`
       };
     });
+
     res.render('staff/feedback_management', {
       layout: 'staff',
       activePage: 'feedback_management',
       feedbackList: formattedFeedback
     });
-
-
-
-  } catch (err) {
-    console.error('Error fetching feedback:', err);
-    res.render('staff/feedback_management', {
-      layout: 'staff',
-      activePage: 'feedback_management',
-      error: 'Failed to load feedback.',
-      feedbackList: []
-    });
-  } finally {
-    if (connection) await connection.end();
-  }
+  });
 });
 
-router.delete('/feedback/:id', requireStaff, async (req, res) => {
+router.delete('/feedback/:id', requireStaff, (req, res) => {
   const feedbackId = req.params.id;
-  let connection;
-  try {
-    connection = await createConnection();
-    const [result] = await connection.execute(
-      'DELETE FROM feedback WHERE feedbackID = ?',
-      [feedbackId]
-    );
 
-    if (result.affectedRows === 1) {
-      res.sendStatus(200); // success
-    } else {
-      res.status(404).send('Feedback not found');
+  callbackConnection.query(
+    'DELETE FROM feedback WHERE feedbackID = ?',
+    [feedbackId],
+    (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Server error');
+      }
+
+      if (result.affectedRows === 1) {
+        res.sendStatus(200); // success
+      } else {
+        res.status(404).send('Feedback not found');
+      }
     }
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
-  } finally {
-    if (connection) await connection.end();
-  }
+  );
 });
 
 
 
-router.get('/staff/feedback_management/:id', requireStaff, async (req, res) => {
+router.get('/staff/feedback_management/:id', requireStaff, (req, res) => {
   const id = req.params.id;
-  let connection;
-  try {
-    connection = await createConnection();
-    const [rows] = await connection.execute('SELECT * FROM feedback WHERE feedbackID = ?', [id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    if (connection) await connection.end();
-}
+  callbackConnection.query(
+    'SELECT * FROM feedback WHERE feedbackID = ?',
+    [id],
+    (err, rows) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+      }
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      res.json(rows[0]);
+    }
+  );
 });
 
 
 
-router.patch('/feedback/:id', async (req, res) => {
+router.patch('/feedback/:id', (req, res) => {
   const feedbackId = req.params.id;
   const { subject, message, replied } = req.body;
 
@@ -532,24 +523,18 @@ router.patch('/feedback/:id', async (req, res) => {
     return res.status(400).json({ error: 'Subject and message are required.' });
   }
 
-  let connection;
-  try {
-    connection = await createConnection(); // or use your existing connection method
-
-    const [result] = await connection.execute(
-      'UPDATE feedback SET subject = ?, message = ?, replied = ? WHERE feedbackID = ?',
-      [subject, message, replied || null, feedbackId]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Feedback not found.' });
+  callbackConnection.query(
+    'UPDATE feedback SET subject = ?, message = ?, replied = ? WHERE feedbackID = ?',
+    [subject, message, replied || null, feedbackId],
+    (err, result) => {
+      if (err) {
+        console.error('Feedback update error:', err);
+        return res.status(500).json({ error: 'Database error.' });
+      }
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Feedback not found.' });
+      }
+      res.json({ success: true });
     }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Feedback update error:', error);
-    res.status(500).json({ error: 'Database error.' });
-  } finally {
-    if (connection) await connection.end();
-  }
+  );
 });
