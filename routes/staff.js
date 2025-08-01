@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
+const mysql = require('mysql2/promise');
 
 // Staff Dashboard
 router.get('/staff/dashboard', requireStaff, (req, res) => {
@@ -817,3 +818,64 @@ router.delete('/users/:userId', requireStaff, (req, res) => {
 });
 
 module.exports = router;
+
+
+
+// Chatbot dashboard
+router.get('/staff/dashboard-intents', async (req, res) => {
+  const conn = await mysql.createConnection(dbConfig);
+
+  const [topIntents] = await conn.execute(`
+    SELECT intent, COUNT(*) AS count
+    FROM chatbotmessages
+    WHERE intent IS NOT NULL
+    GROUP BY intent
+    ORDER BY count DESC
+    LIMIT 5;
+  `);
+
+  await conn.end();
+  res.json(topIntents); // or pass to Handlebars view
+});
+
+
+//Daily intent count for chatbot dashboard section
+router.get('/staff/dashboard-intents-daily', async (req, res) => {
+  const conn = await mysql.createConnection(dbConfig);
+
+  const [rows] = await conn.execute(`
+    SELECT DATE(createdAt) AS date, intent, COUNT(*) AS count
+    FROM chatbotmessages
+    WHERE intent IS NOT NULL AND intent != 'openai'
+    GROUP BY DATE(createdAt), intent
+    ORDER BY DATE(createdAt)
+  `);
+
+  await conn.end();
+
+  // Transform data into { [intent]: { dates: [], counts: [] } }
+  const intentMap = {};
+  const allDatesSet = new Set();
+
+  rows.forEach(({ date, intent, count }) => {
+    allDatesSet.add(date);
+    if (!intentMap[intent]) {
+      intentMap[intent] = {};
+    }
+    intentMap[intent][date] = count;
+  });
+
+  const allDates = Array.from(allDatesSet).sort();
+
+  const datasets = Object.keys(intentMap).map(intent => {
+    const data = allDates.map(date => intentMap[intent][date] || 0);
+    return {
+      label: intent,
+      data: data,
+      fill: false,
+      borderWidth: 2
+    };
+  });
+
+  res.json({ labels: allDates, datasets });
+});

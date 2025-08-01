@@ -87,11 +87,11 @@ ${itemsText}`;
         await conn.end();
         return res.json({ reply: replyText });
       }
-    } else if (reply) {
-      // For all other handled intents with a reply
+    } else if (reply && intent !== "order_tracking" && intent !== "default") {
+      // For all other handled intents with a reply, store intent
       await conn.execute(
-        'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
-        [userId, reply, false]
+        'INSERT INTO ChatbotMessages (userId, message, isFromUser, intent) VALUES (?, ?, ?, ?)',
+        [userId, reply, false, intent]
       );
       await conn.end();
       return res.json({ reply, quickReplies });
@@ -109,8 +109,8 @@ ${itemsText}`;
         });
         const replyText = completion.choices[0].message.content.trim();
         await conn.execute(
-          'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
-          [userId, replyText, false]
+          'INSERT INTO ChatbotMessages (userId, message, isFromUser, intent) VALUES (?, ?, ?, ?)',
+          [userId, replyText, false, "openai"]
         );
         await conn.end();
         return res.json({ reply: replyText });

@@ -307,3 +307,41 @@ canvas {
   background: #f59e0b;
   color: #fff;
 }
+
+
+/* Chatbot Intent Section Styling */
+.chatbot-intent-card {
+  background: white;
+  border-radius: 15px;
+  padding: 25px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.chatbot-intent-card:hover {
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  transform: translateY(-4px);
+}
+
+.chatbot-intent-card h3 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 1rem;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+}
+
+.chatbot-intent-card h3::before {
+  content: "🤖";
+  margin-right: 10px;
+  font-size: 1.3rem;
+}
+
+#intentChart {
+  max-height: 300px;
+  width: 100%;
+}
