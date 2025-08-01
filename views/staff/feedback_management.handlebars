@@ -129,6 +129,12 @@
             <textarea class="form-control" id="replyMessage" name="message" rows="3" required></textarea>
           </div>
         </form>
+
+        <!-- ✅ Confirm Section: Moved inside modal-body -->
+        <div id="confirmSentSection" style="display: none;" class="border-top pt-3 mt-3">
+          <p class="text-warning fw-bold mb-2">After sending the email, click below to confirm:</p>
+          <button type="button" class="btn btn-success" id="confirmSentBtn">✔ I’ve sent the reply</button>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -238,29 +244,40 @@
 
 
 
- document.getElementById('replyForm').addEventListener('submit', async function (e) {
+document.getElementById('replyForm').addEventListener('submit', function (e) {
   e.preventDefault();
 
   const email = document.getElementById('replyEmail').value.trim();
   const subject = document.getElementById('replySubject').value.trim();
   const message = document.getElementById('replyMessage').value.trim();
-  const feedbackID = document.getElementById('feedbackID').value;
-
+  const feedbackID = document.getElementById('replyFeedbackID').value;
 
   if (!message) {
     alert('Please enter a reply message.');
     return;
   }
-  // Open mail client with mailto:
+
+  // Open mail client
   const mailtoLink = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
   window.open(mailtoLink, '_blank');
 
-  // Store reply in database
+  // Show "Confirm Sent" section
+  document.getElementById('confirmSentSection').style.display = 'block';
+
+  // Disable the send reply button to avoid re-click
+  e.submitter.disabled = true;
+});
+
+
+document.getElementById('confirmSentBtn').addEventListener('click', async function () {
+  const feedbackID = document.getElementById('replyFeedbackID').value;
+  const message = document.getElementById('replyMessage').value;
+
   try {
     const res = await fetch('/feedback/reply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feedbackID, message }) // optionally add userID if needed
+      body: JSON.stringify({ feedbackID, message })
     });
 
     const data = await res.json();
@@ -279,6 +296,12 @@
   }
 });
 
+
+document.getElementById('replyModal').addEventListener('hidden.bs.modal', () => {
+  document.getElementById('confirmSentSection').style.display = 'none';
+  document.querySelector('#replyForm button[type="submit"]').disabled = false;
+});
+
 function setupReplyButtons() {
   document.querySelectorAll('.btn-reply').forEach(button => {
     button.addEventListener('click', () => {
@@ -289,7 +312,7 @@ function setupReplyButtons() {
       // Fill modal input fields
       document.getElementById('replyEmail').value = email;
       document.getElementById('replySubject').value = subject;
-      document.getElementById('feedbackID').value = feedbackID;
+      document.getElementById('replyFeedbackID').value = feedbackID;
       document.getElementById('replyMessage').value = '';
     });
   });
