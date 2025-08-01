@@ -39,6 +39,11 @@
                         <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
                         <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
                       </ul>
+                      <button 
+                        class="btn btn-outline-primary btn-sm view-order-btn mt-2"
+                        data-order-id="{{order_id}}">
+                        View Details
+                      </button>
                     </div>
                     <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
                       {{#if listing_image}}
@@ -47,6 +52,7 @@
                         <span class="text-muted">No image</span>
                       {{/if}}
                     </div>
+
                   </div>
                 </div>
               </div>
@@ -104,3 +110,79 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="orderDetailsModalLabel">Order Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="orderDetailsBody">
+        <!-- Order details will be injected here -->
+        <div class="text-center text-muted py-5">Loading...</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary rounded-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.view-order-btn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const orderId = this.getAttribute('data-order-id');
+    const modalBody = document.getElementById('orderDetailsBody');
+    modalBody.innerHTML = `<div class="text-center text-muted py-5">Loading...</div>`;
+
+    fetch(`/orders/details/${orderId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          modalBody.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+          return;
+        }
+
+        // Build HTML for each item
+        let itemsHtml = data.items.map(item => `
+          <div class="d-flex mb-3 align-items-center">
+            <img src="${item.listing_image || '/assets/no-image.png'}" class="rounded-3 me-3" style="width: 70px; height: 70px; object-fit:cover;">
+            <div>
+              <div class="fw-semibold">${item.listing_title}</div>
+              <div class="small text-muted">${item.listing_description || ''}</div>
+              <div class="small">Qty: ${item.quantity} &nbsp; Price: $${item.price}</div>
+            </div>
+          </div>
+        `).join('');
+
+        modalBody.innerHTML = `
+          <div class="mb-3">
+            <span class="fw-bold">Order ID:</span> #${data.order.order_id}
+          </div>
+          <div class="mb-3">
+            <span class="fw-bold">Status:</span>
+            <span class="badge bg-info">${data.order.status}</span>
+          </div>
+          <div class="mb-3">
+            <span class="fw-bold">Order Date:</span> ${data.order.created_at}
+          </div>
+          <div class="mb-3">
+            <span class="fw-bold">Total Amount:</span> $${data.order.total_amount}
+          </div>
+          <div class="mb-3">
+            <span class="fw-bold">Shipping Address:</span> ${data.order.shipping_address_name}, ${data.order.shipping_address_street}, ${data.order.shipping_address_city}, ${data.order.shipping_address_state}, ${data.order.shipping_address_postal_code}, ${data.order.shipping_address_country}, ${data.order.shipping_address_phone}
+          </div>
+          <hr>
+          <h6>Items</h6>
+          ${itemsHtml}
+        `;
+      });
+
+    // Show the modal
+    const orderModal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
+    orderModal.show();
+  });
+});
+
+</script>

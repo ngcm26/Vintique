@@ -4,6 +4,16 @@ const router = express.Router();
 const { callbackConnection, createConnection } = require('../config/database'); // Add createConnection import
 const { upload } = require('../config/multer');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
+const mysql = require('mysql2/promise');
+
+const dbConfig = {
+  host: 'localhost',
+  user: 'root',
+  password: '', //Add your own password here
+  database: 'vintiquedb',
+  port: 3306
+};
+
 
 // Home route
 router.get('/', (req, res) => {
@@ -251,16 +261,6 @@ router.get('/cart', (req, res) => {
   });
 });
 
-// Orders route
-router.get('/orders', (req, res) => {
-  if (!req.session.user) {
-    return res.redirect('/login');
-  }
-  res.render('users/orders', {
-    layout: 'user',
-    activePage: 'orders'
-  });
-});
 
 // Account Settings route
 router.get('/account-settings', (req, res) => {
@@ -975,6 +975,86 @@ router.get('/api/listings/:listingId/reviews', (req, res) => {
 
     res.json({ reviews: results });
   });
+});
+
+
+
+
+// Orders History
+router.get('/orders', async (req, res) => {
+  if (!req.session.user) {
+    return res.redirect('/login');
+  }
+  console.log("SESSION:", req.session.user);
+  const userId = req.session.user.user_id;
+
+  const conn = await mysql.createConnection(dbConfig);
+
+  // Fetch purchases (orders where user is buyer)
+  const [purchases] = await conn.execute(
+    `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image,
+            oi.quantity, oi.price
+     FROM orders o
+     JOIN order_items oi ON o.order_id = oi.order_id
+     JOIN listings l ON oi.listing_id = l.listing_id
+     JOIN users u ON l.user_id = u.user_id
+     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+     WHERE o.user_id = ?`, [userId]
+  );
+
+  // Fetch sales (orders where user is the seller)
+  const [sales] = await conn.execute(
+    `SELECT o.*, l.title AS listing_title, o.user_id AS buyer_id, u.email AS buyer_email, li.image_url AS listing_image,
+            oi.quantity, oi.price
+     FROM orders o
+     JOIN order_items oi ON o.order_id = oi.order_id
+     JOIN listings l ON oi.listing_id = l.listing_id
+     JOIN users u ON o.user_id = u.user_id
+     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+     WHERE l.user_id = ?`, [userId]
+  );
+
+  await conn.end();
+
+  res.render('users/orders', {
+    layout: 'user',
+    activePage: 'orders',
+    purchases,
+    sales
+  });
+});
+
+//to get order details
+
+router.get('/orders/details/:orderId', async (req, res) => {
+  const userId = req.session.user.user_id;
+  const orderId = req.params.orderId;
+
+  const conn = await mysql.createConnection(dbConfig);
+
+  // Check order ownership (as buyer or seller)
+  const [orders] = await conn.execute(
+    `SELECT * FROM orders WHERE order_id = ? AND (user_id = ? OR order_id IN 
+      (SELECT order_id FROM order_items oi JOIN listings l ON oi.listing_id = l.listing_id WHERE l.user_id = ?))`,
+    [orderId, userId, userId]
+  );
+  if (orders.length === 0) {
+    await conn.end();
+    return res.json({ error: "Order not found or not authorized" });
+  }
+  const order = orders[0];
+
+  // Get items
+  const [items] = await conn.execute(
+    `SELECT oi.*, l.title AS listing_title, l.description AS listing_description, li.image_url AS listing_image
+     FROM order_items oi
+     JOIN listings l ON oi.listing_id = l.listing_id
+     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+     WHERE oi.order_id = ?`, [orderId]
+  );
+
+  await conn.end();
+  res.json({ order, items });
 });
 
 module.exports = router;
