@@ -27,6 +27,20 @@ function getActivePromo() {
 function handleIntent(message) {
   const msg = message.toLowerCase();
 
+if (/\b(hi|hello|hey|greetings)\b/.test(msg)) {
+  return {
+    intent: "greeting",
+    reply: `Hello! How can I assist you today? If you're looking for sustainable products or have any questions about eco-friendly practices, feel free to ask!`,
+    quickReplies: [
+      'Sell an Item',
+      'Track Order',
+      'Get Eco Tip',
+      'See Promotions',
+      'Return/Refund Info'
+    ]
+  };
+}
+
   if (/\b(help|what can you do|can you help|assist)\b/.test(msg)) {
     return {
       intent: "help",
@@ -40,6 +54,7 @@ function handleIntent(message) {
       ]
     };
   }
+
 
   if (/\b(sell|post item|upload)\b/.test(msg)) {
     return {

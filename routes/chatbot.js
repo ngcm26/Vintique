@@ -133,4 +133,18 @@ ${itemsText}`;
 });
 
 
+router.get('/chat/history', async (req, res) => {
+  const userId = req.session.user?.user_id;
+  if (!userId) return res.status(401).json({ error: "Not logged in" });
+
+  const conn = await mysql.createConnection(dbConfig);
+  const [rows] = await conn.execute(
+    `SELECT message, isFromUser FROM ChatbotMessages WHERE userId = ? ORDER BY id DESC LIMIT 10`,
+    [userId]
+  );
+  await conn.end();
+  // reverse so oldest first
+  res.json(rows.reverse());
+});
+
 module.exports = router;

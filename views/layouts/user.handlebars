@@ -147,6 +147,11 @@
     <div id="chatbot-messages"
       style="flex: 1; padding: 1rem; overflow-y: auto; font-size: 1rem; display: flex; flex-direction: column; gap: 0.6rem;">
     </div>
+
+    <!-- Quick Replies Container -->
+    <div id="chatbot-quick-replies" style="padding: 0 0.8rem 0.3rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    </div>
+
     <div style="display: flex; gap: 0.5rem; padding: 0.8rem; background: #fffde9;">
       <input id="chatbot-input" type="text" placeholder="Type your message..."
         style="flex: 1; border-radius: 1rem; border: 1px solid #FFD600; padding: 0.6rem 1rem; outline: none;">
@@ -167,10 +172,18 @@
     chatbotBtn.onclick = () => {
       chatbotModal.style.display = 'flex';
       setTimeout(() => chatbotInput.focus(), 120);
+
+      // Fetch and display chat history every time the chat opens
+      chatbotMessages.innerHTML = ""; // clear previous messages
+      fetch('/chat/chat/history', { credentials: 'same-origin' })
+
+        .then(res => res.json())
+        .then(history => {
+          history.forEach(msg => addMessage(msg.message, msg.isFromUser));
+          chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+        });
     };
-    chatbotClose.onclick = () => {
-      chatbotModal.style.display = 'none';
-    };
+
 
     function addMessage(text, fromUser) {
       const msgDiv = document.createElement('div');
@@ -191,7 +204,12 @@
       if (!text) return;
       addMessage(text, true);
       chatbotInput.value = '';
-      addMessage("...", false); // Typing indicator
+      const spinnerDiv = document.createElement('div');
+      spinnerDiv.className = 'vq-spinner';
+      spinnerDiv.id = 'vq-typing-spinner';
+      chatbotMessages.appendChild(spinnerDiv);
+      chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+
 
       fetch('/chat/send', {
         method: 'POST',
@@ -202,8 +220,9 @@
         .then(res => res.json())
         .then(data => {
           // Remove typing indicator
-          const typing = chatbotMessages.querySelector('div:last-child');
-          if (typing && typing.textContent === "...") chatbotMessages.removeChild(typing);
+          const spinner = document.getElementById('vq-typing-spinner');
+          if (spinner) chatbotMessages.removeChild(spinner);
+
 
           // Add the reply text
           addMessage(data.reply, false);
@@ -219,6 +238,26 @@
             chatbotMessages.appendChild(img);
             chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
           }
+
+          // Render quick replies
+          const qrBox = document.getElementById('chatbot-quick-replies');
+          qrBox.innerHTML = '';
+          if (data.quickReplies && Array.isArray(data.quickReplies)) {
+            data.quickReplies.forEach(reply => {
+              const btn = document.createElement('button');
+              btn.textContent = reply;
+              btn.className = 'btn btn-sm btn-outline-warning';
+              btn.style.borderRadius = '20px';
+              btn.style.padding = '6px 14px';
+              btn.style.fontSize = '0.85rem';
+              btn.style.cursor = 'pointer';
+              btn.onclick = () => {
+                chatbotInput.value = reply;
+                sendMessage();
+              };
+              qrBox.appendChild(btn);
+            });
+          }
         })
         .catch(() => {
           const typing = chatbotMessages.querySelector('div:last-child');
@@ -231,6 +270,12 @@
     chatbotInput.addEventListener('keydown', function (e) {
       if (e.key === "Enter") sendMessage();
     });
+
+
+    chatbotClose.onclick = () => {
+      chatbotModal.style.display = 'none';
+    };
+
   </script>
 
 

@@ -148,3 +148,26 @@
     max-width: 90px;
   }
 }
+
+
+.vq-spinner {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  vertical-align: middle;
+}
+.vq-spinner:after {
+  content: " ";
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: 4px;
+  border-radius: 50%;
+  border: 3px solid #FFD600;
+  border-color: #FFD600 transparent #FFD600 transparent;
+  animation: vq-spin 1s linear infinite;
+}
+@keyframes vq-spin {
+  0% { transform: rotate(0deg);}
+  100% { transform: rotate(360deg);}
+}
