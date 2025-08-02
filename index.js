@@ -95,6 +95,10 @@ app.engine('handlebars', engine({
     substring: function(str, start, end) {
       if (typeof str !== 'string') return '';
       return str.substring(start, end);
+    },
+    // Add helper for adding numbers (used in product detail template)
+    add: function(a, b) {
+      return a + b;
     }
   }
 }));

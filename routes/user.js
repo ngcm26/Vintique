@@ -163,6 +163,358 @@ router.get('/my_listing', (req, res) => {
   });
 });
 
+// Product Detail Route
+router.get('/listing/:id', (req, res) => {
+  const listingId = req.params.id;
+  
+  // Get listing details with all images
+  const listingQuery = `
+    SELECT 
+      l.listing_id, 
+      l.title, 
+      l.description, 
+      l.price, 
+      l.category, 
+      l.item_condition, 
+      l.brand, 
+      l.size, 
+      l.status,
+      l.created_at,
+      l.user_id,
+      u.email as username,
+      (
+        SELECT image_url 
+        FROM listing_images li 
+        WHERE li.listing_id = l.listing_id 
+        ORDER BY li.is_main DESC, li.image_id ASC 
+        LIMIT 1
+      ) as image_url
+    FROM listings l
+    LEFT JOIN users u ON l.user_id = u.user_id
+    WHERE l.listing_id = ? AND l.status = 'active'
+  `;
+  
+  callbackConnection.query(listingQuery, [listingId], (err, listings) => {
+    if (err) {
+      console.error('Database error:', err);
+      return res.render('users/product_detail', {
+        layout: 'user',
+        error: 'Database error occurred'
+      });
+    }
+    
+    if (listings.length === 0) {
+      return res.render('users/product_detail', {
+        layout: 'user',
+        error: 'Product not found or no longer available'
+      });
+    }
+    
+    const listing = listings[0];
+    
+    // Fix image URL
+    if (!listing.image_url || listing.image_url === 'null') {
+      listing.image_url = '/assets/logo.png';
+    } else if (!listing.image_url.startsWith('/uploads/')) {
+      listing.image_url = `/uploads/${listing.image_url}`;
+    }
+    
+    // Get all additional images for this listing
+    const imagesQuery = `
+      SELECT image_url 
+      FROM listing_images 
+      WHERE listing_id = ? AND is_main = 0
+      ORDER BY image_id ASC
+    `;
+    
+    callbackConnection.query(imagesQuery, [listingId], (imgErr, images) => {
+      if (imgErr) {
+        console.error('Images error:', imgErr);
+        images = [];
+      }
+      
+      // Fix additional image URLs
+      const additionalImages = images.map(img => {
+        if (!img.image_url || img.image_url === 'null') {
+          return '/assets/logo.png';
+        } else if (!img.image_url.startsWith('/uploads/')) {
+          return `/uploads/${img.image_url}`;
+        }
+        return img.image_url;
+      });
+      
+      listing.additional_images = additionalImages;
+      
+      res.render('users/product_detail', {
+        layout: 'user',
+        listing: listing,
+        user: req.session.user
+      });
+    });
+  });
+});
+
+// Edit Listing Route
+router.get('/edit_listing/:id', (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.redirect('/login');
+  }
+  
+  const listingId = req.params.id;
+  const userId = req.session.user.id;
+  
+  // Get listing details with images
+  const listingQuery = `
+    SELECT 
+      l.listing_id, 
+      l.title, 
+      l.description, 
+      l.price, 
+      l.category, 
+      l.item_condition, 
+      l.brand, 
+      l.size,
+      l.user_id
+    FROM listings l
+    WHERE l.listing_id = ? AND l.user_id = ?
+  `;
+  
+  callbackConnection.query(listingQuery, [listingId, userId], (err, listings) => {
+    if (err) {
+      console.error('Database error:', err);
+      return res.status(500).send('Database error');
+    }
+    
+    if (listings.length === 0) {
+      return res.status(404).send('Listing not found or you do not have permission to edit it');
+    }
+    
+    const listing = listings[0];
+    
+    // Get all images for this listing
+    const imagesQuery = `
+      SELECT image_url 
+      FROM listing_images 
+      WHERE listing_id = ?
+      ORDER BY is_main DESC, image_id ASC
+    `;
+    
+    callbackConnection.query(imagesQuery, [listingId], (imgErr, images) => {
+      if (imgErr) {
+        console.error('Images error:', imgErr);
+        images = [];
+      }
+      
+      // Fix image URLs
+      const listingImages = images.map(img => {
+        if (!img.image_url || img.image_url === 'null') {
+          return '/assets/logo.png';
+        } else if (!img.image_url.startsWith('/uploads/')) {
+          return `/uploads/${img.image_url}`;
+        }
+        return img.image_url;
+      });
+      
+      listing.images = listingImages;
+      
+      res.render('users/edit_listing', {
+        layout: 'user',
+        activePage: 'mylistings',
+        listing: listing
+      });
+    });
+  });
+});
+
+// Update Listing Route
+router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.redirect('/login');
+  }
+  
+  const listingId = req.params.id;
+  const userId = req.session.user.id;
+  const { title, description, brand, size, category, item_condition, price } = req.body;
+  const newImages = req.files;
+  
+  if (!title || !description || !category || !item_condition || !price) {
+    return res.status(400).send('All required fields must be provided.');
+  }
+  
+  // First verify the listing belongs to the user
+  const verifyQuery = 'SELECT listing_id FROM listings WHERE listing_id = ? AND user_id = ?';
+  callbackConnection.query(verifyQuery, [listingId, userId], (err, result) => {
+    if (err) {
+      console.error('Verify listing error:', err);
+      return res.status(500).send('Database error');
+    }
+    
+    if (result.length === 0) {
+      return res.status(403).send('You do not have permission to edit this listing');
+    }
+    
+    // Update the listing
+    const updateListingQuery = `
+      UPDATE listings 
+      SET title = ?, description = ?, brand = ?, size = ?, category = ?, item_condition = ?, price = ?, updated_at = NOW()
+      WHERE listing_id = ? AND user_id = ?
+    `;
+    
+    callbackConnection.query(updateListingQuery, [title, description, brand, size, category, item_condition, price, listingId, userId], (err) => {
+      if (err) {
+        console.error('Update listing error:', err);
+        return res.status(500).send('Database error');
+      }
+      
+      // Add new images if any
+      if (newImages && newImages.length > 0) {
+        const imageValues = newImages.map(img => [
+          listingId,
+          '/uploads/' + img.filename,
+          0 // Not main image by default
+        ]);
+        
+        const insertImagesQuery = 'INSERT INTO listing_images (listing_id, image_url, is_main) VALUES ?';
+        callbackConnection.query(insertImagesQuery, [imageValues], (imgErr) => {
+          if (imgErr) {
+            console.error('Insert images error:', imgErr);
+          }
+        });
+      }
+      
+      res.redirect('/my_listing');
+    });
+  });
+});
+
+// Mark as Sold Route
+router.post('/listings/:id/mark_sold', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const listingId = req.params.id;
+  const userId = req.session.user.id;
+  
+  const updateQuery = `
+    UPDATE listings 
+    SET status = 'sold', updated_at = NOW() 
+    WHERE listing_id = ? AND user_id = ?
+  `;
+  
+  callbackConnection.query(updateQuery, [listingId, userId], (err, result) => {
+    if (err) {
+      console.error('Mark as sold error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Listing not found or you do not have permission' });
+    }
+    
+    res.json({ success: true, message: 'Listing marked as sold' });
+  });
+});
+
+// Delete Listing Route
+router.delete('/listings/:id', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const listingId = req.params.id;
+  const userId = req.session.user.id;
+  
+  // Start transaction
+  callbackConnection.beginTransaction((err) => {
+    if (err) {
+      console.error('Transaction error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    // First delete images
+    const deleteImagesQuery = 'DELETE FROM listing_images WHERE listing_id = ?';
+    callbackConnection.query(deleteImagesQuery, [listingId], (err) => {
+      if (err) {
+        return callbackConnection.rollback(() => {
+          console.error('Delete images error:', err);
+          res.status(500).json({ error: 'Error deleting listing images' });
+        });
+      }
+      
+      // Then delete the listing
+      const deleteListingQuery = 'DELETE FROM listings WHERE listing_id = ? AND user_id = ?';
+      callbackConnection.query(deleteListingQuery, [listingId, userId], (err, result) => {
+        if (err) {
+          return callbackConnection.rollback(() => {
+            console.error('Delete listing error:', err);
+            res.status(500).json({ error: 'Error deleting listing' });
+          });
+        }
+        
+        if (result.affectedRows === 0) {
+          return callbackConnection.rollback(() => {
+            res.status(404).json({ error: 'Listing not found or you do not have permission' });
+          });
+        }
+        
+        callbackConnection.commit((err) => {
+          if (err) {
+            return callbackConnection.rollback(() => {
+              console.error('Commit error:', err);
+              res.status(500).json({ error: 'Error deleting listing' });
+            });
+          }
+          
+          res.json({ success: true, message: 'Listing deleted successfully' });
+        });
+      });
+    });
+  });
+});
+
+// Delete Image Route
+router.post('/delete_image', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const { imgUrl, listingId } = req.body;
+  const userId = req.session.user.id;
+  
+  if (!imgUrl || !listingId) {
+    return res.status(400).json({ error: 'Image URL and listing ID are required' });
+  }
+  
+  // Verify the listing belongs to the user
+  const verifyQuery = 'SELECT listing_id FROM listings WHERE listing_id = ? AND user_id = ?';
+  callbackConnection.query(verifyQuery, [listingId, userId], (err, result) => {
+    if (err) {
+      console.error('Verify listing error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (result.length === 0) {
+      return res.status(403).json({ error: 'You do not have permission to delete this image' });
+    }
+    
+    // Delete the image from database
+    const deleteQuery = 'DELETE FROM listing_images WHERE listing_id = ? AND image_url = ?';
+    callbackConnection.query(deleteQuery, [listingId, imgUrl], (err, result) => {
+      if (err) {
+        console.error('Delete image error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Image not found' });
+      }
+      
+      res.json({ success: true, message: 'Image deleted successfully' });
+    });
+  });
+});
+
 // Q&A route - FIXED VERSION FOR YOUR DATABASE STRUCTURE
 router.get('/qa', (req, res) => {
   // Q&A page should be accessible to all users, but certain features require login
@@ -502,7 +854,353 @@ router.post('/feedback', (req, res) => {
   );
 });
 
-// ========== MESSAGES ROUTES ==========
+// ========== CART API ROUTES ==========
+
+// Get cart items
+router.get('/api/cart', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const userId = req.session.user.id;
+  const cartQuery = `
+    SELECT 
+      c.cart_id,
+      c.listing_id,
+      c.quantity,
+      c.added_at,
+      l.title,
+      l.price,
+      l.item_condition,
+      l.status,
+      (SELECT image_url FROM listing_images li WHERE li.listing_id = l.listing_id ORDER BY li.is_main DESC, li.image_id ASC LIMIT 1) as image_url,
+      u.email as seller_username
+    FROM cart c
+    JOIN listings l ON c.listing_id = l.listing_id
+    JOIN users u ON l.user_id = u.user_id
+    WHERE c.user_id = ?
+    ORDER BY c.added_at DESC
+  `;
+  
+  callbackConnection.query(cartQuery, [userId], (err, items) => {
+    if (err) {
+      console.error('Cart query error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    // Fix image URLs
+    items.forEach(item => {
+      if (!item.image_url || item.image_url === 'null') {
+        item.image_url = '/assets/logo.png';
+      } else if (!item.image_url.startsWith('/uploads/')) {
+        item.image_url = `/uploads/${item.image_url}`;
+      }
+    });
+    
+    res.json({ items: items });
+  });
+});
+
+// Add item to cart
+router.post('/api/cart', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const userId = req.session.user.id;
+  const { listing_id, quantity = 1 } = req.body;
+  
+  if (!listing_id) {
+    return res.status(400).json({ error: 'Listing ID is required' });
+  }
+  
+  // Check if listing exists and is available
+  const checkListingQuery = `
+    SELECT listing_id, title, user_id, status 
+    FROM listings 
+    WHERE listing_id = ? AND status = 'active'
+  `;
+  
+  callbackConnection.query(checkListingQuery, [listing_id], (err, listings) => {
+    if (err) {
+      console.error('Check listing error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (listings.length === 0) {
+      return res.status(404).json({ error: 'Listing not found or no longer available' });
+    }
+    
+    const listing = listings[0];
+    
+    // Check if user is trying to add their own item
+    if (listing.user_id === userId) {
+      return res.status(400).json({ error: 'You cannot add your own items to cart' });
+    }
+    
+    // Check if item is already in cart
+    const checkCartQuery = 'SELECT cart_id FROM cart WHERE user_id = ? AND listing_id = ?';
+    callbackConnection.query(checkCartQuery, [userId, listing_id], (err, cartItems) => {
+      if (err) {
+        console.error('Check cart error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (cartItems.length > 0) {
+        return res.status(409).json({ error: 'Item is already in your cart' });
+      }
+      
+      // Add to cart
+      const insertCartQuery = `
+        INSERT INTO cart (user_id, listing_id, quantity, added_at)
+        VALUES (?, ?, ?, NOW())
+      `;
+      
+      callbackConnection.query(insertCartQuery, [userId, listing_id, quantity], (err, result) => {
+        if (err) {
+          console.error('Add to cart error:', err);
+          return res.status(500).json({ error: 'Failed to add item to cart' });
+        }
+        
+        res.json({ 
+          success: true, 
+          message: `"${listing.title}" added to cart!`,
+          cart_id: result.insertId
+        });
+      });
+    });
+  });
+});
+
+// Remove item from cart
+router.delete('/api/cart/:cartId', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const userId = req.session.user.id;
+  const cartId = req.params.cartId;
+  
+  const deleteQuery = 'DELETE FROM cart WHERE cart_id = ? AND user_id = ?';
+  callbackConnection.query(deleteQuery, [cartId, userId], (err, result) => {
+    if (err) {
+      console.error('Remove from cart error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Item not found in cart' });
+    }
+    
+    res.json({ success: true, message: 'Item removed from cart' });
+  });
+});
+
+// Clear entire cart
+router.delete('/api/cart', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const userId = req.session.user.id;
+  const deleteQuery = 'DELETE FROM cart WHERE user_id = ?';
+  
+  callbackConnection.query(deleteQuery, [userId], (err, result) => {
+    if (err) {
+      console.error('Clear cart error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    res.json({ success: true, message: 'Cart cleared successfully' });
+  });
+});
+
+// ========== CHECKOUT API ROUTES ==========
+
+// Single item checkout (Buy Now)
+router.post('/api/checkout/single', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const userId = req.session.user.id;
+  const { listing_id } = req.body;
+  
+  if (!listing_id) {
+    return res.status(400).json({ error: 'Listing ID is required' });
+  }
+  
+  // Get listing details
+  const listingQuery = `
+    SELECT listing_id, title, price, user_id, status
+    FROM listings 
+    WHERE listing_id = ? AND status = 'active'
+  `;
+  
+  callbackConnection.query(listingQuery, [listing_id], (err, listings) => {
+    if (err) {
+      console.error('Listing query error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (listings.length === 0) {
+      return res.status(404).json({ error: 'Listing not found or no longer available' });
+    }
+    
+    const listing = listings[0];
+    
+    if (listing.user_id === userId) {
+      return res.status(400).json({ error: 'You cannot purchase your own items' });
+    }
+    
+    const subtotal = parseFloat(listing.price);
+    const shipping = subtotal >= 50 ? 0 : 5.99;
+    const tax = subtotal * 0.08; // 8% tax
+    const total = subtotal + shipping + tax;
+    
+    // Create order
+    const createOrderQuery = `
+      INSERT INTO orders (user_id, total_amount, status, created_at)
+      VALUES (?, ?, 'pending', NOW())
+    `;
+    
+    callbackConnection.query(createOrderQuery, [userId, total], (err, orderResult) => {
+      if (err) {
+        console.error('Create order error:', err);
+        return res.status(500).json({ error: 'Failed to create order' });
+      }
+      
+      const orderId = orderResult.insertId;
+      
+      // Add order item
+      const addItemQuery = `
+        INSERT INTO order_items (order_id, listing_id, quantity, price)
+        VALUES (?, ?, 1, ?)
+      `;
+      
+      callbackConnection.query(addItemQuery, [orderId, listing_id, listing.price], (err) => {
+        if (err) {
+          console.error('Add order item error:', err);
+          return res.status(500).json({ error: 'Failed to add order item' });
+        }
+        
+        res.json({
+          success: true,
+          order_id: orderId,
+          total: total,
+          message: 'Order created successfully'
+        });
+      });
+    });
+  });
+});
+
+// Regular cart checkout
+router.post('/api/checkout', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const userId = req.session.user.id;
+  const { shipping_address } = req.body;
+  
+  // Get cart items
+  const cartQuery = `
+    SELECT 
+      c.cart_id,
+      c.listing_id,
+      c.quantity,
+      l.price,
+      l.title,
+      l.user_id as seller_id,
+      l.status
+    FROM cart c
+    JOIN listings l ON c.listing_id = l.listing_id
+    WHERE c.user_id = ?
+  `;
+  
+  callbackConnection.query(cartQuery, [userId], (err, cartItems) => {
+    if (err) {
+      console.error('Cart query error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (cartItems.length === 0) {
+      return res.status(400).json({ error: 'Cart is empty' });
+    }
+    
+    // Check if all items are still available
+    const unavailableItems = cartItems.filter(item => item.status !== 'active');
+    if (unavailableItems.length > 0) {
+      return res.status(400).json({ 
+        error: 'Some items in your cart are no longer available',
+        unavailable_items: unavailableItems.map(item => item.title)
+      });
+    }
+    
+    // Calculate totals
+    const subtotal = cartItems.reduce((total, item) => {
+      return total + (parseFloat(item.price) * item.quantity);
+    }, 0);
+    
+    const shipping = subtotal >= 50 ? 0 : 5.99;
+    const tax = subtotal * 0.08; // 8% tax
+    const total = subtotal + shipping + tax;
+    
+    // Create order
+    const createOrderQuery = `
+      INSERT INTO orders (user_id, total_amount, shipping_address, status, created_at)
+      VALUES (?, ?, ?, 'pending', NOW())
+    `;
+    
+    const shippingAddressJson = JSON.stringify(shipping_address);
+    
+    callbackConnection.query(createOrderQuery, [userId, total, shippingAddressJson], (err, orderResult) => {
+      if (err) {
+        console.error('Create order error:', err);
+        return res.status(500).json({ error: 'Failed to create order' });
+      }
+      
+      const orderId = orderResult.insertId;
+      
+      // Add order items
+      const orderItemsData = cartItems.map(item => [
+        orderId,
+        item.listing_id,
+        item.quantity,
+        item.price
+      ]);
+      
+      const addItemsQuery = `
+        INSERT INTO order_items (order_id, listing_id, quantity, price)
+        VALUES ?
+      `;
+      
+      callbackConnection.query(addItemsQuery, [orderItemsData], (err) => {
+        if (err) {
+          console.error('Add order items error:', err);
+          return res.status(500).json({ error: 'Failed to add order items' });
+        }
+        
+        // Clear cart after successful order creation
+        const clearCartQuery = 'DELETE FROM cart WHERE user_id = ?';
+        callbackConnection.query(clearCartQuery, [userId], (err) => {
+          if (err) {
+            console.warn('Clear cart warning:', err);
+            // Don't fail the order if cart clearing fails
+          }
+          
+          res.json({
+            success: true,
+            order_id: orderId,
+            total: total,
+            message: 'Order created successfully'
+          });
+        });
+      });
+    });
+  });
+});
 
 // Messages page route - FIXED VERSION WITH PROPER DATA LOADING
 router.get('/messages', (req, res) => {
