@@ -939,6 +939,8 @@ router.get('/api/conversations/:conversationId/messages', (req, res) => {
         m.is_read,
         m.message_type,
         m.sender_type,
+        m.is_deleted,
+        m.deleted_for_user,
         
         -- Get conversation info for context
         c.listing_id
@@ -1196,6 +1198,129 @@ router.post('/api/conversations', (req, res) => {
           });
         }
       });
+    });
+  });
+});
+
+// API: Delete a message - FIXED VERSION
+router.delete('/api/conversations/:conversationId/messages/:messageId', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const conversationId = req.params.conversationId;
+  const messageId = req.params.messageId;
+  const userId = req.session.user.id || req.session.user.user_id;
+  const { delete_type } = req.body;
+
+  console.log('Delete message request:', { conversationId, messageId, userId, delete_type });
+
+  if (!['for_me', 'for_everyone'].includes(delete_type)) {
+    return res.status(400).json({ error: 'Invalid delete type' });
+  }
+
+  // Verify access to conversation
+  const accessQuery = `
+    SELECT conversation_id 
+    FROM conversations 
+    WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
+  `;
+
+  callbackConnection.query(accessQuery, [conversationId, userId, userId], (err, access) => {
+    if (err) {
+      console.error('Error checking conversation access:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (access.length === 0) {
+      return res.status(403).json({ error: 'Access denied to this conversation' });
+    }
+
+    // Check if user owns the message
+    const messageQuery = `
+      SELECT sender_id, is_deleted, deleted_for_user 
+      FROM messages 
+      WHERE message_id = ? AND conversation_id = ?
+    `;
+
+    callbackConnection.query(messageQuery, [messageId, conversationId], (err, messages) => {
+      if (err) {
+        console.error('Error checking message:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      if (messages.length === 0) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+
+      const message = messages[0];
+
+      if (delete_type === 'for_everyone' && message.sender_id !== userId) {
+        return res.status(403).json({ error: 'You can only delete your own messages for everyone' });
+      }
+
+      if (delete_type === 'for_everyone') {
+        // Delete for everyone - mark as deleted but keep content as placeholder
+        const updateQuery = `
+          UPDATE messages 
+          SET is_deleted = 1, message_content = '[This message was deleted]', image_url = NULL
+          WHERE message_id = ?
+        `;
+
+        callbackConnection.query(updateQuery, [messageId], (err, result) => {
+          if (err) {
+            console.error('Error deleting message for everyone:', err);
+            return res.status(500).json({ error: 'Failed to delete message' });
+          }
+
+          if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Message not found' });
+          }
+
+          console.log('Message deleted for everyone successfully');
+          res.json({ 
+            success: true, 
+            message: 'Message deleted for everyone'
+          });
+        });
+      } else {
+        // Delete for me - add user to deleted_for_user list
+        let deletedForUser = [];
+        if (message.deleted_for_user) {
+          try {
+            deletedForUser = JSON.parse(message.deleted_for_user);
+          } catch (e) {
+            deletedForUser = [];
+          }
+        }
+
+        if (!deletedForUser.includes(userId)) {
+          deletedForUser.push(userId);
+        }
+
+        const updateQuery = `
+          UPDATE messages 
+          SET deleted_for_user = ?
+          WHERE message_id = ?
+        `;
+
+        callbackConnection.query(updateQuery, [JSON.stringify(deletedForUser), messageId], (err, result) => {
+          if (err) {
+            console.error('Error deleting message for user:', err);
+            return res.status(500).json({ error: 'Failed to delete message' });
+          }
+
+          if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Message not found' });
+          }
+
+          console.log('Message deleted for user successfully');
+          res.json({ 
+            success: true, 
+            message: 'Message deleted for you'
+          });
+        });
+      }
     });
   });
 });
