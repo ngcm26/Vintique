@@ -5,6 +5,14 @@ const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 const mysql = require('mysql2/promise');
 
+const dbConfig = {
+  host: 'localhost',
+  user: 'root',
+  password: '', //Add your own password here
+  database: 'vintiquedb',
+  port: 3306
+};
+
 // Staff Dashboard
 router.get('/staff/dashboard', requireStaff, (req, res) => {
   // Get basic stats for dashboard
@@ -95,22 +103,23 @@ router.get('/staff/staff_management', requireStaff, (req, res) => {
   });
 });
 
-// Q&A Management - accessible to both staff and admin
+// Q&A Management - FIXED VERSION FOR YOUR DATABASE STRUCTURE
 router.get('/staff/qa', requireStaff, (req, res) => {
   const qaQuery = `
     SELECT 
       q.qa_id,
       q.asker_id,
       q.asker_username,
-      q.asker_email,
+      u.email as asker_email,
       q.category,
       q.question_text,
       q.details,
       q.asked_at,
       q.is_verified,
-      q.helpful_count,
+      COALESCE((SELECT COUNT(*) FROM qa_votes WHERE qa_id = q.qa_id), 0) as helpful_count,
       q.created_at
     FROM qa q
+    LEFT JOIN users u ON q.asker_id = u.user_id
     ORDER BY q.asked_at DESC
   `;
   
@@ -141,10 +150,11 @@ router.get('/staff/qa', requireStaff, (req, res) => {
         qa_id,
         answerer_id,
         answerer_username,
-        answerer_email,
+        u.email as answerer_email,
         answer_content,
         answered_at
-      FROM qa_answers
+      FROM qa_answers qa_ans
+      LEFT JOIN users u ON qa_ans.answerer_id = u.user_id
       WHERE qa_id IN (${questionIds.map(() => '?').join(',')})
       ORDER BY answered_at ASC
     `;
@@ -195,7 +205,7 @@ router.get('/api/qa/pending-count', requireStaff, (req, res) => {
   });
 });
 
-// Search/filter questions for staff - FIXED VERSION WITH ANSWER_ID
+// Search/filter questions for staff - FIXED VERSION FOR YOUR DATABASE STRUCTURE
 router.get('/api/staff/qa/search', requireStaff, (req, res) => {
   const { search, status } = req.query;
   let whereConditions = [];
@@ -219,15 +229,16 @@ router.get('/api/staff/qa/search', requireStaff, (req, res) => {
       q.qa_id,
       q.asker_id,
       q.asker_username,
-      q.asker_email,
+      u.email as asker_email,
       q.category,
       q.question_text,
       q.details,
       q.asked_at,
       q.is_verified,
-      q.helpful_count,
+      COALESCE((SELECT COUNT(*) FROM qa_votes WHERE qa_id = q.qa_id), 0) as helpful_count,
       q.created_at
     FROM qa q
+    LEFT JOIN users u ON q.asker_id = u.user_id
     ${whereClause}
     ORDER BY q.asked_at DESC
   `;
@@ -250,10 +261,11 @@ router.get('/api/staff/qa/search', requireStaff, (req, res) => {
         qa_id,
         answerer_id,
         answerer_username,
-        answerer_email,
+        u.email as answerer_email,
         answer_content,
         answered_at
-      FROM qa_answers
+      FROM qa_answers qa_ans
+      LEFT JOIN users u ON qa_ans.answerer_id = u.user_id
       WHERE qa_id IN (${questionIds.map(() => '?').join(',')})
       ORDER BY answered_at ASC
     `;
@@ -293,15 +305,14 @@ router.post('/api/qa/:qaId/answer', requireStaff, (req, res) => {
   }
 
   const insertQuery = `
-    INSERT INTO qa_answers (qa_id, answerer_id, answerer_username, answerer_email, answer_content, answered_at)
-    VALUES (?, ?, ?, ?, ?, NOW())
+    INSERT INTO qa_answers (qa_id, answerer_id, answerer_username, answer_content, answered_at)
+    VALUES (?, ?, ?, ?, NOW())
   `;
 
   const values = [
     qaId,
     req.session.user.id,
     req.session.user.username || req.session.user.email.split('@')[0],
-    req.session.user.email,
     answer_content
   ];
 
@@ -817,10 +828,6 @@ router.delete('/users/:userId', requireStaff, (req, res) => {
   });
 });
 
-module.exports = router;
-
-
-
 // Chatbot dashboard
 router.get('/staff/dashboard-intents', async (req, res) => {
   const conn = await mysql.createConnection(dbConfig);
@@ -837,7 +844,6 @@ router.get('/staff/dashboard-intents', async (req, res) => {
   await conn.end();
   res.json(topIntents); // or pass to Handlebars view
 });
-
 
 //Daily intent count for chatbot dashboard section
 router.get('/staff/dashboard-intents-daily', async (req, res) => {
@@ -879,3 +885,5 @@ router.get('/staff/dashboard-intents-daily', async (req, res) => {
 
   res.json({ labels: allDates, datasets });
 });
+
+module.exports = router;

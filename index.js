@@ -91,7 +91,7 @@ app.engine('handlebars', engine({
       if (typeof str !== 'string') return '';
       return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
     },
-    // ADD THE MISSING SUBSTRING HELPER:
+    // FIXED: Add the missing substring helper
     substring: function(str, start, end) {
       if (typeof str !== 'string') return '';
       return str.substring(start, end);

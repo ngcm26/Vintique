@@ -14,7 +14,6 @@ const dbConfig = {
   port: 3306
 };
 
-
 // Home route
 router.get('/', (req, res) => {
   res.render('users/home', { 
@@ -164,7 +163,7 @@ router.get('/my_listing', (req, res) => {
   });
 });
 
-// Q&A route - FIXED VERSION
+// Q&A route - FIXED VERSION FOR YOUR DATABASE STRUCTURE
 router.get('/qa', (req, res) => {
   // Q&A page should be accessible to all users, but certain features require login
   const qaQuery = `
@@ -172,15 +171,16 @@ router.get('/qa', (req, res) => {
       q.qa_id,
       q.asker_id,
       q.asker_username,
-      q.asker_email,
+      u.email as asker_email,
       q.category,
       q.question_text,
       q.details,
       q.asked_at,
       q.is_verified,
-      q.helpful_count,
+      COALESCE((SELECT COUNT(*) FROM qa_votes WHERE qa_id = q.qa_id), 0) as helpful_count,
       q.created_at
     FROM qa q
+    LEFT JOIN users u ON q.asker_id = u.user_id
     WHERE q.is_verified = 1
     ORDER BY q.asked_at DESC
   `;
@@ -208,15 +208,16 @@ router.get('/qa', (req, res) => {
     const questionIds = questions.map(q => q.qa_id);
     const answersQuery = `
       SELECT 
-        qa_id,
-        answerer_id,
-        answerer_username,
-        answerer_email,
-        answer_content,
-        answered_at
-      FROM qa_answers
-      WHERE qa_id IN (${questionIds.map(() => '?').join(',')})
-      ORDER BY answered_at ASC
+        qa_ans.qa_id,
+        qa_ans.answerer_id,
+        qa_ans.answerer_username,
+        u.email as answerer_email,
+        qa_ans.answer_content,
+        qa_ans.answered_at
+      FROM qa_answers qa_ans
+      LEFT JOIN users u ON qa_ans.answerer_id = u.user_id
+      WHERE qa_ans.qa_id IN (${questionIds.map(() => '?').join(',')})
+      ORDER BY qa_ans.answered_at ASC
     `;
 
     callbackConnection.query(answersQuery, questionIds, (err, answers) => {
@@ -261,7 +262,6 @@ router.get('/cart', (req, res) => {
   });
 });
 
-
 // Account Settings route
 router.get('/account-settings', (req, res) => {
   if (!req.session.user) {
@@ -288,14 +288,13 @@ router.post('/api/qa', (req, res) => {
   }
 
   const insertQuery = `
-    INSERT INTO qa (asker_id, asker_username, asker_email, category, question_text, details, asked_at, is_verified, helpful_count, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, NOW(), 0, 0, NOW())
+    INSERT INTO qa (asker_id, asker_username, category, question_text, details, asked_at, is_verified, created_at)
+    VALUES (?, ?, ?, ?, ?, NOW(), 0, NOW())
   `;
 
   const values = [
     req.session.user.id,
     req.session.user.username || req.session.user.email.split('@')[0],
-    req.session.user.email,
     category,
     question_text,
     details || null
@@ -329,15 +328,14 @@ router.post('/api/qa/:qaId/answer', (req, res) => {
   }
 
   const insertQuery = `
-    INSERT INTO qa_answers (qa_id, answerer_id, answerer_username, answerer_email, answer_content, answered_at)
-    VALUES (?, ?, ?, ?, ?, NOW())
+    INSERT INTO qa_answers (qa_id, answerer_id, answerer_username, answer_content, answered_at)
+    VALUES (?, ?, ?, ?, NOW())
   `;
 
   const values = [
     qaId,
     req.session.user.id,
     req.session.user.username || req.session.user.email.split('@')[0],
-    req.session.user.email,
     answer_content
   ];
 
@@ -382,16 +380,15 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
           return res.status(500).json({ error: 'Failed to remove vote' });
         }
 
-        // Update helpful count
-        const updateCountQuery = 'UPDATE qa SET helpful_count = helpful_count - 1 WHERE qa_id = ?';
+        // Update helpful count (using votes table since no helpful_count column)
+        const updateCountQuery = 'UPDATE qa_votes SET qa_id = qa_id WHERE qa_id = ?'; // Dummy update
         callbackConnection.query(updateCountQuery, [qaId], (err) => {
           if (err) {
-            console.error('Error updating count:', err);
-            return res.status(500).json({ error: 'Failed to update count' });
+            console.warn('Vote count update not needed:', err);
           }
 
-          // Get updated count
-          const getCountQuery = 'SELECT helpful_count FROM qa WHERE qa_id = ?';
+          // Get updated count from votes table
+          const getCountQuery = 'SELECT COUNT(*) as helpful_count FROM qa_votes WHERE qa_id = ?';
           callbackConnection.query(getCountQuery, [qaId], (err, result) => {
             if (err) {
               console.error('Error getting count:', err);
@@ -414,16 +411,15 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
           return res.status(500).json({ error: 'Failed to add vote' });
         }
 
-        // Update helpful count
-        const updateCountQuery = 'UPDATE qa SET helpful_count = helpful_count + 1 WHERE qa_id = ?';
+        // Update helpful count (using votes table since no helpful_count column)
+        const updateCountQuery = 'UPDATE qa_votes SET qa_id = qa_id WHERE qa_id = ?'; // Dummy update
         callbackConnection.query(updateCountQuery, [qaId], (err) => {
           if (err) {
-            console.error('Error updating count:', err);
-            return res.status(500).json({ error: 'Failed to update count' });
+            console.warn('Vote count update not needed:', err);
           }
 
-          // Get updated count
-          const getCountQuery = 'SELECT helpful_count FROM qa WHERE qa_id = ?';
+          // Get updated count from votes table
+          const getCountQuery = 'SELECT COUNT(*) as helpful_count FROM qa_votes WHERE qa_id = ?';
           callbackConnection.query(getCountQuery, [qaId], (err, result) => {
             if (err) {
               console.error('Error getting count:', err);
@@ -947,7 +943,6 @@ router.get('/api/listings', (req, res) => {
   });
 });
 
-
 /// ------------------------ Product Review Routing ------------------------------
 router.get('/api/listings/:listingId/reviews', (req, res) => {
   const listingId = req.params.listingId;
@@ -976,9 +971,6 @@ router.get('/api/listings/:listingId/reviews', (req, res) => {
     res.json({ reviews: results });
   });
 });
-
-
-
 
 // Orders History
 router.get('/orders', async (req, res) => {
@@ -1025,7 +1017,6 @@ router.get('/orders', async (req, res) => {
 });
 
 //to get order details
-
 router.get('/orders/details/:orderId', async (req, res) => {
   const userId = req.session.user.user_id;
   const orderId = req.params.orderId;
