@@ -1969,4 +1969,155 @@ router.get('/orders/details/:orderId', async (req, res) => {
   }
 });
 
+router.post('/orders/update-status/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+  const orderId = req.params.orderId;
+  const { status } = req.body;
+  const userId = req.session.user.user_id || req.session.user.id;
+
+  // Only allow update if user is the seller of ANY item in the order
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+  try {
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM order_items oi 
+        JOIN listings l ON oi.listing_id = l.listing_id
+        WHERE oi.order_id = ? AND l.user_id = ?`, [orderId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    await conn.execute(`UPDATE orders SET status = ? WHERE order_id = ?`, [status, orderId]);
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+
+router.post('/orders/mark-received/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+  const orderId = req.params.orderId;
+  const userId = req.session.user.user_id || req.session.user.id;
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+  try {
+    // Only allow if this user is buyer for the order
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM orders WHERE order_id = ? AND user_id = ?`, 
+      [orderId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    await conn.execute(`UPDATE orders SET status = 'completed' WHERE order_id = ?`, [orderId]);
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.post('/orders/archive/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+  const userId = req.session.user.user_id || req.session.user.id;
+  const orderId = req.params.orderId;
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+
+  try {
+    // Only allow archive if user is buyer or seller of this order
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM orders o
+        LEFT JOIN order_items oi ON o.order_id = oi.order_id
+        LEFT JOIN listings l ON oi.listing_id = l.listing_id
+       WHERE o.order_id = ? AND (o.user_id = ? OR l.user_id = ?)`,
+      [orderId, userId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    await conn.execute(`UPDATE orders SET archived = 1 WHERE order_id = ?`, [orderId]);
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.get('/orders/archived', async (req, res) => {
+  if (!req.session.user) return res.redirect('/login');
+  const userId = req.session.user.user_id || req.session.user.id;
+
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+
+  // Get archived purchases and sales
+  const [purchases] = await conn.execute(
+    `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image, oi.quantity, oi.price
+     FROM orders o
+     JOIN order_items oi ON o.order_id = oi.order_id
+     JOIN listings l ON oi.listing_id = l.listing_id
+     JOIN users u ON l.user_id = u.user_id
+     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+     WHERE o.user_id = ? AND o.archived = 1`, [userId]
+  );
+
+  const [sales] = await conn.execute(
+    `SELECT o.*, l.title AS listing_title, o.user_id AS buyer_id, u.email AS buyer_email, li.image_url AS listing_image, oi.quantity, oi.price
+     FROM orders o
+     JOIN order_items oi ON o.order_id = oi.order_id
+     JOIN listings l ON oi.listing_id = l.listing_id
+     JOIN users u ON o.user_id = u.user_id
+     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+     WHERE l.user_id = ? AND o.archived = 1`, [userId]
+  );
+
+  await conn.end();
+
+  res.render('users/orders_archived', {
+    layout: 'user',
+    activePage: 'orders',
+    purchases,
+    sales
+  });
+});
+
+
+router.post('/orders/delete/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+  const userId = req.session.user.user_id || req.session.user.id;
+  const orderId = req.params.orderId;
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+
+  try {
+    // Only allow if user is buyer or seller and order is archived & cancelled
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM orders o
+        LEFT JOIN order_items oi ON o.order_id = oi.order_id
+        LEFT JOIN listings l ON oi.listing_id = l.listing_id
+       WHERE o.order_id = ? AND o.archived = 1 AND o.status = 'cancelled' AND (o.user_id = ? OR l.user_id = ?)`,
+      [orderId, userId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized or not cancellable" });
+    }
+    // Delete order and cascade to order_items (if foreign key is ON DELETE CASCADE)
+    await conn.execute(`DELETE FROM orders WHERE order_id = ?`, [orderId]);
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
 module.exports = router;
+
