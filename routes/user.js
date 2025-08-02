@@ -1846,24 +1846,25 @@ router.get('/api/listings', (req, res) => {
   });
 });
 
-// Product Review Routing
+// -------------------------- Product Review Routing -----------------------------
 router.get('/api/listings/:listingId/reviews', (req, res) => {
   const listingId = req.params.listingId;
 
   const reviewQuery = `
-    SELECT 
-      r.reviewID,
-      r.rating,
-      r.reviewText,
-      r.createdAt,
-      u.user_id,
-      u.username,
-      u.profile_picture
-    FROM reviews r
-    JOIN users u ON r.userID = u.user_id
-    WHERE r.listingID = ? AND r.approved = 1
-    ORDER BY r.createdAt DESC
-  `;
+  SELECT 
+    r.reviewID,
+    r.rating,
+    r.reviewText,
+    r.createdAt,
+    ui.user_id,
+    ui.username,
+    ui.profile_image_url
+  FROM reviews r
+  JOIN user_information ui ON r.userID = ui.user_id
+  WHERE r.listingID = ? AND r.approved = 1
+  ORDER BY r.createdAt DESC
+`;
+
 
   callbackConnection.query(reviewQuery, [listingId], (err, results) => {
     if (err) {
