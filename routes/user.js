@@ -1,7 +1,7 @@
 // ========== USER ROUTES ==========
 const express = require('express');
 const router = express.Router();
-const { callbackConnection, createConnection } = require('../config/database'); // Add createConnection import
+const { callbackConnection, createConnection } = require('../config/database');
 const { upload } = require('../config/multer');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 const mysql = require('mysql2/promise');
@@ -45,7 +45,7 @@ router.get('/marketplace', (req, res) => {
   const params = [];
   if (req.session.user && req.session.user.role === 'user') {
     sql += ' AND l.user_id != ?';
-    params.push(req.session.user.id);
+    params.push(req.session.user.id || req.session.user.user_id);
   }
   sql += '\n    ORDER BY l.created_at DESC';
   callbackConnection.query(sql, params, (err, listings) => {
@@ -83,10 +83,10 @@ router.get('/post_product', (req, res) => {
 
 // Post Product POST
 router.post('/post_product', upload.array('images', 5), (req, res) => {
-  if (!req.session.user || !req.session.user.id) {
+  if (!req.session.user || (!req.session.user.id && !req.session.user.user_id)) {
     return res.status(401).send('You must be logged in to post a product.');
   }
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const { title, description, brand, size, category, condition, price } = req.body;
   const images = req.files;
 
@@ -130,7 +130,7 @@ router.get('/my_listing', (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.redirect('/login');
   }
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const sql = `
     SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.status, l.created_at, l.updated_at, l.brand, l.size,
           (
@@ -248,7 +248,8 @@ router.get('/listing/:id', (req, res) => {
       res.render('users/product_detail', {
         layout: 'user',
         listing: listing,
-        user: req.session.user
+        user: req.session.user,
+        userJson: JSON.stringify(req.session.user || null)
       });
     });
   });
@@ -261,7 +262,7 @@ router.get('/edit_listing/:id', (req, res) => {
   }
   
   const listingId = req.params.id;
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   
   // Get listing details with images
   const listingQuery = `
@@ -333,7 +334,7 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
   }
   
   const listingId = req.params.id;
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const { title, description, brand, size, category, item_condition, price } = req.body;
   const newImages = req.files;
   
@@ -394,7 +395,7 @@ router.post('/listings/:id/mark_sold', (req, res) => {
   }
   
   const listingId = req.params.id;
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   
   const updateQuery = `
     UPDATE listings 
@@ -423,7 +424,7 @@ router.delete('/listings/:id', (req, res) => {
   }
   
   const listingId = req.params.id;
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   
   // Start transaction
   callbackConnection.beginTransaction((err) => {
@@ -480,7 +481,7 @@ router.post('/delete_image', (req, res) => {
   }
   
   const { imgUrl, listingId } = req.body;
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   
   if (!imgUrl || !listingId) {
     return res.status(400).json({ error: 'Image URL and listing ID are required' });
@@ -515,9 +516,8 @@ router.post('/delete_image', (req, res) => {
   });
 });
 
-// Q&A route - FIXED VERSION FOR YOUR DATABASE STRUCTURE
+// Q&A route
 router.get('/qa', (req, res) => {
-  // Q&A page should be accessible to all users, but certain features require login
   const qaQuery = `
     SELECT 
       q.qa_id,
@@ -548,7 +548,6 @@ router.get('/qa', (req, res) => {
       });
     }
 
-    // For each question, get its answers
     if (questions.length === 0) {
       return res.render('users/qa', {
         layout: 'user',
@@ -575,10 +574,9 @@ router.get('/qa', (req, res) => {
     callbackConnection.query(answersQuery, questionIds, (err, answers) => {
       if (err) {
         console.error('Q&A answers error:', err);
-        // Continue without answers rather than failing completely
+        answers = [];
       }
 
-      // Group answers by question ID
       const answersByQuestionId = {};
       if (answers) {
         answers.forEach(answer => {
@@ -589,7 +587,6 @@ router.get('/qa', (req, res) => {
         });
       }
 
-      // Add answers to questions
       questions.forEach(question => {
         question.answers = answersByQuestionId[question.qa_id] || [];
       });
@@ -625,6 +622,584 @@ router.get('/account-settings', (req, res) => {
   });
 });
 
+// Messages page route - FIXED VERSION FOR YOUR DATABASE SCHEMA
+router.get('/messages', (req, res) => {
+  if (!req.session.user) {
+    return res.redirect('/login');
+  }
+
+  const userId = req.session.user.id || req.session.user.user_id;
+  console.log('Loading messages for user:', userId);
+  
+  const conversationsQuery = `
+    SELECT 
+      c.conversation_id,
+      c.buyer_id,
+      c.seller_id,
+      c.listing_id,
+      c.buyer_username,
+      c.seller_username,
+      c.created_at,
+      c.updated_at,
+      c.status,
+      
+      CASE 
+        WHEN c.buyer_id = ? THEN c.seller_username
+        ELSE c.buyer_username
+      END as other_user_name,
+      
+      l.title as listing_title,
+      l.price as listing_price,
+      
+      (SELECT message_content 
+       FROM messages m2 
+       WHERE m2.conversation_id = c.conversation_id 
+       ORDER BY m2.sent_at DESC 
+       LIMIT 1) as last_message_preview,
+       
+      (SELECT sent_at 
+       FROM messages m2 
+       WHERE m2.conversation_id = c.conversation_id 
+       ORDER BY m2.sent_at DESC 
+       LIMIT 1) as last_message_time,
+       
+      (SELECT COUNT(*) 
+       FROM messages m3 
+       WHERE m3.conversation_id = c.conversation_id 
+       AND m3.sender_id != ? 
+       AND m3.is_read = 0) as unread_count
+       
+    FROM conversations c
+    LEFT JOIN listings l ON c.listing_id = l.listing_id
+    WHERE c.buyer_id = ? OR c.seller_id = ?
+    ORDER BY COALESCE(
+      (SELECT sent_at FROM messages m2 WHERE m2.conversation_id = c.conversation_id ORDER BY m2.sent_at DESC LIMIT 1),
+      c.created_at
+    ) DESC
+  `;
+
+  callbackConnection.query(conversationsQuery, [userId, userId, userId, userId], (err, conversations) => {
+    if (err) {
+      console.error('Error loading conversations:', err);
+      return res.render('users/messages', {
+        layout: 'user',
+        activePage: 'messages',
+        conversations: [],
+        conversationsJson: JSON.stringify([]),
+        userJson: JSON.stringify(req.session.user),
+        error: 'Failed to load conversations'
+      });
+    }
+
+    console.log('Found conversations:', conversations.length);
+
+    const processedConversations = conversations.map(conv => ({
+      ...conv,
+      other_user_name: conv.other_user_name || 'Unknown User',
+      last_message_preview: conv.last_message_preview || 'No messages yet'
+    }));
+
+    res.render('users/messages', {
+      layout: 'user',
+      activePage: 'messages',
+      conversations: processedConversations,
+      conversationsJson: JSON.stringify(processedConversations),
+      userJson: JSON.stringify(req.session.user)
+    });
+  });
+});
+
+// Route to handle "Message Seller" from product details - FINAL FIXED VERSION
+router.post('/start-conversation', (req, res) => {
+  console.log('=== START CONVERSATION REQUEST ===');
+  console.log('Request body:', req.body);
+  console.log('User session:', req.session.user);
+  
+  if (!req.session.user) {
+    console.log('❌ User not authenticated');
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const buyerId = req.session.user.id || req.session.user.user_id;
+  const { listing_id, message } = req.body;
+
+  console.log('Processing request:', {
+    buyerId,
+    listing_id,
+    messageLength: message?.length
+  });
+
+  if (!listing_id || !message) {
+    console.log('❌ Missing required fields');
+    return res.status(400).json({ error: 'Listing ID and message are required' });
+  }
+
+  // First, get buyer information (username/email)
+  const getBuyerQuery = `
+    SELECT u.user_id, u.email, ui.username
+    FROM users u
+    LEFT JOIN user_information ui ON u.user_id = ui.user_id
+    WHERE u.user_id = ?
+  `;
+
+  callbackConnection.query(getBuyerQuery, [buyerId], (err, buyerData) => {
+    if (err) {
+      console.error('❌ Error getting buyer data:', err);
+      return res.status(500).json({ error: 'Database error while getting buyer info' });
+    }
+
+    if (buyerData.length === 0) {
+      console.log('❌ Buyer not found');
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const buyer = buyerData[0];
+    const buyerUsername = buyer.username || buyer.email.split('@')[0];
+
+    console.log('✅ Buyer found:', { buyerId, buyerUsername, email: buyer.email });
+
+    // Get listing and seller information
+    const listingQuery = `
+      SELECT l.listing_id, l.title, l.user_id as seller_id, u.email as seller_email, ui.username as seller_username
+      FROM listings l
+      JOIN users u ON l.user_id = u.user_id
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE l.listing_id = ? AND l.status = 'active'
+    `;
+
+    console.log('🔍 Searching for listing:', listing_id);
+
+    callbackConnection.query(listingQuery, [listing_id], (err, listings) => {
+      if (err) {
+        console.error('❌ Error finding listing:', err);
+        return res.status(500).json({ error: 'Database error while finding listing' });
+      }
+
+      console.log('📦 Listing query result:', listings);
+
+      if (listings.length === 0) {
+        console.log('❌ Listing not found');
+        return res.status(404).json({ error: 'Listing not found or no longer available' });
+      }
+
+      const listing = listings[0];
+      const sellerUsername = listing.seller_username || listing.seller_email.split('@')[0];
+
+      console.log('✅ Listing found:', {
+        listing_id: listing.listing_id,
+        title: listing.title,
+        seller_id: listing.seller_id,
+        sellerUsername
+      });
+
+      if (listing.seller_id === buyerId) {
+        console.log('❌ User trying to message themselves');
+        return res.status(400).json({ error: 'Cannot message yourself about your own listing' });
+      }
+
+      // Check if conversation already exists
+      const existingConvQuery = `
+        SELECT conversation_id 
+        FROM conversations 
+        WHERE buyer_id = ? AND seller_id = ? AND listing_id = ?
+      `;
+
+      console.log('🔍 Checking for existing conversation');
+
+      callbackConnection.query(existingConvQuery, [buyerId, listing.seller_id, listing_id], (err, existing) => {
+        if (err) {
+          console.error('❌ Error checking existing conversation:', err);
+          return res.status(500).json({ error: 'Database error while checking conversations' });
+        }
+
+        console.log('💬 Existing conversation check:', existing.length > 0 ? 'Found' : 'Not found');
+
+        if (existing.length > 0) {
+          // Conversation exists, send message to existing conversation
+          const conversationId = existing[0].conversation_id;
+          console.log('✅ Using existing conversation:', conversationId);
+          
+          const insertMessageQuery = `
+            INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
+            VALUES (?, ?, ?, ?, NOW(), 0, 'text', 'buyer')
+          `;
+
+          console.log('📝 Inserting message to existing conversation');
+
+          callbackConnection.query(insertMessageQuery, [conversationId, buyerId, buyerUsername, message], (err, messageResult) => {
+            if (err) {
+              console.error('❌ Error sending message to existing conversation:', err);
+              return res.status(500).json({ error: 'Failed to send message: ' + err.message });
+            }
+
+            console.log('✅ Message sent to existing conversation');
+
+            res.json({ 
+              success: true, 
+              conversation_id: conversationId,
+              message: 'Message sent successfully',
+              existing: true
+            });
+          });
+        } else {
+          // Create new conversation with all required fields
+          console.log('🆕 Creating new conversation');
+          
+          const createConvQuery = `
+            INSERT INTO conversations (buyer_id, seller_id, listing_id, buyer_username, seller_username, created_at, updated_at, status)
+            VALUES (?, ?, ?, ?, ?, NOW(), NOW(), 'active')
+          `;
+
+          const convParams = [buyerId, listing.seller_id, listing_id, buyerUsername, sellerUsername];
+          console.log('🆕 Conversation params:', convParams);
+
+          callbackConnection.query(createConvQuery, convParams, (err, convResult) => {
+            if (err) {
+              console.error('❌ Error creating conversation:', err);
+              return res.status(500).json({ error: 'Failed to create conversation: ' + err.message });
+            }
+
+            const conversationId = convResult.insertId;
+            console.log('✅ New conversation created:', conversationId);
+
+            // Send the initial message
+            const insertMessageQuery = `
+              INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
+              VALUES (?, ?, ?, ?, NOW(), 0, 'text', 'buyer')
+            `;
+
+            console.log('📝 Inserting initial message');
+
+            callbackConnection.query(insertMessageQuery, [conversationId, buyerId, buyerUsername, message], (err, messageResult) => {
+              if (err) {
+                console.error('❌ Error sending initial message:', err);
+                
+                // Clean up the conversation if message fails
+                callbackConnection.query('DELETE FROM conversations WHERE conversation_id = ?', [conversationId], (cleanupErr) => {
+                  if (cleanupErr) {
+                    console.error('Error cleaning up conversation:', cleanupErr);
+                  }
+                });
+                
+                return res.status(500).json({ error: 'Failed to send initial message: ' + err.message });
+              }
+
+              console.log('✅ Initial message sent successfully');
+
+              res.json({ 
+                success: true, 
+                conversation_id: conversationId,
+                message: 'Conversation started successfully',
+                existing: false
+              });
+            });
+          });
+        }
+      });
+    });
+  });
+});
+
+// API: Get messages for a conversation - FIXED VERSION
+router.get('/api/conversations/:conversationId/messages', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const conversationId = req.params.conversationId;
+  const userId = req.session.user.id || req.session.user.user_id;
+
+  // First, verify user has access to this conversation
+  const accessQuery = `
+    SELECT conversation_id 
+    FROM conversations 
+    WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
+  `;
+
+  callbackConnection.query(accessQuery, [conversationId, userId, userId], (err, access) => {
+    if (err) {
+      console.error('Error checking conversation access:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (access.length === 0) {
+      return res.status(403).json({ error: 'Access denied to this conversation' });
+    }
+
+    // Get all messages for this conversation - Updated for your schema
+    const messagesQuery = `
+      SELECT 
+        m.message_id,
+        m.conversation_id,
+        m.sender_id,
+        m.sender_username,
+        m.message_content,
+        m.image_url,
+        m.sent_at,
+        m.is_read,
+        m.message_type,
+        m.sender_type,
+        
+        -- Get conversation info for context
+        c.listing_id
+        
+      FROM messages m
+      LEFT JOIN conversations c ON m.conversation_id = c.conversation_id
+      WHERE m.conversation_id = ?
+      ORDER BY m.sent_at ASC
+    `;
+
+    callbackConnection.query(messagesQuery, [conversationId], (err, messages) => {
+      if (err) {
+        console.error('Error loading messages:', err);
+        return res.status(500).json({ error: 'Failed to load messages' });
+      }
+
+      // Mark messages as read for the current user
+      const markReadQuery = `
+        UPDATE messages 
+        SET is_read = 1 
+        WHERE conversation_id = ? AND sender_id != ? AND is_read = 0
+      `;
+
+      callbackConnection.query(markReadQuery, [conversationId, userId], (markErr) => {
+        if (markErr) {
+          console.warn('Error marking messages as read:', markErr);
+        }
+      });
+
+      res.json(messages);
+    });
+  });
+});
+
+// API: Send a message - FIXED VERSION
+router.post('/api/conversations/:conversationId/messages', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const conversationId = req.params.conversationId;
+  const userId = req.session.user.id || req.session.user.user_id;
+  const { message_content } = req.body;
+
+  // Get user's username
+  const getUserQuery = `
+    SELECT u.email, ui.username
+    FROM users u
+    LEFT JOIN user_information ui ON u.user_id = ui.user_id
+    WHERE u.user_id = ?
+  `;
+
+  callbackConnection.query(getUserQuery, [userId], (err, userData) => {
+    if (err) {
+      console.error('Error getting user data:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (userData.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userData[0];
+    const username = user.username || user.email.split('@')[0];
+
+    // Verify access to conversation
+    const accessQuery = `
+      SELECT conversation_id, buyer_id, seller_id 
+      FROM conversations 
+      WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
+    `;
+
+    callbackConnection.query(accessQuery, [conversationId, userId, userId], (err, access) => {
+      if (err) {
+        console.error('Error checking conversation access:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      if (access.length === 0) {
+        return res.status(403).json({ error: 'Access denied to this conversation' });
+      }
+
+      if (!message_content || message_content.trim() === '') {
+        return res.status(400).json({ error: 'Message content is required' });
+      }
+
+      const conversation = access[0];
+      const senderType = conversation.buyer_id === userId ? 'buyer' : 'seller';
+
+      // Insert the message
+      const insertQuery = `
+        INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
+        VALUES (?, ?, ?, ?, NOW(), 0, 'text', ?)
+      `;
+
+      callbackConnection.query(insertQuery, [conversationId, userId, username, message_content.trim(), senderType], (err, result) => {
+        if (err) {
+          console.error('Error sending message:', err);
+          return res.status(500).json({ error: 'Failed to send message' });
+        }
+
+        // Update conversation timestamp
+        const updateConvQuery = `
+          UPDATE conversations 
+          SET updated_at = NOW() 
+          WHERE conversation_id = ?
+        `;
+
+        callbackConnection.query(updateConvQuery, [conversationId], (updateErr) => {
+          if (updateErr) {
+            console.warn('Error updating conversation timestamp:', updateErr);
+          }
+        });
+
+        res.json({ 
+          success: true, 
+          message_id: result.insertId,
+          message: 'Message sent successfully'
+        });
+      });
+    });
+  });
+});
+
+// API: Start a new conversation
+router.post('/api/conversations', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const buyerId = req.session.user.id || req.session.user.user_id;
+  const { seller_email, initial_message, listing_id } = req.body;
+
+  if (!seller_email || !initial_message) {
+    return res.status(400).json({ error: 'Seller email and initial message are required' });
+  }
+
+  // Get buyer username
+  const getBuyerQuery = `
+    SELECT u.email, ui.username
+    FROM users u
+    LEFT JOIN user_information ui ON u.user_id = ui.user_id
+    WHERE u.user_id = ?
+  `;
+
+  callbackConnection.query(getBuyerQuery, [buyerId], (err, buyerData) => {
+    if (err) {
+      console.error('Error getting buyer data:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (buyerData.length === 0) {
+      return res.status(404).json({ error: 'Buyer not found' });
+    }
+
+    const buyerUsername = buyerData[0].username || buyerData[0].email.split('@')[0];
+
+    // Find the seller by email
+    const findSellerQuery = `
+      SELECT u.user_id, u.email, ui.username
+      FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.email = ?
+    `;
+    
+    callbackConnection.query(findSellerQuery, [seller_email], (err, sellers) => {
+      if (err) {
+        console.error('Error finding seller:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      if (sellers.length === 0) {
+        return res.status(404).json({ error: 'Seller not found' });
+      }
+
+      const seller = sellers[0];
+      const sellerId = seller.user_id;
+      const sellerUsername = seller.username || seller.email.split('@')[0];
+
+      if (sellerId === buyerId) {
+        return res.status(400).json({ error: 'Cannot start conversation with yourself' });
+      }
+
+      // Check if conversation already exists
+      const existingConvQuery = `
+        SELECT conversation_id 
+        FROM conversations 
+        WHERE buyer_id = ? AND seller_id = ? AND listing_id ${listing_id ? '= ?' : 'IS NULL'}
+      `;
+
+      const queryParams = listing_id ? [buyerId, sellerId, listing_id] : [buyerId, sellerId];
+
+      callbackConnection.query(existingConvQuery, queryParams, (err, existing) => {
+        if (err) {
+          console.error('Error checking existing conversation:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (existing.length > 0) {
+          // Conversation exists, just send the message
+          const conversationId = existing[0].conversation_id;
+          
+          const insertMessageQuery = `
+            INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
+            VALUES (?, ?, ?, ?, NOW(), 0, 'text', 'buyer')
+          `;
+
+          callbackConnection.query(insertMessageQuery, [conversationId, buyerId, buyerUsername, initial_message], (err) => {
+            if (err) {
+              console.error('Error sending message to existing conversation:', err);
+              return res.status(500).json({ error: 'Failed to send message' });
+            }
+
+            res.json({ 
+              success: true, 
+              conversation_id: conversationId,
+              message: 'Message sent to existing conversation'
+            });
+          });
+        } else {
+          // Create new conversation
+          const createConvQuery = `
+            INSERT INTO conversations (buyer_id, seller_id, listing_id, buyer_username, seller_username, created_at, updated_at, status)
+            VALUES (?, ?, ?, ?, ?, NOW(), NOW(), 'active')
+          `;
+
+          const convParams = [buyerId, sellerId, listing_id || null, buyerUsername, sellerUsername];
+
+          callbackConnection.query(createConvQuery, convParams, (err, convResult) => {
+            if (err) {
+              console.error('Error creating conversation:', err);
+              return res.status(500).json({ error: 'Failed to create conversation' });
+            }
+
+            const conversationId = convResult.insertId;
+
+            // Send the initial message
+            const insertMessageQuery = `
+              INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
+              VALUES (?, ?, ?, ?, NOW(), 0, 'text', 'buyer')
+            `;
+
+            callbackConnection.query(insertMessageQuery, [conversationId, buyerId, buyerUsername, initial_message], (err) => {
+              if (err) {
+                console.error('Error sending initial message:', err);
+                return res.status(500).json({ error: 'Failed to send initial message' });
+              }
+
+              res.json({ 
+                success: true, 
+                conversation_id: conversationId,
+                message: 'Conversation started successfully'
+              });
+            });
+          });
+        }
+      });
+    });
+  });
+});
+
 // ========== Q&A API ROUTES ==========
 
 // Submit new question
@@ -644,9 +1219,12 @@ router.post('/api/qa', (req, res) => {
     VALUES (?, ?, ?, ?, ?, NOW(), 0, NOW())
   `;
 
+  const userId = req.session.user.id || req.session.user.user_id;
+  const username = req.session.user.username || req.session.user.email.split('@')[0];
+
   const values = [
-    req.session.user.id,
-    req.session.user.username || req.session.user.email.split('@')[0],
+    userId,
+    username,
     category,
     question_text,
     details || null
@@ -684,10 +1262,13 @@ router.post('/api/qa/:qaId/answer', (req, res) => {
     VALUES (?, ?, ?, ?, NOW())
   `;
 
+  const userId = req.session.user.id || req.session.user.user_id;
+  const username = req.session.user.username || req.session.user.email.split('@')[0];
+
   const values = [
     qaId,
-    req.session.user.id,
-    req.session.user.username || req.session.user.email.split('@')[0],
+    userId,
+    username,
     answer_content
   ];
 
@@ -712,7 +1293,7 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
   }
 
   const qaId = req.params.qaId;
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
 
   // Check if user already voted
   const checkVoteQuery = 'SELECT * FROM qa_votes WHERE qa_id = ? AND user_id = ?';
@@ -732,25 +1313,17 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
           return res.status(500).json({ error: 'Failed to remove vote' });
         }
 
-        // Update helpful count (using votes table since no helpful_count column)
-        const updateCountQuery = 'UPDATE qa_votes SET qa_id = qa_id WHERE qa_id = ?'; // Dummy update
-        callbackConnection.query(updateCountQuery, [qaId], (err) => {
+        // Get updated count from votes table
+        const getCountQuery = 'SELECT COUNT(*) as helpful_count FROM qa_votes WHERE qa_id = ?';
+        callbackConnection.query(getCountQuery, [qaId], (err, result) => {
           if (err) {
-            console.warn('Vote count update not needed:', err);
+            console.error('Error getting count:', err);
+            return res.status(500).json({ error: 'Failed to get updated count' });
           }
 
-          // Get updated count from votes table
-          const getCountQuery = 'SELECT COUNT(*) as helpful_count FROM qa_votes WHERE qa_id = ?';
-          callbackConnection.query(getCountQuery, [qaId], (err, result) => {
-            if (err) {
-              console.error('Error getting count:', err);
-              return res.status(500).json({ error: 'Failed to get updated count' });
-            }
-
-            res.json({ 
-              voted: false, 
-              vote_count: result[0].helpful_count 
-            });
+          res.json({ 
+            voted: false, 
+            vote_count: result[0].helpful_count 
           });
         });
       });
@@ -763,25 +1336,17 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
           return res.status(500).json({ error: 'Failed to add vote' });
         }
 
-        // Update helpful count (using votes table since no helpful_count column)
-        const updateCountQuery = 'UPDATE qa_votes SET qa_id = qa_id WHERE qa_id = ?'; // Dummy update
-        callbackConnection.query(updateCountQuery, [qaId], (err) => {
+        // Get updated count from votes table
+        const getCountQuery = 'SELECT COUNT(*) as helpful_count FROM qa_votes WHERE qa_id = ?';
+        callbackConnection.query(getCountQuery, [qaId], (err, result) => {
           if (err) {
-            console.warn('Vote count update not needed:', err);
+            console.error('Error getting count:', err);
+            return res.status(500).json({ error: 'Failed to get updated count' });
           }
 
-          // Get updated count from votes table
-          const getCountQuery = 'SELECT COUNT(*) as helpful_count FROM qa_votes WHERE qa_id = ?';
-          callbackConnection.query(getCountQuery, [qaId], (err, result) => {
-            if (err) {
-              console.error('Error getting count:', err);
-              return res.status(500).json({ error: 'Failed to get updated count' });
-            }
-
-            res.json({ 
-              voted: true, 
-              vote_count: result[0].helpful_count 
-            });
+          res.json({ 
+            voted: true, 
+            vote_count: result[0].helpful_count 
           });
         });
       });
@@ -795,7 +1360,7 @@ router.get('/api/qa/votes/status', (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const query = 'SELECT qa_id FROM qa_votes WHERE user_id = ?';
   
   callbackConnection.query(query, [userId], (err, votes) => {
@@ -862,7 +1427,7 @@ router.get('/api/cart', (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
   
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const cartQuery = `
     SELECT 
       c.cart_id,
@@ -907,7 +1472,7 @@ router.post('/api/cart', (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
   
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const { listing_id, quantity = 1 } = req.body;
   
   if (!listing_id) {
@@ -978,7 +1543,7 @@ router.delete('/api/cart/:cartId', (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
   
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const cartId = req.params.cartId;
   
   const deleteQuery = 'DELETE FROM cart WHERE cart_id = ? AND user_id = ?';
@@ -1002,7 +1567,7 @@ router.delete('/api/cart', (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
   
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const deleteQuery = 'DELETE FROM cart WHERE user_id = ?';
   
   callbackConnection.query(deleteQuery, [userId], (err, result) => {
@@ -1023,7 +1588,7 @@ router.post('/api/checkout/single', (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
   
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const { listing_id } = req.body;
   
   if (!listing_id) {
@@ -1101,7 +1666,7 @@ router.post('/api/checkout', (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
   
-  const userId = req.session.user.id;
+  const userId = req.session.user.id || req.session.user.user_id;
   const { shipping_address } = req.body;
   
   // Get cart items
@@ -1202,366 +1767,6 @@ router.post('/api/checkout', (req, res) => {
   });
 });
 
-// Messages page route - FIXED VERSION WITH PROPER DATA LOADING
-router.get('/messages', (req, res) => {
-  if (!req.session.user) {
-    return res.redirect('/login');
-  }
-
-  const userId = req.session.user.id;
-  console.log('Loading messages for user:', userId);
-  
-  // Get all conversations for the user
-  const conversationsQuery = `
-    SELECT 
-      c.conversation_id,
-      c.buyer_id,
-      c.seller_id,
-      c.listing_id,
-      c.created_at,
-      c.updated_at,
-      c.status,
-      
-      -- Get the other user's info
-      CASE 
-        WHEN c.buyer_id = ? THEN seller_info.first_name
-        ELSE buyer_info.first_name
-      END as other_user_name,
-      
-      CASE 
-        WHEN c.buyer_id = ? THEN seller_info.email
-        ELSE buyer_info.email
-      END as other_user_email,
-      
-      -- Get listing info
-      l.title as listing_title,
-      l.price as listing_price,
-      
-      -- Get last message info
-      (SELECT message_content 
-       FROM messages m2 
-       WHERE m2.conversation_id = c.conversation_id 
-       ORDER BY m2.sent_at DESC 
-       LIMIT 1) as last_message_preview,
-       
-      (SELECT sent_at 
-       FROM messages m2 
-       WHERE m2.conversation_id = c.conversation_id 
-       ORDER BY m2.sent_at DESC 
-       LIMIT 1) as last_message_time,
-       
-      -- Count unread messages
-      (SELECT COUNT(*) 
-       FROM messages m3 
-       WHERE m3.conversation_id = c.conversation_id 
-       AND m3.sender_id != ? 
-       AND m3.is_read = 0) as unread_count
-       
-    FROM conversations c
-    
-    -- Join to get buyer info
-    LEFT JOIN users buyer_user ON c.buyer_id = buyer_user.user_id
-    LEFT JOIN user_information buyer_info ON buyer_user.user_id = buyer_info.user_id
-    
-    -- Join to get seller info  
-    LEFT JOIN users seller_user ON c.seller_id = seller_user.user_id
-    LEFT JOIN user_information seller_info ON seller_user.user_id = seller_info.user_id
-    
-    -- Join to get listing info
-    LEFT JOIN listings l ON c.listing_id = l.listing_id
-    
-    WHERE c.buyer_id = ? OR c.seller_id = ?
-    ORDER BY COALESCE(
-      (SELECT sent_at FROM messages m2 WHERE m2.conversation_id = c.conversation_id ORDER BY m2.sent_at DESC LIMIT 1),
-      c.created_at
-    ) DESC
-  `;
-
-  callbackConnection.query(conversationsQuery, [userId, userId, userId, userId, userId], (err, conversations) => {
-    if (err) {
-      console.error('Error loading conversations:', err);
-      return res.render('users/messages', {
-        layout: 'user',
-        activePage: 'messages',
-        conversations: [],
-        conversationsJson: JSON.stringify([]),
-        userJson: JSON.stringify(req.session.user),
-        error: 'Failed to load conversations'
-      });
-    }
-
-    console.log('Found conversations:', conversations.length);
-
-    // Process conversations to handle null names
-    const processedConversations = conversations.map(conv => ({
-      ...conv,
-      other_user_name: conv.other_user_name || conv.other_user_email || 'Unknown User',
-      last_message_preview: conv.last_message_preview || 'No messages yet'
-    }));
-
-    res.render('users/messages', {
-      layout: 'user',
-      activePage: 'messages',
-      conversations: processedConversations,
-      conversationsJson: JSON.stringify(processedConversations),
-      userJson: JSON.stringify(req.session.user)
-    });
-  });
-});
-
-// API: Get messages for a conversation
-router.get('/api/conversations/:conversationId/messages', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const conversationId = req.params.conversationId;
-  const userId = req.session.user.id;
-
-  // First, verify user has access to this conversation
-  const accessQuery = `
-    SELECT conversation_id 
-    FROM conversations 
-    WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
-  `;
-
-  callbackConnection.query(accessQuery, [conversationId, userId, userId], (err, access) => {
-    if (err) {
-      console.error('Error checking conversation access:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-
-    if (access.length === 0) {
-      return res.status(403).json({ error: 'Access denied to this conversation' });
-    }
-
-    // Get all messages for this conversation
-    const messagesQuery = `
-      SELECT 
-        m.message_id,
-        m.conversation_id,
-        m.sender_id,
-        m.message_content,
-        m.image_url,
-        m.sent_at,
-        m.is_read,
-        m.message_type,
-        
-        -- Get sender info
-        ui.first_name,
-        ui.last_name,
-        u.email as sender_email,
-        
-        -- Get listing info if it exists
-        c.listing_id
-        
-      FROM messages m
-      LEFT JOIN users u ON m.sender_id = u.user_id
-      LEFT JOIN user_information ui ON u.user_id = ui.user_id
-      LEFT JOIN conversations c ON m.conversation_id = c.conversation_id
-      
-      WHERE m.conversation_id = ?
-      ORDER BY m.sent_at ASC
-    `;
-
-    callbackConnection.query(messagesQuery, [conversationId], (err, messages) => {
-      if (err) {
-        console.error('Error loading messages:', err);
-        return res.status(500).json({ error: 'Failed to load messages' });
-      }
-
-      // Mark messages as read for the current user
-      const markReadQuery = `
-        UPDATE messages 
-        SET is_read = 1 
-        WHERE conversation_id = ? AND sender_id != ? AND is_read = 0
-      `;
-
-      callbackConnection.query(markReadQuery, [conversationId, userId], (markErr) => {
-        if (markErr) {
-          console.warn('Error marking messages as read:', markErr);
-        }
-      });
-
-      res.json(messages);
-    });
-  });
-});
-
-// API: Send a message
-router.post('/api/conversations/:conversationId/messages', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const conversationId = req.params.conversationId;
-  const userId = req.session.user.id;
-  const { message_content } = req.body;
-
-  // Verify access to conversation
-  const accessQuery = `
-    SELECT conversation_id 
-    FROM conversations 
-    WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
-  `;
-
-  callbackConnection.query(accessQuery, [conversationId, userId, userId], (err, access) => {
-    if (err) {
-      console.error('Error checking conversation access:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-
-    if (access.length === 0) {
-      return res.status(403).json({ error: 'Access denied to this conversation' });
-    }
-
-    if (!message_content || message_content.trim() === '') {
-      return res.status(400).json({ error: 'Message content is required' });
-    }
-
-    // Insert the message
-    const insertQuery = `
-      INSERT INTO messages (conversation_id, sender_id, message_content, sent_at, is_read, message_type)
-      VALUES (?, ?, ?, NOW(), 0, 'text')
-    `;
-
-    callbackConnection.query(insertQuery, [conversationId, userId, message_content.trim()], (err, result) => {
-      if (err) {
-        console.error('Error sending message:', err);
-        return res.status(500).json({ error: 'Failed to send message' });
-      }
-
-      // Update conversation timestamp
-      const updateConvQuery = `
-        UPDATE conversations 
-        SET updated_at = NOW() 
-        WHERE conversation_id = ?
-      `;
-
-      callbackConnection.query(updateConvQuery, [conversationId], (updateErr) => {
-        if (updateErr) {
-          console.warn('Error updating conversation timestamp:', updateErr);
-        }
-      });
-
-      res.json({ 
-        success: true, 
-        message_id: result.insertId,
-        message: 'Message sent successfully'
-      });
-    });
-  });
-});
-
-// API: Start a new conversation
-router.post('/api/conversations', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const buyerId = req.session.user.id;
-  const { seller_email, initial_message, listing_id } = req.body;
-
-  if (!seller_email || !initial_message) {
-    return res.status(400).json({ error: 'Seller email and initial message are required' });
-  }
-
-  // Find the seller by email
-  const findSellerQuery = 'SELECT user_id FROM users WHERE email = ?';
-  
-  callbackConnection.query(findSellerQuery, [seller_email], (err, sellers) => {
-    if (err) {
-      console.error('Error finding seller:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-
-    if (sellers.length === 0) {
-      return res.status(404).json({ error: 'Seller not found' });
-    }
-
-    const sellerId = sellers[0].user_id;
-
-    if (sellerId === buyerId) {
-      return res.status(400).json({ error: 'Cannot start conversation with yourself' });
-    }
-
-    // Check if conversation already exists
-    const existingConvQuery = `
-      SELECT conversation_id 
-      FROM conversations 
-      WHERE buyer_id = ? AND seller_id = ? AND listing_id ${listing_id ? '= ?' : 'IS NULL'}
-    `;
-
-    const queryParams = listing_id ? [buyerId, sellerId, listing_id] : [buyerId, sellerId];
-
-    callbackConnection.query(existingConvQuery, queryParams, (err, existing) => {
-      if (err) {
-        console.error('Error checking existing conversation:', err);
-        return res.status(500).json({ error: 'Database error' });
-      }
-
-      if (existing.length > 0) {
-        // Conversation exists, just send the message
-        const conversationId = existing[0].conversation_id;
-        
-        const insertMessageQuery = `
-          INSERT INTO messages (conversation_id, sender_id, message_content, sent_at, is_read, message_type)
-          VALUES (?, ?, ?, NOW(), 0, 'text')
-        `;
-
-        callbackConnection.query(insertMessageQuery, [conversationId, buyerId, initial_message], (err) => {
-          if (err) {
-            console.error('Error sending message to existing conversation:', err);
-            return res.status(500).json({ error: 'Failed to send message' });
-          }
-
-          res.json({ 
-            success: true, 
-            conversation_id: conversationId,
-            message: 'Message sent to existing conversation'
-          });
-        });
-      } else {
-        // Create new conversation
-        const createConvQuery = `
-          INSERT INTO conversations (buyer_id, seller_id, listing_id, created_at, updated_at, status)
-          VALUES (?, ?, ?, NOW(), NOW(), 'active')
-        `;
-
-        const convParams = [buyerId, sellerId, listing_id || null];
-
-        callbackConnection.query(createConvQuery, convParams, (err, convResult) => {
-          if (err) {
-            console.error('Error creating conversation:', err);
-            return res.status(500).json({ error: 'Failed to create conversation' });
-          }
-
-          const conversationId = convResult.insertId;
-
-          // Send the initial message
-          const insertMessageQuery = `
-            INSERT INTO messages (conversation_id, sender_id, message_content, sent_at, is_read, message_type)
-            VALUES (?, ?, ?, NOW(), 0, 'text')
-          `;
-
-          callbackConnection.query(insertMessageQuery, [conversationId, buyerId, initial_message], (err) => {
-            if (err) {
-              console.error('Error sending initial message:', err);
-              return res.status(500).json({ error: 'Failed to send initial message' });
-            }
-
-            res.json({ 
-              success: true, 
-              conversation_id: conversationId,
-              message: 'Conversation started successfully'
-            });
-          });
-        });
-      }
-    });
-  });
-});
-
 // API: Get a single listing (for product cards in messages)
 router.get('/api/listings/:listingId', (req, res) => {
   const listingId = req.params.listingId;
@@ -1641,7 +1846,7 @@ router.get('/api/listings', (req, res) => {
   });
 });
 
-/// ------------------------ Product Review Routing ------------------------------
+// Product Review Routing
 router.get('/api/listings/:listingId/reviews', (req, res) => {
   const listingId = req.params.listingId;
 
@@ -1675,75 +1880,93 @@ router.get('/orders', async (req, res) => {
   if (!req.session.user) {
     return res.redirect('/login');
   }
-  console.log("SESSION:", req.session.user);
-  const userId = req.session.user.user_id;
+  
+  const userId = req.session.user.user_id || req.session.user.id;
 
   const conn = await mysql.createConnection(dbConfig);
 
-  // Fetch purchases (orders where user is buyer)
-  const [purchases] = await conn.execute(
-    `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image,
-            oi.quantity, oi.price
-     FROM orders o
-     JOIN order_items oi ON o.order_id = oi.order_id
-     JOIN listings l ON oi.listing_id = l.listing_id
-     JOIN users u ON l.user_id = u.user_id
-     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
-     WHERE o.user_id = ?`, [userId]
-  );
+  try {
+    // Fetch purchases (orders where user is buyer)
+    const [purchases] = await conn.execute(
+      `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image,
+              oi.quantity, oi.price
+       FROM orders o
+       JOIN order_items oi ON o.order_id = oi.order_id
+       JOIN listings l ON oi.listing_id = l.listing_id
+       JOIN users u ON l.user_id = u.user_id
+       LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+       WHERE o.user_id = ?`, [userId]
+    );
 
-  // Fetch sales (orders where user is the seller)
-  const [sales] = await conn.execute(
-    `SELECT o.*, l.title AS listing_title, o.user_id AS buyer_id, u.email AS buyer_email, li.image_url AS listing_image,
-            oi.quantity, oi.price
-     FROM orders o
-     JOIN order_items oi ON o.order_id = oi.order_id
-     JOIN listings l ON oi.listing_id = l.listing_id
-     JOIN users u ON o.user_id = u.user_id
-     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
-     WHERE l.user_id = ?`, [userId]
-  );
+    // Fetch sales (orders where user is the seller)
+    const [sales] = await conn.execute(
+      `SELECT o.*, l.title AS listing_title, o.user_id AS buyer_id, u.email AS buyer_email, li.image_url AS listing_image,
+              oi.quantity, oi.price
+       FROM orders o
+       JOIN order_items oi ON o.order_id = oi.order_id
+       JOIN listings l ON oi.listing_id = l.listing_id
+       JOIN users u ON o.user_id = u.user_id
+       LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+       WHERE l.user_id = ?`, [userId]
+    );
 
-  await conn.end();
+    await conn.end();
 
-  res.render('users/orders', {
-    layout: 'user',
-    activePage: 'orders',
-    purchases,
-    sales
-  });
+    res.render('users/orders', {
+      layout: 'user',
+      activePage: 'orders',
+      purchases,
+      sales
+    });
+  } catch (error) {
+    console.error('Orders page error:', error);
+    await conn.end();
+    res.status(500).send('Database error');
+  }
 });
 
-//to get order details
+// Get order details
 router.get('/orders/details/:orderId', async (req, res) => {
-  const userId = req.session.user.user_id;
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const userId = req.session.user.user_id || req.session.user.id;
   const orderId = req.params.orderId;
 
   const conn = await mysql.createConnection(dbConfig);
 
-  // Check order ownership (as buyer or seller)
-  const [orders] = await conn.execute(
-    `SELECT * FROM orders WHERE order_id = ? AND (user_id = ? OR order_id IN 
-      (SELECT order_id FROM order_items oi JOIN listings l ON oi.listing_id = l.listing_id WHERE l.user_id = ?))`,
-    [orderId, userId, userId]
-  );
-  if (orders.length === 0) {
+  try {
+    // Check order ownership (as buyer or seller)
+    const [orders] = await conn.execute(
+      `SELECT * FROM orders WHERE order_id = ? AND (user_id = ? OR order_id IN 
+        (SELECT order_id FROM order_items oi JOIN listings l ON oi.listing_id = l.listing_id WHERE l.user_id = ?))`,
+      [orderId, userId, userId]
+    );
+    
+    if (orders.length === 0) {
+      await conn.end();
+      return res.status(404).json({ error: "Order not found or not authorized" });
+    }
+    
+    const order = orders[0];
+
+    // Get items
+    const [items] = await conn.execute(
+      `SELECT oi.*, l.title AS listing_title, l.description AS listing_description, li.image_url AS listing_image
+       FROM order_items oi
+       JOIN listings l ON oi.listing_id = l.listing_id
+       LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+       WHERE oi.order_id = ?`, [orderId]
+    );
+
     await conn.end();
-    return res.json({ error: "Order not found or not authorized" });
+    res.json({ order, items });
+  } catch (error) {
+    console.error('Order details error:', error);
+    await conn.end();
+    res.status(500).json({ error: 'Database error' });
   }
-  const order = orders[0];
-
-  // Get items
-  const [items] = await conn.execute(
-    `SELECT oi.*, l.title AS listing_title, l.description AS listing_description, li.image_url AS listing_image
-     FROM order_items oi
-     JOIN listings l ON oi.listing_id = l.listing_id
-     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
-     WHERE oi.order_id = ?`, [orderId]
-  );
-
-  await conn.end();
-  res.json({ order, items });
 });
 
 module.exports = router;

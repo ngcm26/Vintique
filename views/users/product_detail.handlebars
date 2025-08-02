@@ -360,243 +360,311 @@
 {{/if}}
 
 <script>
-let currentSlide = 0;
-const slides = document.querySelectorAll('.carousel-slide');
-const indicators = document.querySelectorAll('.indicator');
+// Make user data available globally
+window.currentUser = {{{userJson}}} || null;
 
-function showSlide(index) {
-  // Hide all slides
-  slides.forEach(slide => slide.classList.remove('active'));
-  indicators.forEach(indicator => indicator.classList.remove('active'));
+// Updated contactSeller function that integrates with your messages system
+function contactSeller(sellerUsername, productTitle) {
+  console.log('Contact seller called:', { sellerUsername, productTitle, currentUser: window.currentUser });
   
-  // Show current slide
-  if (slides[index]) {
-    slides[index].classList.add('active');
-  }
-  if (indicators[index]) {
-    indicators[index].classList.add('active');
-  }
-  
-  currentSlide = index;
-}
-
-function changeSlide(direction) {
-  let newIndex = currentSlide + direction;
-  
-  // Loop around
-  if (newIndex >= slides.length) {
-    newIndex = 0;
-  } else if (newIndex < 0) {
-    newIndex = slides.length - 1;
-  }
-  
-  showSlide(newIndex);
-}
-
-function goToSlide(index) {
-  showSlide(index);
-}
-
-// Auto-advance carousel every 5 seconds
-setInterval(() => {
-  if (slides.length > 1) {
-    changeSlide(1);
-  }
-}, 5000);
-
-function showTab(tabName, event) {
-  // Hide all tabs
-  document.querySelectorAll('.tab-content').forEach(tab => {
-    tab.classList.remove('active');
-  });
-  
-  // Remove active class from all buttons
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.remove('active');
-  });
-  
-  // Show selected tab
-  const selectedTab = document.getElementById(tabName);
-  if (selectedTab) {
-    selectedTab.classList.add('active');
-  }
-  
-  // Add active class to clicked button
-  if (event && event.target) {
-    event.target.classList.add('active');
-  }
-}
-
-function contactSeller(seller, product) {
-  // Redirect to messages page with seller info
-  window.location.href = `/messages?seller=${encodeURIComponent(seller)}&product=${encodeURIComponent(product)}`;
-}
-
-async function addToCart() {
-  const listingId = window.location.pathname.split('/').pop(); // Get listing ID from URL
-  const productTitle = document.querySelector('.product-title').textContent;
-  const cartBtn = document.querySelector('.btn-cart');
-  const originalText = cartBtn.innerHTML;
-  
-  // Show loading state
-  cartBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-  cartBtn.disabled = true;
-  
-  try {
-    const response = await fetch('/api/cart', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        listing_id: listingId,
-        quantity: 1
-      })
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      // Success - show success state
-      cartBtn.style.transform = 'scale(0.95)';
-      cartBtn.innerHTML = '<i class="fas fa-check"></i> Added!';
-      cartBtn.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
-      cartBtn.style.color = 'white';
-      
-      showNotification(data.message || `"${productTitle}" added to cart!`);
-      
-      // Update cart badge
-      if (window.updateCartBadge) {
-        window.updateCartBadge();
-      }
-      
-      // Reset button after 2 seconds
-      setTimeout(() => {
-        cartBtn.style.transform = '';
-        cartBtn.innerHTML = originalText;
-        cartBtn.style.background = '';
-        cartBtn.style.color = '';
-        cartBtn.disabled = false;
-      }, 2000);
-      
-    } else {
-      // Error - show error state
-      cartBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
-      cartBtn.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
-      cartBtn.style.color = 'white';
-      
-      showNotification(data.error || 'Error adding item to cart', 'error');
-      
-      // Reset button after 3 seconds
-      setTimeout(() => {
-        cartBtn.innerHTML = originalText;
-        cartBtn.style.background = '';
-        cartBtn.style.color = '';
-        cartBtn.disabled = false;
-      }, 3000);
-    }
-  } catch (error) {
-    console.error('Error adding to cart:', error);
-    
-    // Show error state
-    cartBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
-    cartBtn.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
-    cartBtn.style.color = 'white';
-    
-    showNotification('Error adding item to cart', 'error');
-    
-    // Reset button after 3 seconds
+  // Check if user is logged in
+  if (!window.currentUser) {
+    showNotification('Please log in to contact sellers', 'error');
     setTimeout(() => {
-      cartBtn.innerHTML = originalText;
-      cartBtn.style.background = '';
-      cartBtn.style.color = '';
-      cartBtn.disabled = false;
-    }, 3000);
+      window.location.href = '/login';
+    }, 1500);
+    return;
   }
-}
 
-async function buyNow() {
-  const listingId = window.location.pathname.split('/').pop(); // Get listing ID from URL
-  const buyBtn = document.querySelector('.btn-purchase');
-  const originalText = buyBtn.innerHTML;
+  // Get the listing ID from the URL
+  const listingId = window.location.pathname.split('/').pop();
+  console.log('Extracted listing ID:', listingId);
   
-  // Show loading state
-  buyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-  buyBtn.disabled = true;
+  // Create a more user-friendly message prompt
+  const defaultMessage = `Hi! I'm interested in your "${productTitle}". Is it still available?`;
+  const message = prompt(`Send a message to @${sellerUsername}:`, defaultMessage);
   
-  try {
-    // Create order in database
-    const response = await fetch('/api/checkout/single', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        listing_id: listingId
-      })
-    });
+  if (message === null) {
+    console.log('User cancelled message prompt');
+    return; // User cancelled
+  }
+  
+  if (message.trim() === '') {
+    showNotification('Please enter a message', 'error');
+    return;
+  }
+
+  // Show loading state on the message button
+  const messageBtn = document.querySelector('.btn-message');
+  const originalBtnText = messageBtn ? messageBtn.innerHTML : '';
+  
+  if (messageBtn) {
+    messageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    messageBtn.disabled = true;
+    messageBtn.style.opacity = '0.7';
+  }
+
+  console.log('Sending request to start conversation:', {
+    listing_id: parseInt(listingId),
+    message: message.trim()
+  });
+
+  // Send request to start conversation
+  fetch('/start-conversation', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      listing_id: parseInt(listingId), // Make sure it's a number
+      message: message.trim()
+    })
+  })
+  .then(response => {
+    console.log('Response status:', response.status);
+    console.log('Response headers:', response.headers);
     
-    if (response.ok) {
-      const data = await response.json();
-      
-      // STRIPE INTEGRATION - Create payment session
-      const paymentResponse = await fetch('/api/stripe/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          order_id: data.order_id,
-          amount: data.total
-        })
+    if (!response.ok) {
+      return response.text().then(text => {
+        console.error('Error response text:', text);
+        throw new Error(`HTTP error! status: ${response.status} - ${text}`);
       });
+    }
+    return response.json();
+  })
+  .then(data => {
+    console.log('Response data:', data);
+    if (data.success) {
+      // Show appropriate success message
+      const successMessage = data.existing 
+        ? `Message sent! Continuing your conversation with @${sellerUsername}` 
+        : `New conversation started with @${sellerUsername}!`;
       
-      if (paymentResponse.ok) {
-        const paymentData = await paymentResponse.json();
-        
-        // Redirect to Stripe Checkout
-        const stripe = Stripe(paymentData.publishableKey);
-        const { error } = await stripe.redirectToCheckout({
-          sessionId: paymentData.sessionId
-        });
-        
-        if (error) {
-          console.error('Stripe error:', error);
-          alert('Payment error: ' + error.message);
-          
-          // Reset button
-          buyBtn.innerHTML = originalText;
-          buyBtn.disabled = false;
-        }
-      } else {
-        const paymentError = await paymentResponse.json();
-        if (paymentResponse.status === 503) {
-          alert('Payment processing is currently unavailable. Please contact support.');
-        } else {
-          alert('Error setting up payment: ' + paymentError.error);
-        }
-        
-        // Reset button
-        buyBtn.innerHTML = originalText;
-        buyBtn.disabled = false;
+      showNotification(successMessage, 'success');
+      
+      // Change button to indicate success
+      if (messageBtn) {
+        messageBtn.innerHTML = '<i class="fas fa-check"></i> Message Sent!';
+        messageBtn.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+        messageBtn.style.color = 'white';
       }
       
+      // Redirect to messages page with the conversation after a short delay
+      setTimeout(() => {
+        window.location.href = `/messages?conversation=${data.conversation_id}`;
+      }, 1500);
     } else {
-      const error = await response.json();
-      alert('Error creating order: ' + error.error);
-      
-      // Reset button
-      buyBtn.innerHTML = originalText;
-      buyBtn.disabled = false;
+      throw new Error(data.error || 'Failed to send message');
     }
-  } catch (error) {
-    console.error('Error during buy now:', error);
-    alert('Error during purchase. Please try again.');
+  })
+  .catch(error => {
+    console.error('Error contacting seller:', error);
+    showNotification('Error: ' + error.message, 'error');
     
-    // Reset button
-    buyBtn.innerHTML = originalText;
-    buyBtn.disabled = false;
+    // Reset button state
+    if (messageBtn) {
+      messageBtn.innerHTML = originalBtnText;
+      messageBtn.disabled = false;
+      messageBtn.style.opacity = '1';
+      messageBtn.style.background = '';
+      messageBtn.style.color = '';
+    }
+  });
+}
+
+// Enhanced notification function for better UX
+function showNotification(message, type = 'success') {
+  // Remove any existing notifications
+  const existingNotifications = document.querySelectorAll('.custom-notification');
+  existingNotifications.forEach(notif => notif.remove());
+  
+  // Create notification element
+  const notification = document.createElement('div');
+  notification.className = 'custom-notification';
+  
+  // Set colors based on type
+  let bgColor, textColor, icon;
+  switch(type) {
+    case 'success':
+      bgColor = 'linear-gradient(135deg, #28a745, #20c997)';
+      textColor = 'white';
+      icon = 'fas fa-check-circle';
+      break;
+    case 'error':
+      bgColor = 'linear-gradient(135deg, #dc3545, #c82333)';
+      textColor = 'white';
+      icon = 'fas fa-exclamation-triangle';
+      break;
+    case 'info':
+      bgColor = 'linear-gradient(135deg, #17a2b8, #138496)';
+      textColor = 'white';
+      icon = 'fas fa-info-circle';
+      break;
+    default:
+      bgColor = 'linear-gradient(135deg, #6c757d, #545b62)';
+      textColor = 'white';
+      icon = 'fas fa-bell';
   }
+  
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    min-width: 320px;
+    max-width: 450px;
+    background: ${bgColor};
+    color: ${textColor};
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    font-weight: 500;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+  `;
+  
+  notification.innerHTML = `
+    <i class="${icon}" style="font-size: 1.1rem;"></i>
+    <span style="flex: 1;">${message}</span>
+    <button onclick="this.parentElement.remove()" style="
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: ${textColor};
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">&times;</button>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Animate in
+  setTimeout(() => {
+    notification.style.opacity = '1';
+    notification.style.transform = 'translateX(0)';
+  }, 100);
+  
+  // Auto remove after delay
+  const autoRemoveDelay = type === 'error' ? 6000 : 4000;
+  setTimeout(() => {
+    if (notification.parentElement) {
+      notification.style.opacity = '0';
+      notification.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 300);
+    }
+  }, autoRemoveDelay);
+}
+
+// Function to handle when user clicks message seller from marketplace
+function startConversationFromMarketplace(listingId, sellerEmail, productTitle) {
+  if (!window.currentUser) {
+    showNotification('Please log in to contact sellers', 'error');
+    setTimeout(() => {
+      window.location.href = '/login';
+    }, 1500);
+    return;
+  }
+
+  const defaultMessage = `Hi! I'm interested in your "${productTitle}". Is it still available?`;
+  const message = prompt(`Send a message about "${productTitle}":`, defaultMessage);
+  
+  if (message === null || message.trim() === '') {
+    return;
+  }
+
+  fetch('/start-conversation', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      listing_id: listingId,
+      message: message.trim()
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showNotification('Message sent successfully!', 'success');
+      setTimeout(() => {
+        window.location.href = `/messages?conversation=${data.conversation_id}`;
+      }, 1500);
+    } else {
+      showNotification('Error: ' + data.error, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error starting conversation:', error);
+    showNotification('Network error while contacting seller', 'error');
+  });
+}
+
+// Add other product detail functions
+function buyNow() {
+  if (!window.currentUser) {
+    showNotification('Please log in to purchase items', 'error');
+    setTimeout(() => {
+      window.location.href = '/login';
+    }, 1500);
+    return;
+  }
+  
+  const listingId = window.location.pathname.split('/').pop();
+  
+  // For now, redirect to a checkout page or show a message
+  showNotification('Buy Now functionality will be implemented soon!', 'info');
+}
+
+function addToCart() {
+  if (!window.currentUser) {
+    showNotification('Please log in to add items to cart', 'error');
+    setTimeout(() => {
+      window.location.href = '/login';
+    }, 1500);
+    return;
+  }
+  
+  const listingId = window.location.pathname.split('/').pop();
+  
+  fetch('/api/cart', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      listing_id: parseInt(listingId),
+      quantity: 1
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showNotification(data.message, 'success');
+    } else {
+      showNotification('Error: ' + data.error, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error adding to cart:', error);
+    showNotification('Error adding item to cart', 'error');
+  });
 }
 
 function markAsSold(listingId) {
@@ -604,20 +672,22 @@ function markAsSold(listingId) {
     fetch(`/listings/${listingId}/mark_sold`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       }
     })
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        showNotification('Item marked as sold!');
-        window.location.reload();
+        showNotification('Item marked as sold!', 'success');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       } else {
-        showNotification('Error marking item as sold', 'error');
+        showNotification('Error: ' + data.error, 'error');
       }
     })
     .catch(error => {
-      console.error('Error:', error);
+      console.error('Error marking as sold:', error);
       showNotification('Error marking item as sold', 'error');
     });
   }
@@ -628,63 +698,73 @@ function deleteListing(listingId) {
     fetch(`/listings/${listingId}`, {
       method: 'DELETE',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       }
     })
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        showNotification('Listing deleted successfully!');
-        window.location.href = '/my_listing';
+        showNotification('Listing deleted successfully!', 'success');
+        setTimeout(() => {
+          window.location.href = '/my_listing';
+        }, 1500);
       } else {
-        showNotification('Error deleting listing', 'error');
+        showNotification('Error: ' + data.error, 'error');
       }
     })
     .catch(error => {
-      console.error('Error:', error);
+      console.error('Error deleting listing:', error);
       showNotification('Error deleting listing', 'error');
     });
   }
 }
 
-function showNotification(message, type = 'success') {
-  // Create notification element if it doesn't exist
-  let notification = document.getElementById('notification');
-  if (!notification) {
-    notification = document.createElement('div');
-    notification.id = 'notification';
-    notification.className = 'notification';
-    notification.innerHTML = `
-      <span id="notification-text"></span>
-      <button class="close-btn" onclick="hideNotification()">&times;</button>
-    `;
-    document.body.appendChild(notification);
-  }
+// Tab functionality
+function showTab(tabName, event) {
+  // Remove active class from all tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   
-  const notificationText = document.getElementById('notification-text');
-  if (notificationText) {
-    notificationText.textContent = message;
-  }
+  // Remove active class from all tab contents
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
   
-  // Set notification color based on type
-  if (type === 'error') {
-    notification.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
-  } else {
-    notification.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
-  }
+  // Add active class to clicked button
+  event.target.classList.add('active');
   
-  notification.classList.add('show');
-  
-  // Auto hide after 5 seconds
-  setTimeout(() => {
-    hideNotification();
-  }, 5000);
+  // Show the selected tab content
+  document.getElementById(tabName).classList.add('active');
 }
 
-function hideNotification() {
-  const notification = document.getElementById('notification');
-  if (notification) {
-    notification.classList.remove('show');
+// Image carousel functionality
+let currentSlide = 0;
+const slides = document.querySelectorAll('.carousel-slide');
+const indicators = document.querySelectorAll('.indicator');
+
+function changeSlide(direction) {
+  slides[currentSlide].classList.remove('active');
+  indicators[currentSlide].classList.remove('active');
+  
+  currentSlide += direction;
+  
+  if (currentSlide >= slides.length) {
+    currentSlide = 0;
+  } else if (currentSlide < 0) {
+    currentSlide = slides.length - 1;
   }
+  
+  slides[currentSlide].classList.add('active');
+  indicators[currentSlide].classList.add('active');
 }
+
+function goToSlide(slideIndex) {
+  slides[currentSlide].classList.remove('active');
+  indicators[currentSlide].classList.remove('active');
+  
+  currentSlide = slideIndex;
+  
+  slides[currentSlide].classList.add('active');
+  indicators[currentSlide].classList.add('active');
+}
+
+console.log('Product detail messaging functionality loaded');
+console.log('Current user:', window.currentUser);
 </script>

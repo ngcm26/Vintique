@@ -169,7 +169,12 @@ app.use((error, req, res, next) => {
     stack: error.stack,
     url: req.url,
     method: req.method,
-    body: req.body
+    body: req.body,
+    session: req.session?.user ? { 
+      user_id: req.session.user.id || req.session.user.user_id,
+      email: req.session.user.email,
+      role: req.session.user.role 
+    } : 'No session'
   });
   
   // Don't leak error details in production
