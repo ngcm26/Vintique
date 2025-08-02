@@ -99,7 +99,10 @@ app.engine('handlebars', engine({
     // Add helper for adding numbers (used in product detail template)
     add: function(a, b) {
       return a + b;
-    }
+    },
+    
+    or: function(a, b) { return a || b; },
+
   }
 }));
 

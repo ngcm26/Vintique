@@ -1,0 +1,209 @@
+body {
+  background: #fffbe7;
+  color: #212529;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.header-bar {
+  background: #fffbe7;
+  padding: 1rem 1.5rem 1rem 0.2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #ffe066;
+  border-radius: 0 0 1.5rem 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.page-title {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #222;
+  margin-bottom: 0.2rem;
+}
+
+.page-subtitle {
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
+.btn-outline-secondary {
+  border: 2px solid #FFD600;
+  color: #222 !important;
+  background: #fffbe7;
+  font-weight: 500;
+  border-radius: 1.5rem;
+  transition: all 0.2s;
+}
+.btn-outline-secondary:hover {
+  background: #FFD600;
+  color: #222;
+  border: 2px solid #FFD600;
+}
+
+.nav-tabs {
+  border-bottom: 2px solid #FFD600;
+}
+.nav-tabs .nav-link {
+  color: #222;
+  font-weight: 500;
+  background: #fffbe7;
+  border: none;
+  border-radius: 1.5rem 1.5rem 0 0;
+  margin-right: 2px;
+  padding: 10px 22px;
+  transition: background 0.1s;
+}
+.nav-tabs .nav-link.active, .nav-tabs .nav-link:focus {
+  background: #FFD600 !important;
+  color: #222 !important;
+  border: none;
+  box-shadow: 0 2px 10px #ffe06670;
+}
+
+.feedback-card, .order-card, .card.shadow-sm {
+  background: #fff;
+  border: 1.5px solid #ffe066;
+  border-radius: 18px;
+  padding: 22px 22px 18px 22px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 10px #ffecb350;
+  transition: box-shadow 0.22s;
+}
+.feedback-card:hover, .order-card:hover {
+  box-shadow: 0 4px 18px #ffe06680;
+  border-color: #FFD600;
+}
+
+.card-title {
+  color: #222;
+  font-weight: 600;
+  margin-bottom: 0.6rem;
+}
+
+ul.list-unstyled {
+  margin-bottom: 0.7rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: 24px;
+  font-size: 0.97rem;
+  font-weight: 700;
+  background: #FFD600;
+  color: #222;
+  margin-right: 6px;
+  border: 1.5px solid #ffe066;
+}
+.bg-secondary    { background: #e5e5e5 !important; color: #222 !important; border: none;}
+.bg-info         { background: #a7e0f9 !important; color: #222 !important; border: none;}
+.bg-primary      { background: #ffd600 !important; color: #222 !important; border: none;}
+.bg-success      { background: #ccff90 !important; color: #222 !important; border: none;}
+.bg-danger       { background: #ffe0e0 !important; color: #d7263d !important; border: none;}
+
+.btn-outline-primary, .btn-primary {
+  background: #FFD600 !important;
+  color: #222 !important;
+  border: none !important;
+  border-radius: 1.3rem !important;
+  padding: 6px 18px;
+  font-weight: 500;
+  box-shadow: 0 1px 3px #ffd60044;
+  margin-top: 0.2rem;
+}
+.btn-outline-primary:hover, .btn-primary:hover {
+  background: #ffec80 !important;
+  color: #222 !important;
+}
+.btn-success {
+  background: #ccff90 !important;
+  color: #222 !important;
+  border-radius: 1.3rem !important;
+  font-weight: 500;
+}
+.btn-success:hover {
+  background: #b5e688 !important;
+}
+.btn-danger {
+  background: #ffbdbd !important;
+  color: #d7263d !important;
+  border-radius: 1.3rem !important;
+  font-weight: 500;
+}
+.btn-danger:hover {
+  background: #ff8686 !important;
+  color: #fff !important;
+}
+
+.view-order-btn, .mark-received-btn, .archive-order-btn, .delete-order-btn, .update-status-btn {
+  margin-top: 3px;
+  margin-right: 4px;
+  font-size: 0.97rem;
+}
+
+.form-select {
+  border-radius: 1.2rem;
+  border: 1.5px solid #ffe066;
+  padding: 7px 20px;
+  font-size: 0.99rem;
+  background: #fffbe7;
+  color: #212529;
+  font-weight: 500;
+}
+.form-select:focus {
+  border-color: #FFD600;
+  outline: none;
+  box-shadow: 0 2px 8px #ffe06670;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 10px;
+  color: #6c757d;
+  background: none;
+}
+.empty-state i {
+  font-size: 3.5rem;
+  color: #ffe066;
+  margin-bottom: 15px;
+  display: block;
+}
+
+.img-fluid {
+  box-shadow: 0 1.5px 6px #ffe06680;
+  border-radius: 1.2rem;
+}
+
+.modal-content {
+  background: #fffbe7;
+  border: 2px solid #FFD600;
+  border-radius: 1.5rem;
+}
+.modal-header, .modal-footer {
+  background: #FFD600;
+  border-bottom: 1.5px solid #ffe066;
+  border-radius: 1.5rem 1.5rem 0 0;
+}
+.modal-title {
+  color: #222;
+  font-weight: bold;
+}
+
+@media (max-width: 800px) {
+  .header-bar, .feedback-card, .order-card, .modal-content {
+    border-radius: 1.1rem;
+    padding: 13px !important;
+  }
+  .page-title { font-size: 1.3rem; }
+  .img-fluid { max-width: 120px !important; max-height: 100px !important; }
+}
+
+@media (max-width: 500px) {
+  .header-bar, .feedback-card, .order-card, .modal-content {
+    border-radius: 0.8rem;
+    padding: 8px !important;
+  }
+  .page-title { font-size: 1.05rem; }
+}
+

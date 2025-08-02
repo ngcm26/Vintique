@@ -939,6 +939,8 @@ router.get('/api/conversations/:conversationId/messages', (req, res) => {
         m.is_read,
         m.message_type,
         m.sender_type,
+        m.is_deleted,
+        m.deleted_for_user,
         
         -- Get conversation info for context
         c.listing_id
@@ -1196,6 +1198,129 @@ router.post('/api/conversations', (req, res) => {
           });
         }
       });
+    });
+  });
+});
+
+// API: Delete a message - FIXED VERSION
+router.delete('/api/conversations/:conversationId/messages/:messageId', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const conversationId = req.params.conversationId;
+  const messageId = req.params.messageId;
+  const userId = req.session.user.id || req.session.user.user_id;
+  const { delete_type } = req.body;
+
+  console.log('Delete message request:', { conversationId, messageId, userId, delete_type });
+
+  if (!['for_me', 'for_everyone'].includes(delete_type)) {
+    return res.status(400).json({ error: 'Invalid delete type' });
+  }
+
+  // Verify access to conversation
+  const accessQuery = `
+    SELECT conversation_id 
+    FROM conversations 
+    WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
+  `;
+
+  callbackConnection.query(accessQuery, [conversationId, userId, userId], (err, access) => {
+    if (err) {
+      console.error('Error checking conversation access:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (access.length === 0) {
+      return res.status(403).json({ error: 'Access denied to this conversation' });
+    }
+
+    // Check if user owns the message
+    const messageQuery = `
+      SELECT sender_id, is_deleted, deleted_for_user 
+      FROM messages 
+      WHERE message_id = ? AND conversation_id = ?
+    `;
+
+    callbackConnection.query(messageQuery, [messageId, conversationId], (err, messages) => {
+      if (err) {
+        console.error('Error checking message:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      if (messages.length === 0) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+
+      const message = messages[0];
+
+      if (delete_type === 'for_everyone' && message.sender_id !== userId) {
+        return res.status(403).json({ error: 'You can only delete your own messages for everyone' });
+      }
+
+      if (delete_type === 'for_everyone') {
+        // Delete for everyone - mark as deleted but keep content as placeholder
+        const updateQuery = `
+          UPDATE messages 
+          SET is_deleted = 1, message_content = '[This message was deleted]', image_url = NULL
+          WHERE message_id = ?
+        `;
+
+        callbackConnection.query(updateQuery, [messageId], (err, result) => {
+          if (err) {
+            console.error('Error deleting message for everyone:', err);
+            return res.status(500).json({ error: 'Failed to delete message' });
+          }
+
+          if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Message not found' });
+          }
+
+          console.log('Message deleted for everyone successfully');
+          res.json({ 
+            success: true, 
+            message: 'Message deleted for everyone'
+          });
+        });
+      } else {
+        // Delete for me - add user to deleted_for_user list
+        let deletedForUser = [];
+        if (message.deleted_for_user) {
+          try {
+            deletedForUser = JSON.parse(message.deleted_for_user);
+          } catch (e) {
+            deletedForUser = [];
+          }
+        }
+
+        if (!deletedForUser.includes(userId)) {
+          deletedForUser.push(userId);
+        }
+
+        const updateQuery = `
+          UPDATE messages 
+          SET deleted_for_user = ?
+          WHERE message_id = ?
+        `;
+
+        callbackConnection.query(updateQuery, [JSON.stringify(deletedForUser), messageId], (err, result) => {
+          if (err) {
+            console.error('Error deleting message for user:', err);
+            return res.status(500).json({ error: 'Failed to delete message' });
+          }
+
+          if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Message not found' });
+          }
+
+          console.log('Message deleted for user successfully');
+          res.json({ 
+            success: true, 
+            message: 'Message deleted for you'
+          });
+        });
+      }
     });
   });
 });
@@ -1970,4 +2095,155 @@ router.get('/orders/details/:orderId', async (req, res) => {
   }
 });
 
+router.post('/orders/update-status/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+  const orderId = req.params.orderId;
+  const { status } = req.body;
+  const userId = req.session.user.user_id || req.session.user.id;
+
+  // Only allow update if user is the seller of ANY item in the order
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+  try {
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM order_items oi 
+        JOIN listings l ON oi.listing_id = l.listing_id
+        WHERE oi.order_id = ? AND l.user_id = ?`, [orderId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    await conn.execute(`UPDATE orders SET status = ? WHERE order_id = ?`, [status, orderId]);
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+
+router.post('/orders/mark-received/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+  const orderId = req.params.orderId;
+  const userId = req.session.user.user_id || req.session.user.id;
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+  try {
+    // Only allow if this user is buyer for the order
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM orders WHERE order_id = ? AND user_id = ?`, 
+      [orderId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    await conn.execute(`UPDATE orders SET status = 'completed' WHERE order_id = ?`, [orderId]);
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.post('/orders/archive/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+  const userId = req.session.user.user_id || req.session.user.id;
+  const orderId = req.params.orderId;
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+
+  try {
+    // Only allow archive if user is buyer or seller of this order
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM orders o
+        LEFT JOIN order_items oi ON o.order_id = oi.order_id
+        LEFT JOIN listings l ON oi.listing_id = l.listing_id
+       WHERE o.order_id = ? AND (o.user_id = ? OR l.user_id = ?)`,
+      [orderId, userId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    await conn.execute(`UPDATE orders SET archived = 1 WHERE order_id = ?`, [orderId]);
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.get('/orders/archived', async (req, res) => {
+  if (!req.session.user) return res.redirect('/login');
+  const userId = req.session.user.user_id || req.session.user.id;
+
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+
+  // Get archived purchases and sales
+  const [purchases] = await conn.execute(
+    `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image, oi.quantity, oi.price
+     FROM orders o
+     JOIN order_items oi ON o.order_id = oi.order_id
+     JOIN listings l ON oi.listing_id = l.listing_id
+     JOIN users u ON l.user_id = u.user_id
+     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+     WHERE o.user_id = ? AND o.archived = 1`, [userId]
+  );
+
+  const [sales] = await conn.execute(
+    `SELECT o.*, l.title AS listing_title, o.user_id AS buyer_id, u.email AS buyer_email, li.image_url AS listing_image, oi.quantity, oi.price
+     FROM orders o
+     JOIN order_items oi ON o.order_id = oi.order_id
+     JOIN listings l ON oi.listing_id = l.listing_id
+     JOIN users u ON o.user_id = u.user_id
+     LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+     WHERE l.user_id = ? AND o.archived = 1`, [userId]
+  );
+
+  await conn.end();
+
+  res.render('users/orders_archived', {
+    layout: 'user',
+    activePage: 'orders',
+    purchases,
+    sales
+  });
+});
+
+
+router.post('/orders/delete/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+  const userId = req.session.user.user_id || req.session.user.id;
+  const orderId = req.params.orderId;
+  const conn = await require('mysql2/promise').createConnection(dbConfig);
+
+  try {
+    // Only allow if user is buyer or seller and order is archived & cancelled
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM orders o
+        LEFT JOIN order_items oi ON o.order_id = oi.order_id
+        LEFT JOIN listings l ON oi.listing_id = l.listing_id
+       WHERE o.order_id = ? AND o.archived = 1 AND o.status = 'cancelled' AND (o.user_id = ? OR l.user_id = ?)`,
+      [orderId, userId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized or not cancellable" });
+    }
+    // Delete order and cascade to order_items (if foreign key is ON DELETE CASCADE)
+    await conn.execute(`DELETE FROM orders WHERE order_id = ?`, [orderId]);
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
 module.exports = router;
+
