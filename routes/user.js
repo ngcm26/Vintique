@@ -1971,7 +1971,7 @@ router.get('/api/listings', (req, res) => {
   });
 });
 
-// Product Review Routing
+// -------------------------- Product Review Routing -----------------------------
 router.get('/api/listings/:listingId/reviews', (req, res) => {
   const listingId = req.params.listingId;
 
@@ -1982,10 +1982,11 @@ router.get('/api/listings/:listingId/reviews', (req, res) => {
       r.reviewText,
       r.createdAt,
       u.user_id,
-      u.username,
-      u.profile_picture
+      ui.username,
+      ui.profile_image_url
     FROM reviews r
     JOIN users u ON r.userID = u.user_id
+    JOIN user_information ui ON u.user_id = ui.user_id
     WHERE r.listingID = ? AND r.approved = 1
     ORDER BY r.createdAt DESC
   `;
@@ -1996,9 +1997,29 @@ router.get('/api/listings/:listingId/reviews', (req, res) => {
       return res.status(500).json({ error: 'Database error while fetching reviews' });
     }
 
-    res.json({ reviews: results });
+    const now = new Date();
+
+    const formattedReviews = results.map(review => {
+      const createdAt = new Date(review.createdAt);
+      const diffTime = now - createdAt;
+      const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      return {
+        reviewID: review.reviewID,
+        rating: review.rating,
+        reviewText: review.reviewText,
+        createdAt: review.createdAt,
+        user_id: review.user_id,
+        username: review.username,
+        profile_image_url: review.profile_image_url,
+        timeAgo: daysAgo === 0 ? 'Today' : `${daysAgo} day(s) ago`
+      };
+    });
+
+    res.render('your-review-view', { reviews: formattedReviews });
   });
 });
+
 
 // Orders History
 router.get('/orders', async (req, res) => {
