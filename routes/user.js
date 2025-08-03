@@ -28,7 +28,7 @@ router.get('/home', (req, res) => {
   res.render('users/home', { layout: 'user', activePage: 'home' });
 });
 
-// Marketplace route
+// Marketplace route - FIXED VERSION
 router.get('/marketplace', (req, res) => {
   let sql = `
     SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.created_at, l.brand, l.size,
@@ -48,6 +48,7 @@ router.get('/marketplace', (req, res) => {
     params.push(req.session.user.id || req.session.user.user_id);
   }
   sql += '\n    ORDER BY l.created_at DESC';
+  
   callbackConnection.query(sql, params, (err, listings) => {
     if (err) return res.status(500).send('Database error');
     
@@ -975,15 +976,48 @@ router.get('/api/conversations/:conversationId/messages', (req, res) => {
   });
 });
 
-// API: Send a message - FIXED VERSION
-router.post('/api/conversations/:conversationId/messages', (req, res) => {
+// API: Send a message - FIXED VERSION WITH IMAGE SUPPORT
+router.post('/api/conversations/:conversationId/messages', upload.single('image'), (req, res) => {
+  console.log('=== MESSAGE SEND API CALLED ===');
+  console.log('Request headers:', req.headers);
+  console.log('Request body:', req.body);
+  console.log('Request file:', req.file);
+  console.log('Session user:', req.session.user);
+
   if (!req.session.user) {
+    console.log('❌ User not authenticated');
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   const conversationId = req.params.conversationId;
   const userId = req.session.user.id || req.session.user.user_id;
-  const { message_content } = req.body;
+
+  // Handle both FormData (with image) and JSON (text only) requests
+  let messageContent = null;
+  let imageFile = null;
+
+  if (req.file) {
+    // This is a FormData request with an image
+    messageContent = req.body.message_content || null;
+    imageFile = req.file;
+    console.log('📷 Image upload detected:', imageFile.filename);
+  } else if (req.body && typeof req.body === 'object') {
+    // This is a JSON request (text only)
+    messageContent = req.body.message_content;
+    console.log('📝 Text-only message detected');
+  } else {
+    console.log('❌ Invalid request format');
+    return res.status(400).json({ error: 'Invalid request format' });
+  }
+
+  console.log('Message content:', messageContent);
+  console.log('Image file:', imageFile ? imageFile.filename : 'None');
+
+  // Validate that we have either text or image
+  if (!messageContent && !imageFile) {
+    console.log('❌ No content provided');
+    return res.status(400).json({ error: 'Message content or image is required' });
+  }
 
   // Get user's username
   const getUserQuery = `
@@ -1023,20 +1057,35 @@ router.post('/api/conversations/:conversationId/messages', (req, res) => {
         return res.status(403).json({ error: 'Access denied to this conversation' });
       }
 
-      if (!message_content || message_content.trim() === '') {
-        return res.status(400).json({ error: 'Message content is required' });
-      }
-
       const conversation = access[0];
       const senderType = conversation.buyer_id === userId ? 'buyer' : 'seller';
 
+      // Prepare image URL if image was uploaded - FIXED PATH
+      const imageUrl = imageFile ? `/uploads/messages/${imageFile.filename}` : null;
+
+      // For image-only messages, provide a default content to avoid null constraint
+      const finalMessageContent = messageContent || (imageFile ? '[Image]' : null);
+
       // Insert the message
       const insertQuery = `
-        INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
-        VALUES (?, ?, ?, ?, NOW(), 0, 'text', ?)
+        INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, image_url, sent_at, is_read, message_type, sender_type)
+        VALUES (?, ?, ?, ?, ?, NOW(), 0, ?, ?)
       `;
 
-      callbackConnection.query(insertQuery, [conversationId, userId, username, message_content.trim(), senderType], (err, result) => {
+      const messageType = imageFile ? 'image' : 'text';
+      const values = [
+        conversationId, 
+        userId, 
+        username, 
+        finalMessageContent, 
+        imageUrl, 
+        messageType, 
+        senderType
+      ];
+
+      console.log('💾 Inserting message with values:', values);
+
+      callbackConnection.query(insertQuery, values, (err, result) => {
         if (err) {
           console.error('Error sending message:', err);
           return res.status(500).json({ error: 'Failed to send message' });
@@ -1054,6 +1103,8 @@ router.post('/api/conversations/:conversationId/messages', (req, res) => {
             console.warn('Error updating conversation timestamp:', updateErr);
           }
         });
+
+        console.log('✅ Message sent successfully');
 
         res.json({ 
           success: true, 
@@ -1613,8 +1664,6 @@ router.post('/api/cart', (req, res) => {
   
   callbackConnection.query(checkListingQuery, [listing_id], (err, listings) => {
     if (err) {
-      console.error('Check listing error:', err);
-      return res.status(500).json({ error: 'Database error' });
     }
     
     if (listings.length === 0) {
@@ -2020,7 +2069,6 @@ router.get('/api/listings/:listingId/reviews', (req, res) => {
   });
 });
 
-
 // Orders History
 router.get('/orders', async (req, res) => {
   if (!req.session.user) {
@@ -2143,7 +2191,6 @@ router.post('/orders/update-status/:orderId', async (req, res) => {
   }
 });
 
-
 router.post('/orders/mark-received/:orderId', async (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
   const orderId = req.params.orderId;
@@ -2234,7 +2281,6 @@ router.get('/orders/archived', async (req, res) => {
   });
 });
 
-
 router.post('/orders/delete/:orderId', async (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
 
@@ -2266,4 +2312,3 @@ router.post('/orders/delete/:orderId', async (req, res) => {
 });
 
 module.exports = router;
-

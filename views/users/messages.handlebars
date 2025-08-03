@@ -1,4 +1,3 @@
-
 <!-- Messages Interface - Full Width Design -->
 <link rel="stylesheet" href="/assets/css/users/messages.css">
 
@@ -849,11 +848,11 @@ async function startNewChat(userEmail) {
     if (response.ok) {
       window.location.reload();
     } else {
-      showNotification('Failed to start conversation: ' + data.error, 'error');
+      showError('Failed to start conversation: ' + data.error);
     }
   } catch (error) {
     console.error('Error starting conversation:', error);
-    showNotification('Network error while starting conversation', 'error');
+    showError('Network error while starting conversation');
   }
   
   closeNewChatModal();
@@ -965,7 +964,6 @@ function loadEmptyChat() {
   `;
 }
 
-// Global function for starting conversations from product listings
 window.startConversationFromListing = async function(listingId, sellerEmail, productTitle) {
   try {
     if (!currentUser) {

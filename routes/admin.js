@@ -102,30 +102,93 @@ router.get('/admin/staff_management', (req, res) => {
   });
 });
 
-// Q&A Management
+// Q&A Management - FIXED TO MATCH YOUR DATABASE SCHEMA
 router.get('/admin/qa', (req, res) => {
   if (!req.session.user || req.session.user.role !== 'admin') {
     return res.redirect('/login');
   }
   
+  // Use the same query structure as your staff routes for consistency
   const qaQuery = `
-    SELECT q.qa_id, q.question, q.answer, q.status, q.created_at,
-           u.email as user_email
+    SELECT 
+      q.qa_id,
+      q.asker_id,
+      q.asker_username,
+      u.email as asker_email,
+      q.category,
+      q.question_text,
+      q.details,
+      q.asked_at,
+      q.is_verified,
+      COALESCE((SELECT COUNT(*) FROM qa_votes WHERE qa_id = q.qa_id), 0) as helpful_count,
+      q.created_at
     FROM qa q
-    LEFT JOIN users u ON q.user_id = u.user_id
-    ORDER BY q.created_at DESC
+    LEFT JOIN users u ON q.asker_id = u.user_id
+    ORDER BY q.asked_at DESC
   `;
   
-  callbackConnection.query(qaQuery, (err, qaList) => {
+  callbackConnection.query(qaQuery, (err, questions) => {
     if (err) {
       console.error('Q&A management error:', err);
-      return res.status(500).send('Database error');
+      return res.render('staff/qa_management', {
+        layout: 'admin',
+        activePage: 'qa',
+        error: 'Failed to load questions',
+        questions: []
+      });
     }
-    
-    res.render('staff/qa_management', {
-      layout: 'admin',
-      activePage: 'qa',
-      qaList: qaList
+
+    if (questions.length === 0) {
+      return res.render('staff/qa_management', {
+        layout: 'admin',
+        activePage: 'qa',
+        questions: []
+      });
+    }
+
+    // Get answers for all questions - INCLUDE answer_id!
+    const questionIds = questions.map(q => q.qa_id);
+    const answersQuery = `
+      SELECT 
+        answer_id,
+        qa_id,
+        answerer_id,
+        answerer_username,
+        u.email as answerer_email,
+        answer_content,
+        answered_at
+      FROM qa_answers qa_ans
+      LEFT JOIN users u ON qa_ans.answerer_id = u.user_id
+      WHERE qa_id IN (${questionIds.map(() => '?').join(',')})
+      ORDER BY answered_at ASC
+    `;
+
+    callbackConnection.query(answersQuery, questionIds, (err, answers) => {
+      if (err) {
+        console.error('Q&A answers error:', err);
+        // Continue without answers rather than failing completely
+        answers = [];
+      }
+
+      // Group answers by question ID
+      const answersByQuestionId = {};
+      answers.forEach(answer => {
+        if (!answersByQuestionId[answer.qa_id]) {
+          answersByQuestionId[answer.qa_id] = [];
+        }
+        answersByQuestionId[answer.qa_id].push(answer);
+      });
+
+      // Add answers to questions
+      questions.forEach(question => {
+        question.answers = answersByQuestionId[question.qa_id] || [];
+      });
+
+      res.render('staff/qa_management', {
+        layout: 'admin',
+        activePage: 'qa',
+        questions: questions
+      });
     });
   });
 });
