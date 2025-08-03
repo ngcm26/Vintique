@@ -1,0 +1,41 @@
+{{!-- views/staff/vouchers/list.handlebars --}}
+<h1 class="mb-4 fw-bold">Manage Vouchers</h1>
+{{#if error}}
+  <div class="alert alert-danger">{{error}}</div>
+{{/if}}
+<a href="/staff/vouchers/new" class="btn btn-primary mb-3">Create New Voucher</a>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Code</th>
+      <th>Type</th>
+      <th>Value</th>
+      <th>Min Spend</th>
+      <th>Expiry</th>
+      <th>Usage</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each vouchers}}
+    <tr>
+      <td>{{code}}</td>
+      <td>{{capitalize discount_type}}</td>
+      <td>
+        {{#if (eq discount_type 'percentage')}}{{discount_value}}%{{else}}${{discount_value}}{{/if}}
+      </td>
+      <td>${{min_spend}}</td>
+      <td>{{formatDate expiry_date}}</td>
+      <td>{{used_count}} / {{usage_limit}}</td>
+      <td>{{capitalize status}}</td>
+      <td>
+        <a href="/staff/vouchers/{{voucher_id}}/edit" class="btn btn-sm btn-warning">Edit</a>
+        <form action="/staff/vouchers/{{voucher_id}}/delete" method="POST" style="display:inline;" onsubmit="return confirm('Delete this voucher?');">
+          <button class="btn btn-sm btn-danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
