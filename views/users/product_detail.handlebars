@@ -250,108 +250,29 @@
             <span class="badge bg-success">Eco Friendly</span>
           </div>
         </div>
-
-        <!-- Reviews Tab -->
-        <div class="tab-content" id="reviews">
-          <div class="reviews-section">
-            <div class="review-summary">
-              <div class="overall-rating">
-                <div class="rating-number">4.8</div>
-                <div class="rating-stars">
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                </div>
-                <div class="rating-count">Based on 24 reviews</div>
-              </div>
-              
-              <div class="rating-breakdown">
-                <div class="rating-row">
-                  <span>5 stars</span>
-                  <div class="rating-bar">
-                    <div class="rating-fill" style="width: 75%"></div>
-                  </div>
-                  <span>18</span>
-                </div>
-                <div class="rating-row">
-                  <span>4 stars</span>
-                  <div class="rating-bar">
-                    <div class="rating-fill" style="width: 20%"></div>
-                  </div>
-                  <span>5</span>
-                </div>
-                <div class="rating-row">
-                  <span>3 stars</span>
-                  <div class="rating-bar">
-                    <div class="rating-fill" style="width: 4%"></div>
-                  </div>
-                  <span>1</span>
-                </div>
-                <div class="rating-row">
-                  <span>2 stars</span>
-                  <div class="rating-bar">
-                    <div class="rating-fill" style="width: 0%"></div>
-                  </div>
-                  <span>0</span>
-                </div>
-                <div class="rating-row">
-                  <span>1 star</span>
-                  <div class="rating-bar">
-                    <div class="rating-fill" style="width: 0%"></div>
-                  </div>
-                  <span>0</span>
-                </div>
-              </div>
-            </div>
-
             <!-- Individual Reviews -->
-            <div class="individual-review">
-              <div class="review-header">
-                <div class="reviewer-info">
-                  <div class="reviewer-avatar">SJ</div>
-                  <div class="reviewer-details">
-                    <h6>Sarah Johnson</h6>
-                    <p>Verified Buyer • 2 days ago</p>
-                  </div>
-                </div>
-                <div class="review-rating">
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                </div>
-              </div>
-              <div class="review-text">
-                This item exceeded my expectations! The condition was even better than described. 
-                Love supporting sustainable fashion. Will definitely buy from @{{listing.username}} again!
-              </div>
-            </div>
 
+            {{#each reviews}}
             <div class="individual-review">
               <div class="review-header">
                 <div class="reviewer-info">
-                  <div class="reviewer-avatar">MR</div>
+                  <div class="reviewer-avatar">{{username.[0]}}</div>
                   <div class="reviewer-details">
-                    <h6>Maria Rodriguez</h6>
-                    <p>Verified Buyer • 1 week ago</p>
+                    <h6>{{username}}</h6>
+                    <p>Verified Buyer • {{timeAgo}}</p>
                   </div>
                 </div>
                 <div class="review-rating">
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
-                  <i class="fas fa-star"></i>
+                  {{#times rating}}<i class="fas fa-star"></i>{{/times}}
                 </div>
               </div>
               <div class="review-text">
-                Beautiful item! Fits perfectly and the quality is so good. 
-                Fast shipping and great communication from the seller.
+                {{reviewText}}
               </div>
             </div>
+            {{/each}}
+
+            
           </div>
         </div>
       </div>

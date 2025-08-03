@@ -107,9 +107,10 @@ router.get('/home', (req, res) => {
   res.render('users/home', { layout: 'user', activePage: 'home' });
 });
 
-// Marketplace route
-router.get('/marketplace', (req, res) => {
-  let sql = `
+// Marketplace route - FIXED VERSION
+/* 
+changed marketplace sql query from:
+let sql = `
     SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.created_at, l.brand, l.size,
           (
             SELECT image_url FROM listing_images img2
@@ -121,12 +122,41 @@ router.get('/marketplace', (req, res) => {
     FROM listings l
     LEFT JOIN users u ON l.user_id = u.user_id
     WHERE l.status = 'active'`;
+
+to that because i need the username to be a username instead of the email address -kangren 
+*/
+router.get('/marketplace', (req, res) => {
+  let sql = `
+    SELECT 
+      l.listing_id, 
+      l.title, 
+      l.price, 
+      l.category, 
+      l.item_condition, 
+      l.created_at, 
+      l.brand, 
+      l.size,
+      (
+        SELECT image_url 
+        FROM listing_images img2
+        WHERE img2.listing_id = l.listing_id
+        ORDER BY img2.is_main DESC, img2.image_id ASC
+        LIMIT 1
+      ) as image_url,
+      COALESCE(ui.username, 'Unknown') as username
+    FROM listings l
+    LEFT JOIN users u ON l.user_id = u.user_id
+    LEFT JOIN user_information ui ON u.user_id = ui.user_id
+    WHERE l.status = 'active'
+  `;
+
   const params = [];
   if (req.session.user && req.session.user.role === 'user') {
     sql += ' AND l.user_id != ?';
     params.push(getUserId(req));
   }
   sql += '\n    ORDER BY l.created_at DESC';
+  
   callbackConnection.query(sql, params, (err, listings) => {
     if (err) return handleDbError(err, res, 'Failed to load marketplace');
     
@@ -1380,6 +1410,8 @@ router.get('/api/conversations/:conversationId/messages', (req, res) => {
         m.is_read,
         m.message_type,
         m.sender_type,
+        m.is_deleted,
+        m.deleted_for_user,
         
         -- Get conversation info for context
         c.listing_id
@@ -1414,13 +1446,48 @@ router.get('/api/conversations/:conversationId/messages', (req, res) => {
   });
 });
 
-// API: Send a message - FIXED VERSION
-router.post('/api/conversations/:conversationId/messages', (req, res) => {
-  if (!requireUserAuth(req, res)) return;
+// API: Send a message - FIXED VERSION WITH IMAGE SUPPORT
+router.post('/api/conversations/:conversationId/messages', upload.single('image'), (req, res) => {
+  console.log('=== MESSAGE SEND API CALLED ===');
+  console.log('Request headers:', req.headers);
+  console.log('Request body:', req.body);
+  console.log('Request file:', req.file);
+  console.log('Session user:', req.session.user);
+
+  if (!req.session.user) {
+    console.log('❌ User not authenticated');
+    return res.status(401).json({ error: 'Authentication required' });
+  }
 
   const conversationId = req.params.conversationId;
-  const userId = getUserId(req);
-  const { message_content } = req.body;
+  const userId = req.session.user.id || req.session.user.user_id;
+
+  // Handle both FormData (with image) and JSON (text only) requests
+  let messageContent = null;
+  let imageFile = null;
+
+  if (req.file) {
+    // This is a FormData request with an image
+    messageContent = req.body.message_content || null;
+    imageFile = req.file;
+    console.log('📷 Image upload detected:', imageFile.filename);
+  } else if (req.body && typeof req.body === 'object') {
+    // This is a JSON request (text only)
+    messageContent = req.body.message_content;
+    console.log('📝 Text-only message detected');
+  } else {
+    console.log('❌ Invalid request format');
+    return res.status(400).json({ error: 'Invalid request format' });
+  }
+
+  console.log('Message content:', messageContent);
+  console.log('Image file:', imageFile ? imageFile.filename : 'None');
+
+  // Validate that we have either text or image
+  if (!messageContent && !imageFile) {
+    console.log('❌ No content provided');
+    return res.status(400).json({ error: 'Message content or image is required' });
+  }
 
   // Get user's username
   const getUserQuery = `
@@ -1460,20 +1527,35 @@ router.post('/api/conversations/:conversationId/messages', (req, res) => {
         return res.status(403).json({ error: 'Access denied to this conversation' });
       }
 
-      if (!message_content || message_content.trim() === '') {
-        return res.status(400).json({ error: 'Message content is required' });
-      }
-
       const conversation = access[0];
       const senderType = conversation.buyer_id === userId ? 'buyer' : 'seller';
 
+      // Prepare image URL if image was uploaded - FIXED PATH
+      const imageUrl = imageFile ? `/uploads/messages/${imageFile.filename}` : null;
+
+      // For image-only messages, provide a default content to avoid null constraint
+      const finalMessageContent = messageContent || (imageFile ? '[Image]' : null);
+
       // Insert the message
       const insertQuery = `
-        INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
-        VALUES (?, ?, ?, ?, NOW(), 0, 'text', ?)
+        INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, image_url, sent_at, is_read, message_type, sender_type)
+        VALUES (?, ?, ?, ?, ?, NOW(), 0, ?, ?)
       `;
 
-      callbackConnection.query(insertQuery, [conversationId, userId, username, message_content.trim(), senderType], (err, result) => {
+      const messageType = imageFile ? 'image' : 'text';
+      const values = [
+        conversationId, 
+        userId, 
+        username, 
+        finalMessageContent, 
+        imageUrl, 
+        messageType, 
+        senderType
+      ];
+
+      console.log('💾 Inserting message with values:', values);
+
+      callbackConnection.query(insertQuery, values, (err, result) => {
         if (err) {
           console.error('Error sending message:', err);
           return res.status(500).json({ error: 'Failed to send message' });
@@ -1491,6 +1573,8 @@ router.post('/api/conversations/:conversationId/messages', (req, res) => {
             console.warn('Error updating conversation timestamp:', updateErr);
           }
         });
+
+        console.log('✅ Message sent successfully');
 
         res.json({ 
           success: true, 
@@ -1633,6 +1717,129 @@ router.post('/api/conversations', (req, res) => {
           });
         }
       });
+    });
+  });
+});
+
+// API: Delete a message - FIXED VERSION
+router.delete('/api/conversations/:conversationId/messages/:messageId', (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const conversationId = req.params.conversationId;
+  const messageId = req.params.messageId;
+  const userId = req.session.user.id || req.session.user.user_id;
+  const { delete_type } = req.body;
+
+  console.log('Delete message request:', { conversationId, messageId, userId, delete_type });
+
+  if (!['for_me', 'for_everyone'].includes(delete_type)) {
+    return res.status(400).json({ error: 'Invalid delete type' });
+  }
+
+  // Verify access to conversation
+  const accessQuery = `
+    SELECT conversation_id 
+    FROM conversations 
+    WHERE conversation_id = ? AND (buyer_id = ? OR seller_id = ?)
+  `;
+
+  callbackConnection.query(accessQuery, [conversationId, userId, userId], (err, access) => {
+    if (err) {
+      console.error('Error checking conversation access:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (access.length === 0) {
+      return res.status(403).json({ error: 'Access denied to this conversation' });
+    }
+
+    // Check if user owns the message
+    const messageQuery = `
+      SELECT sender_id, is_deleted, deleted_for_user 
+      FROM messages 
+      WHERE message_id = ? AND conversation_id = ?
+    `;
+
+    callbackConnection.query(messageQuery, [messageId, conversationId], (err, messages) => {
+      if (err) {
+        console.error('Error checking message:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      if (messages.length === 0) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+
+      const message = messages[0];
+
+      if (delete_type === 'for_everyone' && message.sender_id !== userId) {
+        return res.status(403).json({ error: 'You can only delete your own messages for everyone' });
+      }
+
+      if (delete_type === 'for_everyone') {
+        // Delete for everyone - mark as deleted but keep content as placeholder
+        const updateQuery = `
+          UPDATE messages 
+          SET is_deleted = 1, message_content = '[This message was deleted]', image_url = NULL
+          WHERE message_id = ?
+        `;
+
+        callbackConnection.query(updateQuery, [messageId], (err, result) => {
+          if (err) {
+            console.error('Error deleting message for everyone:', err);
+            return res.status(500).json({ error: 'Failed to delete message' });
+          }
+
+          if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Message not found' });
+          }
+
+          console.log('Message deleted for everyone successfully');
+          res.json({ 
+            success: true, 
+            message: 'Message deleted for everyone'
+          });
+        });
+      } else {
+        // Delete for me - add user to deleted_for_user list
+        let deletedForUser = [];
+        if (message.deleted_for_user) {
+          try {
+            deletedForUser = JSON.parse(message.deleted_for_user);
+          } catch (e) {
+            deletedForUser = [];
+          }
+        }
+
+        if (!deletedForUser.includes(userId)) {
+          deletedForUser.push(userId);
+        }
+
+        const updateQuery = `
+          UPDATE messages 
+          SET deleted_for_user = ?
+          WHERE message_id = ?
+        `;
+
+        callbackConnection.query(updateQuery, [JSON.stringify(deletedForUser), messageId], (err, result) => {
+          if (err) {
+            console.error('Error deleting message for user:', err);
+            return res.status(500).json({ error: 'Failed to delete message' });
+          }
+
+          if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Message not found' });
+          }
+
+          console.log('Message deleted for user successfully');
+          res.json({ 
+            success: true, 
+            message: 'Message deleted for you'
+          });
+        });
+      }
     });
   });
 });
@@ -1908,8 +2115,6 @@ router.post('/api/cart', (req, res) => {
   
   callbackConnection.query(checkListingQuery, [listing_id], (err, listings) => {
     if (err) {
-      console.error('Check listing error:', err);
-      return res.status(500).json({ error: 'Database error' });
     }
     
     if (listings.length === 0) {
@@ -2090,7 +2295,7 @@ router.get('/api/listings', (req, res) => {
   });
 });
 
-// Product Review Routing
+// -------------------------- Product Review Routing -----------------------------
 router.get('/api/listings/:listingId/reviews', (req, res) => {
   const listingId = req.params.listingId;
 
@@ -2101,10 +2306,11 @@ router.get('/api/listings/:listingId/reviews', (req, res) => {
       r.reviewText,
       r.createdAt,
       u.user_id,
-      u.username,
-      u.profile_picture
+      ui.username,
+      ui.profile_image_url
     FROM reviews r
     JOIN users u ON r.userID = u.user_id
+    JOIN user_information ui ON u.user_id = ui.user_id
     WHERE r.listingID = ? AND r.approved = 1
     ORDER BY r.createdAt DESC
   `;
@@ -2115,7 +2321,26 @@ router.get('/api/listings/:listingId/reviews', (req, res) => {
       return res.status(500).json({ error: 'Database error while fetching reviews' });
     }
 
-    res.json({ reviews: results });
+    const now = new Date();
+
+    const formattedReviews = results.map(review => {
+      const createdAt = new Date(review.createdAt);
+      const diffTime = now - createdAt;
+      const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      return {
+        reviewID: review.reviewID,
+        rating: review.rating,
+        reviewText: review.reviewText,
+        createdAt: review.createdAt,
+        user_id: review.user_id,
+        username: review.username,
+        profile_image_url: review.profile_image_url,
+        timeAgo: daysAgo === 0 ? 'Today' : `${daysAgo} day(s) ago`
+      };
+    });
+
+    res.render('your-review-view', { reviews: formattedReviews });
   });
 });
 
@@ -2638,3 +2863,73 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+
+
+// ------------------------------- User Profile -----------------------------------------------
+
+router.get('/user/:username', (req, res) => {
+  const username = req.params.username;
+
+  const sql = `
+    SELECT u.user_id, u.email, ui.username, ui.first_name, ui.last_name,
+       ui.profile_image_url
+FROM users u
+JOIN user_information ui ON u.user_id = ui.user_id
+WHERE ui.username = ?
+
+
+  `;
+
+  callbackConnection.query(sql, [username], (err, users) => {
+    if (err) {
+      console.error('Error fetching user profile:', err);
+      return res.status(500).send('Internal Server Error');
+    }
+
+    if (users.length === 0) {
+      return res.status(404).render('users/user_not_found', {
+        layout: 'user',
+        message: 'User not found.'
+      });
+    }
+
+    const user = users[0];
+
+    // Now get the user's listings (if you want to show them)
+    const listingSql = `
+      SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.created_at,
+        (
+        SELECT image_url 
+        FROM listing_images img2
+        WHERE img2.listing_id = l.listing_id
+        ORDER BY img2.is_main DESC, img2.image_id ASC
+        LIMIT 1
+      ) as image_url
+      FROM listings l
+      WHERE l.user_id = ?
+        AND l.status = 'active'
+      ORDER BY l.created_at DESC
+    `;
+
+    callbackConnection.query(listingSql, [user.user_id], (err, listings) => {
+      if (err) {
+        console.error('Error fetching listings:', err);
+        return res.status(500).send('Error loading user listings.');
+      }
+
+      listings.forEach(listing => {
+        listing.image_url = listing.image_url
+          ? `/uploads/${listing.image_url}`
+          : '/assets/logo.png';
+      });
+
+      res.render('users/profile_display', {
+        layout: 'user',
+        profileUser: user,
+        listings: listings,
+        activePage: null,
+        user: req.session.user // current logged in user (if any)
+      });
+    });
+  });
+});

@@ -23,21 +23,31 @@ if (!fs.existsSync(profilePhotoDir)) {
 // Configure multer for image uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // Check the route to determine upload directory
-    if (req.route && req.route.path.includes('messages')) {
+    // More specific route detection for messages
+    const isMessageRoute = req.url.includes('/api/conversations/') && req.url.includes('/messages');
+    const isAccountRoute = req.url.includes('account-settings');
+    
+    if (isMessageRoute) {
+      console.log('📁 Uploading to messages directory');
       cb(null, messagesUploadDir);
-    } else if (req.route && req.route.path.includes('account-settings')) {
+    } else if (isAccountRoute) {
+      console.log('📁 Uploading to profile photo directory');
       cb(null, profilePhotoDir);
     } else {
+      console.log('📁 Uploading to default directory');
       cb(null, uploadsDir);
     }
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const extension = path.extname(file.originalname);
-    if (req.route && req.route.path.includes('messages')) {
+    
+    const isMessageRoute = req.url.includes('/api/conversations/') && req.url.includes('/messages');
+    const isAccountRoute = req.url.includes('account-settings');
+    
+    if (isMessageRoute) {
       cb(null, 'msg_' + uniqueSuffix + extension);
-    } else if (req.route && req.route.path.includes('account-settings')) {
+    } else if (isAccountRoute) {
       cb(null, 'profile_' + uniqueSuffix + extension);
     } else {
       cb(null, uniqueSuffix + '-' + file.originalname.replace(/\s+/g, '_'));

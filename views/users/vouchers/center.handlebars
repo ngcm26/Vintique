@@ -1,0 +1,41 @@
+<h1 class="mb-4 fw-bold">Voucher Center</h1>
+
+{{#if error}}
+  <div class="alert alert-danger">{{error}}</div>
+{{/if}}
+{{#if success}}
+  <div class="alert alert-success">{{success}}</div>
+{{/if}}
+
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Code</th>
+      <th>Type</th>
+      <th>Value</th>
+      <th>Min Spend</th>
+      <th>Expiry</th>
+      <th>Status</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each vouchers}}
+    <tr>
+      <td>{{code}}</td>
+      <td>{{capitalize discount_type}}</td>
+      <td>
+        {{#if (eq discount_type 'percentage')}}{{discount_value}}%{{else}}${{discount_value}}{{/if}}
+      </td>
+      <td>${{min_spend}}</td>
+      <td>{{formatDate expiry_date}}</td>
+      <td>{{capitalize status}}</td>
+      <td>
+        <form action="/vouchers/{{voucher_id}}/claim" method="POST" style="display:inline;">
+          <button class="btn btn-sm btn-primary">Claim</button>
+        </form>
+      </td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>

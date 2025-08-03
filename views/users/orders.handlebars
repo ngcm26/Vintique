@@ -1,117 +1,200 @@
+<head>
+  <link rel="stylesheet" href="/assets/css/users/orders.css">
+</head>
+
+
 <div class="container py-5">
-  <h1 class="mb-4 fw-bold">My Orders</h1>
+  <!-- Header -->
+  <div class="header-bar mb-4">
+    <div>
+      <h1 class="page-title mb-1">My Orders</h1>
+      <div class="page-subtitle">Track all your purchases and sales in one place</div>
+    </div>
+    <a href="/orders/archived" class="btn btn-outline-secondary">
+      <i class="bi bi-archive"></i> Archived Orders
+    </a>
+  </div>
+
+  <!-- Tabs -->
   <ul class="nav nav-tabs mb-4" id="ordersTab" role="tablist">
     <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="purchases-tab" data-bs-toggle="tab" data-bs-target="#purchases" type="button" role="tab" aria-controls="purchases" aria-selected="true">
+      <button class="nav-link active" id="purchases-tab" data-bs-toggle="tab" data-bs-target="#purchases" type="button"
+        role="tab" aria-controls="purchases" aria-selected="true">
         <i class="bi bi-bag"></i> Purchases
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales" type="button" role="tab" aria-controls="sales" aria-selected="false">
+      <button class="nav-link" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales" type="button" role="tab"
+        aria-controls="sales" aria-selected="false">
         <i class="bi bi-cash-stack"></i> Sales
       </button>
     </li>
   </ul>
+
   <div class="tab-content" id="ordersTabContent">
     <!-- Purchases -->
     <div class="tab-pane fade show active" id="purchases" role="tabpanel" aria-labelledby="purchases-tab">
       {{#if purchases.length}}
-        <div class="row g-4">
-          {{#each purchases}}
-            <div class="col-12">
-              <div class="card shadow-sm border-0 rounded-4">
-                <div class="card-body">
-                  <div class="row">
-                    <div class="col-md-8">
-                      <h5 class="card-title mb-2 fw-semibold">{{listing_title}}</h5>
-                      <ul class="list-unstyled mb-2">
-                        <li><span class="fw-semibold text-secondary">Order ID:</span> #{{order_id}}</li>
-                        <li><span class="fw-semibold text-secondary">Status:</span>
-                          <span class="badge
-                            {{#if (eq status 'pending')}}bg-secondary{{/if}}
-                            {{#if (eq status 'paid')}}bg-info{{/if}}
-                            {{#if (eq status 'shipped')}}bg-primary{{/if}}
-                            {{#if (eq status 'completed')}}bg-success{{/if}}
-                            {{#if (eq status 'cancelled')}}bg-danger{{/if}}">{{status}}</span>
-                        </li>
-                        <li><span class="fw-semibold text-secondary">Seller:</span> {{seller_email}}</li>
-                        <li><span class="fw-semibold text-secondary">Quantity:</span> {{quantity}}</li>
-                        <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
-                        <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
-                      </ul>
-                      <button 
-                        class="btn btn-outline-primary btn-sm view-order-btn mt-2"
-                        data-order-id="{{order_id}}">
-                        View Details
+      <div class="row g-4">
+        {{#each purchases}}
+        <div class="col-12">
+          <div class="feedback-card">
+            <div class="row">
+              <div class="col-md-8">
+                <h5 class="card-title mb-2 fw-semibold">{{listing_title}}</h5>
+                <ul class="list-unstyled mb-2">
+                  <li>
+                    <span class="fw-semibold text-secondary">Order ID:</span> #{{order_id}}
+                  </li>
+                  <li>
+                    <span class="fw-semibold text-secondary">Status:</span>
+                    <span class="status-badge
+                      {{#if (eq status 'pending')}}bg-secondary{{/if}}
+                      {{#if (eq status 'paid')}}bg-info{{/if}}
+                      {{#if (eq status 'shipped')}}bg-primary{{/if}}
+                      {{#if (eq status 'completed')}}bg-success{{/if}}
+                      {{#if (eq status 'cancelled')}}bg-danger{{/if}}">
+                      {{capitalize status}}
+                    </span>
+                    {{#unless (or (eq status 'completed') (eq status 'cancelled'))}}
+                      <button class="btn btn-success btn-sm ms-2 mark-received-btn" data-order-id="{{order_id}}">
+                        Mark as Received
                       </button>
-                    </div>
-                    <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
-                      {{#if listing_image}}
-                        <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm" style="max-width:220px; max-height:180px; object-fit:cover;">
-                      {{else}}
-                        <span class="text-muted">No image</span>
-                      {{/if}}
-                    </div>
-
-                  </div>
+                    {{/unless}}
+                    {{#if (eq status 'cancelled')}}
+                      <button class="btn btn-outline-secondary btn-sm archive-order-btn ms-2" data-order-id="{{order_id}}">
+                        <i class="bi bi-archive"></i> Archive
+                      </button>
+                    {{/if}}
+                  </li>
+                  <li><span class="fw-semibold text-secondary">Seller:</span> {{seller_email}}</li>
+                  <li><span class="fw-semibold text-secondary">Quantity:</span> {{quantity}}</li>
+                  <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
+                  <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
+                </ul>
+                <div class="feedback-actions mt-2">
+                  <button class="btn btn-outline-primary btn-sm view-order-btn" data-order-id="{{order_id}}">
+                    View Details
+                  </button>
                 </div>
               </div>
+              <div class="col-md-4 d-flex align-items-center justify-content-center">
+                {{#if listing_image}}
+                  <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm"
+                    style="max-width:160px; max-height:130px; object-fit:cover;">
+                {{else}}
+                  <span class="text-muted">No image</span>
+                {{/if}}
+              </div>
             </div>
-          {{/each}}
+          </div>
         </div>
+        {{/each}}
+      </div>
       {{else}}
-        <div class="alert alert-info rounded-4">No purchases yet.</div>
+      <div class="empty-state">
+        <i class="bi bi-box-seam"></i>
+        <div>No purchases yet.</div>
+      </div>
       {{/if}}
     </div>
 
     <!-- Sales -->
     <div class="tab-pane fade" id="sales" role="tabpanel" aria-labelledby="sales-tab">
       {{#if sales.length}}
-        <div class="row g-4">
-          {{#each sales}}
-            <div class="col-12">
-              <div class="card shadow-sm border-0 rounded-4">
-                <div class="card-body">
-                  <div class="row">
-                    <div class="col-md-8">
-                      <h5 class="card-title mb-2 fw-semibold">{{listing_title}}</h5>
-                      <ul class="list-unstyled mb-2">
-                        <li><span class="fw-semibold text-secondary">Order ID:</span> #{{order_id}}</li>
-                        <li><span class="fw-semibold text-secondary">Status:</span>
-                          <span class="badge
-                            {{#if (eq status 'pending')}}bg-secondary{{/if}}
-                            {{#if (eq status 'paid')}}bg-info{{/if}}
-                            {{#if (eq status 'shipped')}}bg-primary{{/if}}
-                            {{#if (eq status 'completed')}}bg-success{{/if}}
-                            {{#if (eq status 'cancelled')}}bg-danger{{/if}}">{{status}}</span>
-                        </li>
-                        <li><span class="fw-semibold text-secondary">Buyer:</span> {{buyer_email}}</li>
-                        <li><span class="fw-semibold text-secondary">Quantity:</span> {{quantity}}</li>
-                        <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
-                        <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
-                      </ul>
-                    </div>
-                    <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
-                      {{#if listing_image}}
-                        <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm" style="max-width:220px; max-height:180px; object-fit:cover;">
-                      {{else}}
-                        <span class="text-muted">No image</span>
-                      {{/if}}
-                    </div>
-                  </div>
-                </div>
+      <div class="row g-4">
+        {{#each sales}}
+        <div class="col-12">
+          <div class="feedback-card">
+            <div class="row">
+              <div class="col-md-8">
+                <h5 class="card-title mb-2 fw-semibold">{{listing_title}}</h5>
+                <ul class="list-unstyled mb-2">
+                  <li>
+                    <span class="fw-semibold text-secondary">Order ID:</span> #{{order_id}}
+                  </li>
+                  <li>
+                    <span class="fw-semibold text-secondary">Status:</span>
+                    <span class="status-badge
+                      {{#if (eq status 'pending')}}bg-secondary{{/if}}
+                      {{#if (eq status 'paid')}}bg-info{{/if}}
+                      {{#if (eq status 'shipped')}}bg-primary{{/if}}
+                      {{#if (eq status 'completed')}}bg-success{{/if}}
+                      {{#if (eq status 'cancelled')}}bg-danger{{/if}}">
+                      {{capitalize status}}
+                    </span>
+                    {{#if (eq status 'cancelled')}}
+                      <button class="btn btn-outline-secondary btn-sm archive-order-btn ms-2" data-order-id="{{order_id}}">
+                        <i class="bi bi-archive"></i> Archive
+                      </button>
+                    {{/if}}
+                  </li>
+                  <li><span class="fw-semibold text-secondary">Buyer:</span> {{buyer_email}}</li>
+                  <li><span class="fw-semibold text-secondary">Quantity:</span> {{quantity}}</li>
+                  <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
+                  <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
+                  <li>
+                    <span class="fw-semibold text-secondary">Update Status:</span>
+                    <select class="form-select form-select-sm order-status-dropdown d-inline-block w-auto" data-order-id="{{order_id}}">
+                      <option value="pending" {{#if (eq status 'pending' )}}selected{{/if}}>Pending</option>
+                      <option value="paid" {{#if (eq status 'paid' )}}selected{{/if}}>Paid</option>
+                      <option value="packing" {{#if (eq status 'packing' )}}selected{{/if}}>Packing</option>
+                      <option value="shipped" {{#if (eq status 'shipped' )}}selected{{/if}}>Shipped</option>
+                      <option value="out_for_delivery" {{#if (eq status 'out_for_delivery' )}}selected{{/if}}>Out for Delivery</option>
+                      <option value="completed" {{#if (eq status 'completed' )}}selected{{/if}}>Completed</option>
+                      <option value="cancelled" {{#if (eq status 'cancelled' )}}selected{{/if}}>Cancelled</option>
+                    </select>
+                    <button class="btn btn-primary btn-sm ms-2 update-status-btn" data-order-id="{{order_id}}">
+                      Save
+                    </button>
+                  </li>
+                </ul>
+              </div>
+              <div class="col-md-4 d-flex align-items-center justify-content-center">
+                {{#if listing_image}}
+                  <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm"
+                    style="max-width:160px; max-height:130px; object-fit:cover;">
+                {{else}}
+                  <span class="text-muted">No image</span>
+                {{/if}}
               </div>
             </div>
-          {{/each}}
+          </div>
         </div>
+        {{/each}}
+      </div>
       {{else}}
-        <div class="alert alert-info rounded-4">No sales yet.</div>
+      <div class="empty-state">
+        <i class="bi bi-inboxes"></i>
+        <div>No sales yet.</div>
+      </div>
       {{/if}}
     </div>
   </div>
 </div>
 
+<!-- Order Details Modal -->
 <div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="orderDetailsModalLabel">Order Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="orderDetailsBody">
+        <!-- Order details will be injected here -->
+        <div class="text-center text-muted py-5">Loading...</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary rounded-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel"
+  aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content rounded-4">
       <div class="modal-header">
@@ -131,21 +214,21 @@
 
 <script>
   document.querySelectorAll('.view-order-btn').forEach(btn => {
-  btn.addEventListener('click', function () {
-    const orderId = this.getAttribute('data-order-id');
-    const modalBody = document.getElementById('orderDetailsBody');
-    modalBody.innerHTML = `<div class="text-center text-muted py-5">Loading...</div>`;
+    btn.addEventListener('click', function () {
+      const orderId = this.getAttribute('data-order-id');
+      const modalBody = document.getElementById('orderDetailsBody');
+      modalBody.innerHTML = `<div class="text-center text-muted py-5">Loading...</div>`;
 
-    fetch(`/orders/details/${orderId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) {
-          modalBody.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-          return;
-        }
+      fetch(`/orders/details/${orderId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            modalBody.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            return;
+          }
 
-        // Build HTML for each item
-        let itemsHtml = data.items.map(item => `
+          // Build HTML for each item
+          let itemsHtml = data.items.map(item => `
           <div class="d-flex mb-3 align-items-center">
             <img src="${item.listing_image || '/assets/no-image.png'}" class="rounded-3 me-3" style="width: 70px; height: 70px; object-fit:cover;">
             <div>
@@ -156,7 +239,7 @@
           </div>
         `).join('');
 
-        modalBody.innerHTML = `
+          modalBody.innerHTML = `
           <div class="mb-3">
             <span class="fw-bold">Order ID:</span> #${data.order.order_id}
           </div>
@@ -177,12 +260,108 @@
           <h6>Items</h6>
           ${itemsHtml}
         `;
-      });
+        });
 
-    // Show the modal
-    const orderModal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
-    orderModal.show();
+      // Show the modal
+      const orderModal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
+      orderModal.show();
+    });
   });
-});
 
+
+
+  document.querySelectorAll('.update-status-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const orderId = this.getAttribute('data-order-id');
+      const dropdown = document.querySelector(`.order-status-dropdown[data-order-id="${orderId}"]`);
+      const newStatus = dropdown.value;
+      btn.disabled = true;
+      fetch(`/orders/update-status/${orderId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+        credentials: 'same-origin'
+      })
+        .then(res => res.json())
+        .then(data => {
+          btn.disabled = false;
+          if (data.success) {
+            alert('Order status updated!');
+            // Optionally reload to see badge color change:
+            window.location.reload();
+          } else {
+            alert(data.error || 'Failed to update status.');
+          }
+        })
+        .catch(() => {
+          btn.disabled = false;
+          alert('Error updating status.');
+        });
+    });
+  });
+
+  document.querySelectorAll('.mark-received-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const orderId = this.getAttribute('data-order-id');
+      fetch(`/orders/mark-received/${orderId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            // Optionally update UI, show a message, or reload
+            alert('Order marked as received!');
+            location.reload();
+          } else {
+            alert(data.error || 'Something went wrong.');
+          }
+        });
+    });
+  });
+
+  document.querySelectorAll('.cancel-order-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const orderId = this.getAttribute('data-order-id');
+      if (confirm("Are you sure you want to cancel this order? This action cannot be undone.")) {
+        fetch(`/orders/update-status/${orderId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'cancelled' })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              alert('Order cancelled!');
+              location.reload();
+            } else {
+              alert(data.error || 'Something went wrong.');
+            }
+          });
+      }
+    });
+  });
+
+
+
+  document.querySelectorAll('.archive-order-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const orderId = this.getAttribute('data-order-id');
+      if (confirm('Are you sure you want to archive this order?')) {
+        fetch(`/orders/archive/${orderId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              alert('Order archived!');
+              location.reload();
+            } else {
+              alert(data.error || 'Something went wrong.');
+            }
+          });
+      }
+    });
+  });
 </script>

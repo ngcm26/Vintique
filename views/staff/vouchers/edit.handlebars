@@ -1,0 +1,39 @@
+<h1 class="mb-4 fw-bold">Edit Voucher</h1>
+<form method="POST" action="/staff/vouchers/{{voucher.voucher_id}}">
+  <div class="mb-3">
+    <label for="code" class="form-label">Voucher Code</label>
+    <input type="text" class="form-control" name="code" id="code" value="{{voucher.code}}" required maxlength="50">
+  </div>
+  <div class="mb-3">
+    <label for="discount_type" class="form-label">Discount Type</label>
+    <select class="form-select" name="discount_type" id="discount_type" required>
+      <option value="percentage" {{#if (eq voucher.discount_type 'percentage')}}selected{{/if}}>Percentage (%)</option>
+      <option value="amount" {{#if (eq voucher.discount_type 'amount')}}selected{{/if}}>Fixed Amount ($)</option>
+    </select>
+  </div>
+  <div class="mb-3">
+    <label for="discount_value" class="form-label">Discount Value</label>
+    <input type="number" class="form-control" name="discount_value" id="discount_value" value="{{voucher.discount_value}}" required step="0.01" min="0">
+  </div>
+  <div class="mb-3">
+    <label for="min_spend" class="form-label">Minimum Spend</label>
+    <input type="number" class="form-control" name="min_spend" id="min_spend" value="{{voucher.min_spend}}" step="0.01" min="0">
+  </div>
+  <div class="mb-3">
+    <label for="expiry_date" class="form-label">Expiry Date</label>
+    <input type="date" class="form-control" name="expiry_date" id="expiry_date" value="{{voucher.expiry_date}}" required>
+  </div>
+  <div class="mb-3">
+    <label for="usage_limit" class="form-label">Usage Limit</label>
+    <input type="number" class="form-control" name="usage_limit" id="usage_limit" value="{{voucher.usage_limit}}" required min="1">
+  </div>
+  <div class="mb-3">
+    <label for="status" class="form-label">Status</label>
+    <select class="form-select" name="status" id="status">
+      <option value="active" {{#if (eq voucher.status 'active')}}selected{{/if}}>Active</option>
+      <option value="inactive" {{#if (eq voucher.status 'inactive')}}selected{{/if}}>Inactive</option>
+    </select>
+  </div>
+  <button class="btn btn-success" type="submit">Update Voucher</button>
+  <a href="/staff/vouchers" class="btn btn-secondary ms-2">Cancel</a>
+</form>

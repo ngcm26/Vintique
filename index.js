@@ -122,7 +122,10 @@ app.engine('handlebars', engine({
     // Add helper for adding numbers (used in product detail template)
     add: function(a, b) {
       return a + b;
-    }
+    },
+    
+    or: function(a, b) { return a || b; },
+
   }
 }));
 
@@ -149,6 +152,9 @@ const userRoutes = require('./routes/user');
 const staffRoutes = require('./routes/staff');
 const adminRoutes = require('./routes/admin');
 const chatbotRoutes = require('./routes/chatbot');
+const staffVoucherRoutes = require('./routes/staffVouchers'); 
+const voucherRoutes = require('./routes/vouchers');       
+
 
 // ========== ROUTE REGISTRATION ==========
 app.use('/', authRoutes);
@@ -156,6 +162,8 @@ app.use('/', userRoutes);
 app.use('/', staffRoutes);
 app.use('/', adminRoutes);
 app.use('/chat', chatbotRoutes);
+app.use('/staff/vouchers', staffVoucherRoutes);
+app.use('/vouchers', voucherRoutes);  
 
 // ========== DATABASE CONNECTION HEALTH CHECK ==========
 // Test database connection on startup

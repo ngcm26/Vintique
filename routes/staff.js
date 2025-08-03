@@ -886,4 +886,48 @@ router.get('/staff/dashboard-intents-daily', async (req, res) => {
   res.json({ labels: allDates, datasets });
 });
 
+router.get('/profile/:userId', async (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    // 1. Get user info
+    const [user] = await connection.query(`
+      SELECT username, profile_image_url FROM user_information WHERE user_id = ?
+    `, [userId]);
+
+    // 2. Get reviews written by this user
+    const [reviews] = await connection.query(`
+      SELECT 
+        r.reviewID,
+        r.rating,
+        r.reviewText,
+        r.createdAt,
+        l.title AS listingTitle,
+        l.listing_id
+      FROM reviews r
+      JOIN listings l ON r.listingID = l.listing_id
+      WHERE r.userID = ?
+      ORDER BY r.createdAt DESC
+    `, [userId]);
+
+    // Optional: Format the dates
+    const now = new Date();
+    reviews.forEach(review => {
+      const createdAt = new Date(review.createdAt);
+      const daysAgo = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+      review.timeAgo = daysAgo === 0 ? 'Today' : `${daysAgo} day(s) ago`;
+    });
+
+    res.render('user/profile', {
+      user: user[0],
+      reviews
+    });
+
+  } catch (err) {
+    console.error('Error fetching profile data:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+
 module.exports = router;

@@ -1,0 +1,37 @@
+<h1 class="mb-4 fw-bold">My Vouchers</h1>
+{{#if error}}
+  <div class="alert alert-danger">{{error}}</div>
+{{/if}}
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Code</th>
+      <th>Type</th>
+      <th>Value</th>
+      <th>Min Spend</th>
+      <th>Expiry</th>
+      <th>Status</th>
+      <th>Used?</th>
+      <th>Claimed At</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each vouchers}}
+    <tr>
+      <td>{{code}}</td>
+      <td>{{capitalize discount_type}}</td>
+      <td>
+        {{#if (eq discount_type 'percentage')}}{{discount_value}}%{{else}}${{discount_value}}{{/if}}
+      </td>
+      <td>${{min_spend}}</td>
+      <td>{{formatDate expiry_date}}</td>
+      <td>{{capitalize status}}</td>
+      <td>
+        {{#if used}}<span class="badge bg-secondary">Used</span>{{else}}<span class="badge bg-success">Unused</span>{{/if}}
+      </td>
+      <td>{{formatDate claimed_at}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
