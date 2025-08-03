@@ -2111,13 +2111,14 @@ router.get('/orders', async (req, res) => {
   try {
     // Fetch purchases (orders where user is buyer)
     const [purchases] = await conn.execute(
-      `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image,
-              oi.quantity, oi.price
+      `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image, l.listing_id as listing_id,
+              oi.quantity, oi.price, oi.order_item_id as orderItemId, r.reviewID IS NOT NULL AS hasReviewed
        FROM orders o
        JOIN order_items oi ON o.order_id = oi.order_id
        JOIN listings l ON oi.listing_id = l.listing_id
        JOIN users u ON l.user_id = u.user_id
        LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+       LEFT JOIN reviews r ON r.userID = o.user_id AND r.orderItemID = oi.order_item_id
        WHERE o.user_id = ?`, [userId]
     );
 
@@ -2409,5 +2410,55 @@ WHERE ui.username = ?
         user: req.session.user // current logged in user (if any)
       });
     });
+  });
+});
+
+
+
+// -------------------------------------- Adding review after completed orders ------------------------------------------
+
+router.post('/reviews/add', (req, res) => {
+  const { listing_id, order_item_id, rating, reviewText } = req.body;
+  const userID = req.session.user.user_id || req.session.user.id;
+
+
+  if (!listing_id || !order_item_id || !rating) {
+    return res.status(400).send('Missing required fields.');
+  }
+
+  // First, get sellerID from listings table
+  const getSellerSql = 'SELECT user_id AS sellerID FROM listings WHERE listing_id = ?';
+
+  callbackConnection.query(getSellerSql, [listing_id], (err, listingRows) => {
+    if (err) {
+      console.error('Error fetching seller:', err);
+      return res.status(500).send('Server error.');
+    }
+
+    if (listingRows.length === 0) {
+      return res.status(400).send('Invalid listing.');
+    }
+
+    const sellerID = listingRows[0].sellerID;
+
+    // Insert the review now
+    const insertReviewSql = `
+      INSERT INTO reviews (userID, sellerID, listingID, orderItemID, rating, reviewText)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    callbackConnection.query(
+      insertReviewSql,
+      [userID, sellerID, listing_id, order_item_id, rating, reviewText],
+      (err, result) => {
+        if (err) {
+          console.error('Error inserting review:', err);
+          return res.status(500).send('Server error.');
+        }
+
+        // Success, redirect or render a page as needed
+        res.redirect('/purchases'); 
+      }
+    );
   });
 });

@@ -57,14 +57,25 @@
                       {{capitalize status}}
                     </span>
                     {{#unless (or (eq status 'completed') (eq status 'cancelled'))}}
-                      <button class="btn btn-success btn-sm ms-2 mark-received-btn" data-order-id="{{order_id}}">
-                        Mark as Received
-                      </button>
+                    <button class="btn btn-success btn-sm ms-2 mark-received-btn" data-order-id="{{order_id}}">
+                      Mark as Received
+                    </button>
                     {{/unless}}
+                    {{#if (eq status 'completed')}}
+                    {{#if hasReviewed}}
+                    <span class="badge bg-secondary ms-2">Reviewed</span>
+                    {{else}}
+                    <button class="btn btn-outline-warning btn-sm ms-2 leave-review-btn" data-order-id="{{order_id}}"
+                      data-listing-id="{{listing_id}}" data-order-item-id="{{orderItemId}}">
+                      Leave Review
+                    </button>
+                    {{/if}}
+                    {{/if}}
                     {{#if (eq status 'cancelled')}}
-                      <button class="btn btn-outline-secondary btn-sm archive-order-btn ms-2" data-order-id="{{order_id}}">
-                        <i class="bi bi-archive"></i> Archive
-                      </button>
+                    <button class="btn btn-outline-secondary btn-sm archive-order-btn ms-2"
+                      data-order-id="{{order_id}}">
+                      <i class="bi bi-archive"></i> Archive
+                    </button>
                     {{/if}}
                   </li>
                   <li><span class="fw-semibold text-secondary">Seller:</span> {{seller_email}}</li>
@@ -80,10 +91,10 @@
               </div>
               <div class="col-md-4 d-flex align-items-center justify-content-center">
                 {{#if listing_image}}
-                  <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm"
-                    style="max-width:160px; max-height:130px; object-fit:cover;">
+                <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm"
+                  style="max-width:160px; max-height:130px; object-fit:cover;">
                 {{else}}
-                  <span class="text-muted">No image</span>
+                <span class="text-muted">No image</span>
                 {{/if}}
               </div>
             </div>
@@ -124,9 +135,10 @@
                       {{capitalize status}}
                     </span>
                     {{#if (eq status 'cancelled')}}
-                      <button class="btn btn-outline-secondary btn-sm archive-order-btn ms-2" data-order-id="{{order_id}}">
-                        <i class="bi bi-archive"></i> Archive
-                      </button>
+                    <button class="btn btn-outline-secondary btn-sm archive-order-btn ms-2"
+                      data-order-id="{{order_id}}">
+                      <i class="bi bi-archive"></i> Archive
+                    </button>
                     {{/if}}
                   </li>
                   <li><span class="fw-semibold text-secondary">Buyer:</span> {{buyer_email}}</li>
@@ -135,12 +147,14 @@
                   <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
                   <li>
                     <span class="fw-semibold text-secondary">Update Status:</span>
-                    <select class="form-select form-select-sm order-status-dropdown d-inline-block w-auto" data-order-id="{{order_id}}">
+                    <select class="form-select form-select-sm order-status-dropdown d-inline-block w-auto"
+                      data-order-id="{{order_id}}">
                       <option value="pending" {{#if (eq status 'pending' )}}selected{{/if}}>Pending</option>
                       <option value="paid" {{#if (eq status 'paid' )}}selected{{/if}}>Paid</option>
                       <option value="packing" {{#if (eq status 'packing' )}}selected{{/if}}>Packing</option>
                       <option value="shipped" {{#if (eq status 'shipped' )}}selected{{/if}}>Shipped</option>
-                      <option value="out_for_delivery" {{#if (eq status 'out_for_delivery' )}}selected{{/if}}>Out for Delivery</option>
+                      <option value="out_for_delivery" {{#if (eq status 'out_for_delivery' )}}selected{{/if}}>Out for
+                        Delivery</option>
                       <option value="completed" {{#if (eq status 'completed' )}}selected{{/if}}>Completed</option>
                       <option value="cancelled" {{#if (eq status 'cancelled' )}}selected{{/if}}>Cancelled</option>
                     </select>
@@ -152,10 +166,10 @@
               </div>
               <div class="col-md-4 d-flex align-items-center justify-content-center">
                 {{#if listing_image}}
-                  <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm"
-                    style="max-width:160px; max-height:130px; object-fit:cover;">
+                <img src="{{listing_image}}" alt="Product Image" class="img-fluid rounded-3 shadow-sm"
+                  style="max-width:160px; max-height:130px; object-fit:cover;">
                 {{else}}
-                  <span class="text-muted">No image</span>
+                <span class="text-muted">No image</span>
                 {{/if}}
               </div>
             </div>
@@ -173,8 +187,39 @@
   </div>
 </div>
 
+
+<!-- Review Modal -->
+<div class="modal fade" id="leaveReviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="reviewForm" method="POST" action="/reviews/add">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Leave a Review</h5>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="listing_id" id="reviewListingId">
+          <input type="hidden" name="orderItemId" id="reviewOrderItemId">
+
+          <div class="mb-3">
+            <label for="rating" class="form-label">Rating (1–5)</label>
+            <input type="number" name="rating" id="rating" class="form-control" min="1" max="5" required>
+          </div>
+          <div class="mb-3">
+            <label for="reviewText" class="form-label">Your Review</label>
+            <textarea name="reviewText" id="reviewText" class="form-control" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Submit Review</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Order Details Modal -->
-<div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+<div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel"
+  aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content rounded-4">
       <div class="modal-header">
@@ -364,4 +409,53 @@
       }
     });
   });
+
+  // Order review form javascript 
+
+document.querySelectorAll('.leave-review-btn').forEach(button => {
+  button.addEventListener('click', () => {
+    document.getElementById('reviewListingId').value = button.dataset.listingId;
+    document.getElementById('reviewOrderItemId').value = button.dataset.orderItemId;
+    const modal = new bootstrap.Modal(document.getElementById('leaveReviewModal'));
+    modal.show();
+  });
+});
+
+document.getElementById('reviewForm').addEventListener('submit', async function (e) {
+  e.preventDefault(); // Prevent default HTML form submission
+
+  const listing_id = document.getElementById('reviewListingId').value;
+  const order_item_id = document.getElementById('reviewOrderItemId').value;
+  const rating = document.getElementById('rating').value;
+  const reviewText = document.getElementById('reviewText').value;
+
+  const response = await fetch('/reviews/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ listing_id, order_item_id, rating, reviewText }),
+  });
+
+  if (response.ok) {
+    // Close modal
+    const modalEl = document.getElementById('leaveReviewModal');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    modal.hide();
+
+    // Show success alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-success position-fixed top-0 end-0 p-3 m-3';
+    alertDiv.style.zIndex = 9999;
+    alertDiv.textContent = '✅ Review submitted successfully!';
+    document.body.appendChild(alertDiv);
+
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => alertDiv.remove(), 3000);
+  } else {
+    const errorText = await response.text();
+    alert(`❌ Failed to submit review: ${errorText}`);
+  }
+});
+
+
+
 </script>
