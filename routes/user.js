@@ -29,8 +29,9 @@ router.get('/home', (req, res) => {
 });
 
 // Marketplace route - FIXED VERSION
-router.get('/marketplace', (req, res) => {
-  let sql = `
+/* 
+changed marketplace sql query from:
+let sql = `
     SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.created_at, l.brand, l.size,
           (
             SELECT image_url FROM listing_images img2
@@ -42,6 +43,34 @@ router.get('/marketplace', (req, res) => {
     FROM listings l
     LEFT JOIN users u ON l.user_id = u.user_id
     WHERE l.status = 'active'`;
+
+to that because i need the username to be a username instead of the email address -kangren 
+*/
+router.get('/marketplace', (req, res) => {
+  let sql = `
+    SELECT 
+      l.listing_id, 
+      l.title, 
+      l.price, 
+      l.category, 
+      l.item_condition, 
+      l.created_at, 
+      l.brand, 
+      l.size,
+      (
+        SELECT image_url 
+        FROM listing_images img2
+        WHERE img2.listing_id = l.listing_id
+        ORDER BY img2.is_main DESC, img2.image_id ASC
+        LIMIT 1
+      ) as image_url,
+      COALESCE(ui.username, 'Unknown') as username
+    FROM listings l
+    LEFT JOIN users u ON l.user_id = u.user_id
+    LEFT JOIN user_information ui ON u.user_id = ui.user_id
+    WHERE l.status = 'active'
+  `;
+
   const params = [];
   if (req.session.user && req.session.user.role === 'user') {
     sql += ' AND l.user_id != ?';
@@ -2312,3 +2341,73 @@ router.post('/orders/delete/:orderId', async (req, res) => {
 });
 
 module.exports = router;
+
+
+// ------------------------------- User Profile -----------------------------------------------
+
+router.get('/user/:username', (req, res) => {
+  const username = req.params.username;
+
+  const sql = `
+    SELECT u.user_id, u.email, ui.username, ui.first_name, ui.last_name,
+       ui.profile_image_url
+FROM users u
+JOIN user_information ui ON u.user_id = ui.user_id
+WHERE ui.username = ?
+
+
+  `;
+
+  callbackConnection.query(sql, [username], (err, users) => {
+    if (err) {
+      console.error('Error fetching user profile:', err);
+      return res.status(500).send('Internal Server Error');
+    }
+
+    if (users.length === 0) {
+      return res.status(404).render('users/user_not_found', {
+        layout: 'user',
+        message: 'User not found.'
+      });
+    }
+
+    const user = users[0];
+
+    // Now get the user's listings (if you want to show them)
+    const listingSql = `
+      SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.created_at,
+        (
+        SELECT image_url 
+        FROM listing_images img2
+        WHERE img2.listing_id = l.listing_id
+        ORDER BY img2.is_main DESC, img2.image_id ASC
+        LIMIT 1
+      ) as image_url
+      FROM listings l
+      WHERE l.user_id = ?
+        AND l.status = 'active'
+      ORDER BY l.created_at DESC
+    `;
+
+    callbackConnection.query(listingSql, [user.user_id], (err, listings) => {
+      if (err) {
+        console.error('Error fetching listings:', err);
+        return res.status(500).send('Error loading user listings.');
+      }
+
+      listings.forEach(listing => {
+        listing.image_url = listing.image_url
+          ? `/uploads/${listing.image_url}`
+          : '/assets/logo.png';
+      });
+
+      res.render('users/profile_display', {
+        layout: 'user',
+        profileUser: user,
+        listings: listings,
+        activePage: null,
+        user: req.session.user // current logged in user (if any)
+      });
+    });
+  });
+});

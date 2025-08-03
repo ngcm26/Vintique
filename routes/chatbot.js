@@ -11,7 +11,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const dbConfig = {
   host: 'localhost',
   user: 'root',
-  password: '#Wongairbus320@',
+  password: '',
   database: 'vintiquedb'
 };
 

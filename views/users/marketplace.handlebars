@@ -91,7 +91,11 @@
 
           <h3 class="product-title">{{title}}</h3>
 
-          <div class="product-seller">by @{{username}}</div>
+          <!-- Replace this line of code to allow user to go to user profile page
+          <div class="product-seller">by @{{username}}</div> -->
+          <div class="product-seller">
+            by <a href="/user/{{username}}" class="seller-link">@{{username}}</a>
+          </div>
 
           <div class="product-details">
             <div class="product-price">${{price}}</div>
