@@ -37,70 +37,26 @@ router.get('/staff/dashboard', requireStaff, (req, res) => {
   });
 });
 
-// User Management - accessible to both staff and admin
+// Staff User Management route
 router.get('/staff/user_management', requireStaff, (req, res) => {
-  const usersQuery = `
-    SELECT u.user_id, u.email, u.role, u.status, u.date_joined,
-           ui.first_name, ui.last_name, ui.username, ui.phone_number
-    FROM users u
-    LEFT JOIN user_information ui ON u.user_id = ui.user_id
-    WHERE u.role = 'user'
-    ORDER BY u.date_joined DESC
-  `;
-  
-  callbackConnection.query(usersQuery, (err, users) => {
+  const sql = `SELECT u.user_id, ui.username, u.email, u.phone_number as phone, 
+               COALESCE(ui.status, 'active') as status, u.role
+               FROM users u
+               LEFT JOIN user_information ui ON u.user_id = ui.user_id
+               WHERE u.role = 'user'`;
+  callbackConnection.query(sql, (err, results) => {
     if (err) {
-      console.error('User management error:', err);
+      console.error('Database error:', err);
       return res.status(500).send('Database error');
     }
-    
-    // Transform the data to match the template expectations
-    const transformedUsers = users.map(user => ({
-      ...user,
-      phone: user.phone_number || 'N/A',
-      isBanned: user.status === 'suspended',
-      created_at: user.date_joined // Add alias for consistency
-    }));
-    
-    res.render('staff/user_management', {
-      layout: 'staff',
-      activePage: 'user_management',
-      users: transformedUsers
-    });
+    const users = results.map(u => ({ ...u, isBanned: u.status === 'suspended' }));
+    res.render('staff/user_management', { layout: 'staff', activePage: 'user_management', users });
   });
 });
 
-// Staff Management - accessible to both staff and admin, but with different permissions
-router.get('/staff/staff_management', requireStaff, (req, res) => {
-  const staffQuery = `
-    SELECT u.user_id, u.email, u.role, u.status, u.date_joined,
-           ui.first_name, ui.last_name, ui.username, ui.phone_number
-    FROM users u
-    LEFT JOIN user_information ui ON u.user_id = ui.user_id
-    WHERE u.role IN ('staff', 'admin')
-    ORDER BY u.date_joined DESC
-  `;
-  
-  callbackConnection.query(staffQuery, (err, staff) => {
-    if (err) {
-      console.error('Staff management error:', err);
-      return res.status(500).send('Database error');
-    }
-    
-    // Transform the data to include created_at alias
-    const transformedStaff = staff.map(member => ({
-      ...member,
-      created_at: member.date_joined // Add alias for consistency
-    }));
-    
-    res.render('staff/staff_management', {
-      layout: 'staff',
-      activePage: 'staff_management',
-      staffMembers: transformedStaff,
-      currentUser: req.session.user,
-      isAdmin: req.session.user.role === 'admin'
-    });
-  });
+// Legacy users route
+router.get('/users', requireStaff, (req, res) => {
+  res.redirect('/staff/user_management');
 });
 
 // Q&A Management - FIXED VERSION FOR YOUR DATABASE STRUCTURE
@@ -612,219 +568,109 @@ router.post('/feedback/reply', requireStaff, (req, res) => {
   });
 });
 
-// ========== STAFF MANAGEMENT API ROUTES ==========
+// ========== USER MANAGEMENT API ROUTES ==========
 
-// Create new staff member
-router.post('/staff', requireAdmin, (req, res) => {
-  const { email, role, phone, password } = req.body;
-
-  if (!email || !role || !phone || !password) {
-    return res.status(400).json({ error: 'All fields are required' });
+// Staff User Management API endpoints
+router.patch('/users/:id', requireStaff, (req, res) => {
+  const userId = req.params.id;
+  const { username, email, phone, status } = req.body;
+  if (!username || !email || !phone || !status) {
+    return res.status(400).json({ error: 'All fields are required.' });
   }
-
-  if (!['staff', 'admin'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role' });
+  if (!['active', 'suspended'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status value.' });
   }
-
-  // Check if email already exists
-  const checkEmailQuery = 'SELECT user_id FROM users WHERE email = ?';
-  callbackConnection.query(checkEmailQuery, [email], (err, existingUsers) => {
-    if (err) {
-      console.error('Error checking email:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-
-    if (existingUsers.length > 0) {
-      return res.status(400).json({ error: 'Email already exists' });
-    }
-
-    // Create user
-    const createUserQuery = 'INSERT INTO users (email, password, role, status) VALUES (?, ?, ?, ?)';
-    callbackConnection.query(createUserQuery, [email, password, role, 'active'], (err, result) => {
-      if (err) {
-        console.error('Error creating user:', err);
-        return res.status(500).json({ error: 'Failed to create user' });
-      }
-
-      const userId = result.insertId;
-
-      // Create user information
-      const createUserInfoQuery = 'INSERT INTO user_information (user_id, phone_number) VALUES (?, ?)';
-      callbackConnection.query(createUserInfoQuery, [userId, phone], (err) => {
-        if (err) {
-          console.error('Error creating user info:', err);
-          return res.status(500).json({ error: 'Failed to create user information' });
-        }
-
-        res.json({ success: true, message: 'Staff member created successfully' });
+  const checkSql = `
+    SELECT u.user_id 
+    FROM users u
+    LEFT JOIN user_information ui ON u.user_id = ui.user_id
+    WHERE (ui.username = ? OR u.email = ? OR u.phone_number = ?) 
+      AND u.user_id != ?
+  `;
+  callbackConnection.query(checkSql, [username, email, phone, userId], (err, results) => {
+    if (err) return res.status(500).json({ error: 'Database error during validation.' });
+    if (results.length > 0) return res.status(400).json({ error: 'Username, email, or phone number already exists.' });
+    callbackConnection.beginTransaction(err => {
+      if (err) return res.status(500).json({ error: 'Database transaction error.' });
+      const updateUsers = `UPDATE users SET email = ?, phone_number = ? WHERE user_id = ?`;
+      callbackConnection.query(updateUsers, [email, phone, userId], err => {
+        if (err) return callbackConnection.rollback(() => res.status(500).json({ error: 'Error updating users table.' }));
+        const updateInfo = `UPDATE user_information SET username = ?, email = ?, phone_number = ?, status = ? WHERE user_id = ?`;
+        callbackConnection.query(updateInfo, [username, email, phone, status, userId], err => {
+          if (err) return callbackConnection.rollback(() => res.status(500).json({ error: 'Error updating user_information table.' }));
+          callbackConnection.commit(err => {
+            if (err) return callbackConnection.rollback(() => res.status(500).json({ error: 'Transaction commit error.' }));
+            res.json({ success: true });
+          });
+        });
       });
     });
   });
 });
 
-// Update staff member
-router.patch('/staff/:staffId', requireAdmin, (req, res) => {
-  const staffId = req.params.staffId;
-  const { email, phone, role } = req.body;
-
-  if (!email || !phone || !role) {
-    return res.status(400).json({ error: 'All fields are required' });
-  }
-
-  if (!['staff', 'admin'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role' });
-  }
-
-  // Update user
-  const updateUserQuery = 'UPDATE users SET email = ?, role = ? WHERE user_id = ?';
-  callbackConnection.query(updateUserQuery, [email, role, staffId], (err, result) => {
-    if (err) {
-      console.error('Error updating user:', err);
-      return res.status(500).json({ error: 'Failed to update user' });
-    }
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Staff member not found' });
-    }
-
-    // Update user information
-    const updateUserInfoQuery = 'UPDATE user_information SET phone_number = ? WHERE user_id = ?';
-    callbackConnection.query(updateUserInfoQuery, [phone, staffId], (err) => {
-      if (err) {
-        console.error('Error updating user info:', err);
-        return res.status(500).json({ error: 'Failed to update user information' });
-      }
-
-      res.json({ success: true, message: 'Staff member updated successfully' });
-    });
-  });
-});
-
-// Toggle staff status
-router.patch('/staff/:staffId/status', requireAdmin, (req, res) => {
-  const staffId = req.params.staffId;
-  const { status } = req.body;
-
-  if (!['active', 'suspended'].includes(status)) {
-    return res.status(400).json({ error: 'Invalid status' });
-  }
-
-  const updateQuery = 'UPDATE users SET status = ? WHERE user_id = ?';
-  callbackConnection.query(updateQuery, [status, staffId], (err, result) => {
-    if (err) {
-      console.error('Error updating status:', err);
-      return res.status(500).json({ error: 'Failed to update status' });
-    }
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Staff member not found' });
-    }
-
-    res.json({ success: true, message: `Staff member ${status === 'active' ? 'activated' : 'suspended'} successfully` });
-  });
-});
-
-// Delete staff member
-router.delete('/staff/:staffId', requireAdmin, (req, res) => {
-  const staffId = req.params.staffId;
-
-  // Check if trying to delete self
-  if (parseInt(staffId) === req.session.user.user_id) {
-    return res.status(400).json({ error: 'You cannot delete your own account' });
-  }
-
-  const deleteQuery = 'DELETE FROM users WHERE user_id = ?';
-  callbackConnection.query(deleteQuery, [staffId], (err, result) => {
-    if (err) {
-      console.error('Error deleting staff member:', err);
-      return res.status(500).json({ error: 'Failed to delete staff member' });
-    }
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Staff member not found' });
-    }
-
-    res.json({ success: true, message: 'Staff member deleted successfully' });
-  });
-});
-
-// ========== USER MANAGEMENT API ROUTES ==========
-
-// Toggle user ban status
-router.patch('/users/:userId/ban', requireStaff, (req, res) => {
-  const userId = req.params.userId;
-  const { banned } = req.body;
-
-  const newStatus = banned ? 'suspended' : 'active';
-  const updateQuery = 'UPDATE users SET status = ? WHERE user_id = ? AND role = "user"';
-  
-  callbackConnection.query(updateQuery, [newStatus, userId], (err, result) => {
-    if (err) {
-      console.error('Error updating user status:', err);
-      return res.status(500).json({ error: 'Failed to update user status' });
-    }
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({ 
-      success: true, 
-      message: `User ${banned ? 'suspended' : 'activated'} successfully` 
-    });
-  });
-});
-
-// Update user information
-router.patch('/users/:userId', requireStaff, (req, res) => {
-  const userId = req.params.userId;
-  const { username, email, phone } = req.body;
-
-  if (!username || !email) {
-    return res.status(400).json({ error: 'Username and email are required' });
-  }
-
-  // Update user information
-  const updateUserInfoQuery = 'UPDATE user_information SET username = ?, phone_number = ? WHERE user_id = ?';
-  callbackConnection.query(updateUserInfoQuery, [username, phone || null, userId], (err) => {
-    if (err) {
-      console.error('Error updating user info:', err);
-      return res.status(500).json({ error: 'Failed to update user information' });
-    }
-
-    // Update user email
-    const updateUserQuery = 'UPDATE users SET email = ? WHERE user_id = ? AND role = "user"';
-    callbackConnection.query(updateUserQuery, [email, userId], (err, result) => {
-      if (err) {
-        console.error('Error updating user:', err);
-        return res.status(500).json({ error: 'Failed to update user' });
-      }
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-
-      res.json({ success: true, message: 'User updated successfully' });
-    });
-  });
-});
-
 // Delete user
-router.delete('/users/:userId', requireStaff, (req, res) => {
-  const userId = req.params.userId;
+router.delete('/users/:id', requireStaff, (req, res) => {
+  const userId = req.params.id;
+  const checkRoleSql = 'SELECT role FROM users WHERE user_id = ?';
+  callbackConnection.query(checkRoleSql, [userId], (err, results) => {
+    if (err) return res.status(500).json({ error: 'Database error.' });
+    if (results.length === 0) return res.status(404).json({ error: 'User not found.' });
+    if (results[0].role === 'staff') return res.status(403).json({ error: 'Cannot delete staff users.' });
+    const deleteSql = 'DELETE FROM users WHERE user_id = ?';
+    callbackConnection.query(deleteSql, [userId], (err, result) => {
+      if (err) return res.status(500).json({ error: 'Database error during deletion.' });
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found.' });
+      res.json({ success: true });
+    });
+  });
+});
 
-  const deleteQuery = 'DELETE FROM users WHERE user_id = ? AND role = "user"';
-  callbackConnection.query(deleteQuery, [userId], (err, result) => {
-    if (err) {
-      console.error('Error deleting user:', err);
-      return res.status(500).json({ error: 'Failed to delete user' });
-    }
+// Change user status
+router.patch('/users/:id/status', requireStaff, (req, res) => {
+  const userId = req.params.id;
+  const { status } = req.body;
+  if (!['active', 'suspended'].includes(status)) return res.status(400).json({ error: 'Invalid status.' });
+  
+  // Update both user_information and users tables
+  const updateInfoSql = 'UPDATE user_information SET status = ? WHERE user_id = ?';
+  const updateUserSql = 'UPDATE users SET status = ? WHERE user_id = ?';
+  
+  callbackConnection.query(updateInfoSql, [status, userId], (err, result) => {
+    if (err) return res.status(500).json({ error: 'Database error updating user_information status.' });
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found in user_information.' });
+    
+    // Update users table
+    callbackConnection.query(updateUserSql, [status, userId], (err2, result2) => {
+      if (err2) return res.status(500).json({ error: 'Database error updating users status.' });
+      if (result2.affectedRows === 0) return res.status(404).json({ error: 'User not found in users table.' });
+      res.json({ success: true });
+    });
+  });
+});
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({ success: true, message: 'User deleted successfully' });
+// Toggle user suspend status (for frontend compatibility)
+router.patch('/users/:id/ban', requireStaff, (req, res) => {
+  const userId = req.params.id;
+  const { banned } = req.body;
+  
+  if (typeof banned !== 'boolean') {
+    return res.status(400).json({ error: 'Banned field must be a boolean.' });
+  }
+  
+  const newStatus = banned ? 'suspended' : 'active';
+  const updateInfoSql = 'UPDATE user_information SET status = ? WHERE user_id = ?';
+  const updateUserSql = 'UPDATE users SET status = ? WHERE user_id = ?';
+  
+  callbackConnection.query(updateInfoSql, [newStatus, userId], (err, result) => {
+    if (err) return res.status(500).json({ error: 'Database error updating user_information status.' });
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found in user_information.' });
+    
+    // Update users table
+    callbackConnection.query(updateUserSql, [newStatus, userId], (err2, result2) => {
+      if (err2) return res.status(500).json({ error: 'Database error updating users status.' });
+      if (result2.affectedRows === 0) return res.status(404).json({ error: 'User not found in users table.' });
+      res.json({ success: true });
+    });
   });
 });
 
@@ -928,6 +774,5 @@ router.get('/profile/:userId', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
-
 
 module.exports = router;

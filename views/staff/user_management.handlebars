@@ -39,9 +39,9 @@
           </td>
           <td>
             {{#if this.isBanned}}
-              <button class="btn btn-sm btn-success action-btn" onclick="toggleBan(this)">Unsuspend</button>
+              <button class="btn btn-sm btn-success action-btn" onclick="toggleSuspend(this)">Unsuspend</button>
             {{else}}
-              <button class="btn btn-sm btn-warning action-btn" onclick="toggleBan(this)">Suspend</button>
+              <button class="btn btn-sm btn-warning action-btn" onclick="toggleSuspend(this)">Suspend</button>
             {{/if}}
             <button class="btn btn-sm btn-secondary" onclick="editUser(this)">Edit</button>
             <button class="btn btn-sm btn-danger" onclick="deleteUser(this)">Delete</button>
@@ -78,6 +78,13 @@
             <label for="editPhone" class="form-label">Phone</label>
             <input type="text" class="form-control" id="editPhone">
           </div>
+          <div class="mb-3">
+            <label for="editStatus" class="form-label">Status</label>
+            <select class="form-control" id="editStatus">
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
         </form>
       </div>
       <div class="modal-footer">
@@ -98,6 +105,12 @@
     document.getElementById('editUsername').value = editingRow.cells[1].textContent;
     document.getElementById('editEmail').value = editingRow.cells[2].textContent;
     document.getElementById('editPhone').value = editingRow.cells[3].textContent;
+    
+    // Set status based on the badge
+    const statusBadge = editingRow.querySelector('td:nth-child(5) span');
+    const isBanned = statusBadge.classList.contains('status-banned');
+    document.getElementById('editStatus').value = isBanned ? 'suspended' : 'active';
+    
     new bootstrap.Modal(document.getElementById('editUserModal')).show();
   }
 
@@ -106,11 +119,38 @@
     const username = document.getElementById('editUsername').value;
     const email = document.getElementById('editEmail').value;
     const phone = document.getElementById('editPhone').value;
+    const status = document.getElementById('editStatus').value;
+    
+    // Validation
+    if (!username || !email || !phone || !status) {
+      alert('All fields are required.');
+      return;
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+    
+    // Phone validation (8 digits)
+    const phoneRegex = /^\d{8}$/;
+    if (!phoneRegex.test(phone)) {
+      alert('Phone number must be exactly 8 digits.');
+      return;
+    }
+    
+    // Show loading state
+    const saveBtn = document.querySelector('#editUserModal .btn-primary');
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = 'Saving...';
+    saveBtn.disabled = true;
     
     fetch(`/users/${userId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, phone })
+      body: JSON.stringify({ username, email, phone, status })
     })
     .then(res => res.json())
     .then(data => {
@@ -118,32 +158,67 @@
         editingRow.cells[1].textContent = username;
         editingRow.cells[2].textContent = email;
         editingRow.cells[3].textContent = phone;
+        
+        // Update status badge
+        const statusCell = editingRow.querySelector('td:nth-child(5) span');
+        if (status === 'suspended') {
+          statusCell.classList.remove('status-active');
+          statusCell.classList.add('status-banned');
+          statusCell.textContent = 'Suspended';
+        } else {
+          statusCell.classList.remove('status-banned');
+          statusCell.classList.add('status-active');
+          statusCell.textContent = 'Active';
+        }
+        
+        // Update suspend/unsuspend button
+        const actionBtn = editingRow.querySelector('.action-btn');
+        if (status === 'suspended') {
+          actionBtn.classList.remove('btn-warning');
+          actionBtn.classList.add('btn-success');
+          actionBtn.textContent = 'Unsuspend';
+        } else {
+          actionBtn.classList.remove('btn-success');
+          actionBtn.classList.add('btn-warning');
+          actionBtn.textContent = 'Suspend';
+        }
+        
         bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
         alert('User updated successfully!');
       } else {
         alert(data.error || 'Failed to update user.');
       }
     })
-    .catch(() => alert('Failed to update user.'));
+    .catch(() => alert('Failed to update user.'))
+    .finally(() => {
+      // Reset button state
+      saveBtn.textContent = originalText;
+      saveBtn.disabled = false;
+    });
   }
 
-  function toggleBan(btn) {
+  function toggleSuspend(btn) {
     const row = btn.closest('tr');
     const userId = row.cells[0].textContent;
     const statusCell = row.querySelector('td:nth-child(5) span');
-    const isBanned = statusCell.classList.contains('status-banned');
+    const isSuspended = statusCell.classList.contains('status-banned');
     
-    if (!confirm(`Are you sure you want to ${isBanned ? 'unsuspend' : 'suspend'} this user?`)) return;
+    if (!confirm(`Are you sure you want to ${isSuspended ? 'unsuspend' : 'suspend'} this user?`)) return;
+    
+    // Show loading state
+    const originalText = btn.textContent;
+    btn.textContent = 'Loading...';
+    btn.disabled = true;
     
     fetch(`/users/${userId}/ban`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ banned: !isBanned })
+      body: JSON.stringify({ banned: !isSuspended })
     })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        if (isBanned) {
+        if (isSuspended) {
           statusCell.classList.remove('status-banned');
           statusCell.classList.add('status-active');
           statusCell.textContent = 'Active';
@@ -158,12 +233,22 @@
           btn.classList.add('btn-success');
           btn.textContent = 'Unsuspend';
         }
-        alert(`User ${isBanned ? 'activated' : 'suspended'} successfully!`);
+        alert(`User ${isSuspended ? 'activated' : 'suspended'} successfully!`);
+        // Re-enable button after successful update
+        btn.disabled = false;
       } else {
         alert(data.error || 'Failed to change status.');
+        // Reset button state on error
+        btn.textContent = originalText;
+        btn.disabled = false;
       }
     })
-    .catch(() => alert('Failed to change status.'));
+    .catch(() => {
+      alert('Failed to change status.');
+      // Reset button state on error
+      btn.textContent = originalText;
+      btn.disabled = false;
+    });
   }
 
   function deleteUser(btn) {
@@ -172,6 +257,11 @@
     const userEmail = row.cells[2].textContent;
     
     if (!confirm(`Are you sure you want to delete user with email "${userEmail}"? This action cannot be undone.`)) return;
+    
+    // Show loading state
+    const originalText = btn.textContent;
+    btn.textContent = 'Deleting...';
+    btn.disabled = true;
     
     fetch(`/users/${userId}`, {
       method: 'DELETE'
@@ -185,7 +275,12 @@
         alert(data.error || 'Failed to delete user.');
       }
     })
-    .catch(() => alert('Failed to delete user.'));
+    .catch(() => alert('Failed to delete user.'))
+    .finally(() => {
+      // Reset button state
+      btn.textContent = originalText;
+      btn.disabled = false;
+    });
   }
 
   // Search bar and status filter functionality

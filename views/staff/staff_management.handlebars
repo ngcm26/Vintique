@@ -1,7 +1,7 @@
-<h1>Admin: Manage Staff & Admin</h1>
+<h1>Staff Management</h1>
 <div style="height: 32px;"></div>
 <div class="header-bar">
-  <h3 class="mb-0">Staff & Admin Management</h3>
+  <h3 class="mb-0">Staff Management</h3>
   <div style="display: flex; gap: 8px; align-items: center;">
     {{#if isAdmin}}
     <button class="btn-add-staff" data-bs-toggle="modal" data-bs-target="#addStaffModal">
@@ -59,9 +59,9 @@
             <!-- Other staff members - show active buttons only for admins -->
             {{#if ../isAdmin}}
               {{#if (eq this.status 'active')}}
-                <button class="btn btn-sm btn-warning" onclick="toggleStaffStatus(this)">Suspend</button>
+                <button class="btn btn-sm btn-warning action-btn" onclick="toggleStaffStatus(this)">Suspend</button>
               {{else}}
-                <button class="btn btn-sm btn-success" onclick="toggleStaffStatus(this)">Activate</button>
+                <button class="btn btn-sm btn-success action-btn" onclick="toggleStaffStatus(this)">Unsuspend</button>
               {{/if}}
               <button class="btn btn-sm btn-secondary" onclick="editStaff(this)">Edit</button>
               <button class="btn btn-sm btn-danger" onclick="deleteStaff(this)">Delete</button>
@@ -103,6 +103,13 @@
             <select class="form-control" id="editStaffRole" required>
               <option value="staff">Staff</option>
               <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="editStaffStatus" class="form-label">Status</label>
+            <select class="form-control" id="editStaffStatus">
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
             </select>
           </div>
         </form>
@@ -182,6 +189,11 @@
     const role = roleBadge.textContent.toLowerCase();
     document.getElementById('editStaffRole').value = role;
     
+    // Set status based on the badge
+    const statusBadge = editingStaffRow.querySelector('td:nth-child(5) span');
+    const isSuspended = statusBadge.classList.contains('status-banned');
+    document.getElementById('editStaffStatus').value = isSuspended ? 'suspended' : 'active';
+    
     new bootstrap.Modal(document.getElementById('editStaffModal')).show();
   }
 
@@ -195,17 +207,29 @@
     const email = document.getElementById('editStaffEmail').value;
     const phone = document.getElementById('editStaffPhone').value;
     const role = document.getElementById('editStaffRole').value;
+    const status = document.getElementById('editStaffStatus').value;
     
-    // Validate phone number format
+    // Client-side validation
+    if (!email || !phone || !role || !status) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+    
     if (!/^\d{8}$/.test(phone)) {
       alert('Phone number must be exactly 8 digits long.');
       return;
     }
     
+    // Show loading state
+    const saveBtn = document.querySelector('#editStaffModal .btn-primary');
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = 'Saving...';
+    saveBtn.disabled = true;
+    
     fetch(`/staff/${staffId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, phone, role })
+      body: JSON.stringify({ email, phone, role, status })
     })
     .then(res => {
       if (!res.ok) {
@@ -226,6 +250,30 @@
         roleBadge.textContent = role.charAt(0).toUpperCase() + role.slice(1);
         roleBadge.className = `badge role-${role}`;
         
+        // Update status badge
+        const statusCell = editingStaffRow.querySelector('td:nth-child(5) span');
+        if (status === 'suspended') {
+          statusCell.classList.remove('status-active');
+          statusCell.classList.add('status-banned');
+          statusCell.textContent = 'Suspended';
+        } else {
+          statusCell.classList.remove('status-banned');
+          statusCell.classList.add('status-active');
+          statusCell.textContent = 'Active';
+        }
+        
+        // Update suspend/unsuspend button
+        const actionBtn = editingStaffRow.querySelector('.action-btn');
+        if (status === 'suspended') {
+          actionBtn.classList.remove('btn-warning');
+          actionBtn.classList.add('btn-success');
+          actionBtn.textContent = 'Unsuspend';
+        } else {
+          actionBtn.classList.remove('btn-success');
+          actionBtn.classList.add('btn-warning');
+          actionBtn.textContent = 'Suspend';
+        }
+        
         bootstrap.Modal.getInstance(document.getElementById('editStaffModal')).hide();
         alert('Staff member updated successfully!');
       } else {
@@ -235,6 +283,11 @@
     .catch(error => {
       console.error('Error:', error);
       alert(error.message || 'Failed to update staff member. Please try again.');
+    })
+    .finally(() => {
+      // Reset button state
+      saveBtn.textContent = originalText;
+      saveBtn.disabled = false;
     });
   }
 
@@ -248,40 +301,54 @@
     const staffId = row.cells[0].textContent;
     
     const statusCell = row.querySelector('td:nth-child(5) span');
-    const isActive = statusCell.classList.contains('status-active');
-    const newStatus = isActive ? 'suspended' : 'active';
+    const isSuspended = statusCell.classList.contains('status-banned');
     
-    if (!confirm(`Are you sure you want to ${isActive ? 'suspend' : 'activate'} this staff member?`)) return;
+    if (!confirm(`Are you sure you want to ${isSuspended ? 'unsuspend' : 'suspend'} this staff member?`)) return;
+    
+    // Show loading state
+    const originalText = btn.textContent;
+    btn.textContent = 'Loading...';
+    btn.disabled = true;
     
     fetch(`/staff/${staffId}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
+      body: JSON.stringify({ status: isSuspended ? 'active' : 'suspended' })
     })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        if (isActive) {
-          statusCell.classList.remove('status-active');
-          statusCell.classList.add('status-banned');
-          statusCell.textContent = 'Suspended';
-          btn.classList.remove('btn-warning');
-          btn.classList.add('btn-success');
-          btn.textContent = 'Activate';
-        } else {
+        if (isSuspended) {
           statusCell.classList.remove('status-banned');
           statusCell.classList.add('status-active');
           statusCell.textContent = 'Active';
           btn.classList.remove('btn-success');
           btn.classList.add('btn-warning');
           btn.textContent = 'Suspend';
+        } else {
+          statusCell.classList.remove('status-active');
+          statusCell.classList.add('status-banned');
+          statusCell.textContent = 'Suspended';
+          btn.classList.remove('btn-warning');
+          btn.classList.add('btn-success');
+          btn.textContent = 'Unsuspend';
         }
-        alert(`Staff member ${isActive ? 'suspended' : 'activated'} successfully!`);
+        alert(`Staff member ${isSuspended ? 'activated' : 'suspended'} successfully!`);
+        // Re-enable button after successful update
+        btn.disabled = false;
       } else {
         alert(data.error || 'Failed to change status.');
+        // Reset button state on error
+        btn.textContent = originalText;
+        btn.disabled = false;
       }
     })
-    .catch(() => alert('Failed to change status.'));
+    .catch(() => {
+      alert('Failed to change status.');
+      // Reset button state on error
+      btn.textContent = originalText;
+      btn.disabled = false;
+    });
   }
 
   function deleteStaff(btn) {
@@ -296,6 +363,11 @@
     
     if (!confirm(`Are you sure you want to delete staff member with email "${staffEmail}"? This action cannot be undone.`)) return;
     
+    // Show loading state
+    const originalText = btn.textContent;
+    btn.textContent = 'Deleting...';
+    btn.disabled = true;
+    
     fetch(`/staff/${staffId}`, {
       method: 'DELETE'
     })
@@ -308,7 +380,12 @@
         alert(data.error || 'Failed to delete staff member.');
       }
     })
-    .catch(() => alert('Failed to delete staff member.'));
+    .catch(() => alert('Failed to delete staff member.'))
+    .finally(() => {
+      // Reset button state
+      btn.textContent = originalText;
+      btn.disabled = false;
+    });
   }
 
   function addStaffMember() {
@@ -323,18 +400,9 @@
     const password = document.getElementById('staffPassword').value;
     const confirmPassword = document.getElementById('staffConfirmPassword').value;
     
-    if (!email) {
-      alert('Please enter an email address');
-      return;
-    }
-    
-    if (!phone) {
-      alert('Please enter a phone number');
-      return;
-    }
-    
-    if (!password) {
-      alert('Please enter a password');
+    // Client-side validation
+    if (!email || !phone || !password || !confirmPassword) {
+      alert('Please fill in all required fields.');
       return;
     }
     
@@ -347,6 +415,17 @@
       alert('Password must be at least 6 characters long');
       return;
     }
+    
+    if (!/^\d{8}$/.test(phone)) {
+      alert('Phone number must be exactly 8 digits long.');
+      return;
+    }
+    
+    // Show loading state
+    const addBtn = document.querySelector('#addStaffModal .btn-warning');
+    const originalText = addBtn.textContent;
+    addBtn.textContent = 'Adding...';
+    addBtn.disabled = true;
     
     // Make API call to create staff member
     fetch('/staff', {
@@ -389,6 +468,11 @@
     .catch(error => {
       console.error('Error:', error);
       alert(error.message || 'Failed to create staff member. Please try again.');
+    })
+    .finally(() => {
+      // Reset button state
+      addBtn.textContent = originalText;
+      addBtn.disabled = false;
     });
   }
 

@@ -5,7 +5,7 @@ const { generateOTP, sendVerificationEmail } = require('../utils/helpers');
 
 // ======= LOGIN =======
 router.get('/login', (req, res) => {
-  const { message, verified, email } = req.query;
+  const { message, verified, email, error } = req.query;
   
   // If user just verified their email, pre-fill the email field
   const formData = verified && email ? { email } : {};
@@ -15,6 +15,7 @@ router.get('/login', (req, res) => {
     layout: 'user',
     activePage: 'login',
     message,
+    error,
     formData
   });
 });
@@ -36,7 +37,8 @@ router.post('/login', async (req, res) => {
         ui.first_name,
         ui.last_name,
         ui.username,
-        ui.verified
+        ui.verified,
+        COALESCE(ui.status, u.status) as status
       FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE u.email = ?
@@ -49,7 +51,7 @@ router.post('/login', async (req, res) => {
     const user = users[0];
 
     if (user.status === 'suspended') {
-      return renderError('Your account has been suspended');
+      return renderError('Your account has been suspended. Please contact support for assistance.');
     }
 
     if (user.password !== password) {
@@ -66,7 +68,7 @@ router.post('/login', async (req, res) => {
       id: user.user_id,
       email: user.email,
       role: user.role,
-      status: user.status,
+      status: user.status, // This now uses the COALESCE result
       first_name: user.first_name,
       last_name: user.last_name,
       username: user.username
