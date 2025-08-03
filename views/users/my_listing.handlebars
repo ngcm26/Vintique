@@ -151,17 +151,53 @@ function showTableView() {
 function deleteListing(event, listingId) {
   event.stopPropagation();
   if (!confirm('Are you sure you want to delete this listing? This action cannot be undone.')) return;
-  fetch(`/listings/${listingId}`, { method: 'DELETE' })
-    .then(res => res.json())
+  
+  console.log('Attempting to delete listing:', listingId);
+  
+  fetch(`/listings/${listingId}`, { 
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+    .then(res => {
+      console.log('Delete response status:', res.status);
+      return res.json();
+    })
     .then(data => {
+      console.log('Delete response data:', data);
       if (data.success) {
         // Remove the card or row from the DOM
         document.querySelectorAll(`[data-listing-id='${listingId}']`).forEach(el => el.remove());
+        // Show success message
+        showNotification('Listing deleted successfully!', 'success');
       } else {
-        alert(data.error || 'Failed to delete listing.');
+        showNotification(data.error || 'Failed to delete listing.', 'error');
       }
     })
-    .catch(() => alert('Failed to delete listing.'));
+    .catch(error => {
+      console.error('Delete listing error:', error);
+      showNotification('Failed to delete listing. Please try again.', 'error');
+    });
+}
+
+// Simple notification function
+function showNotification(message, type) {
+  const notification = document.createElement('div');
+  notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+  notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+  notification.innerHTML = `
+    ${message}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  `;
+  document.body.appendChild(notification);
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.remove();
+    }
+  }, 5000);
 }
 </script>
 

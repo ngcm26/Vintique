@@ -8,13 +8,7 @@ const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
 
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '', //Add your own password here
-  database: 'vintiquedb',
-  port: 3306
-};
+// Database configuration is handled by config/database.js
 
 // ========== HELPER FUNCTIONS ==========
 
@@ -82,7 +76,7 @@ const getListingWithImages = (listingId, callback) => {
         SELECT image_url 
         FROM listing_images li 
         WHERE li.listing_id = l.listing_id 
-        ORDER BY li.is_main DESC, li.image_id ASC 
+        ORDER BY li.image_id ASC 
         LIMIT 1
       ) as image_url
     FROM listings l
@@ -140,7 +134,7 @@ router.get('/marketplace', (req, res) => {
         SELECT image_url 
         FROM listing_images img2
         WHERE img2.listing_id = l.listing_id
-        ORDER BY img2.is_main DESC, img2.image_id ASC
+        ORDER BY img2.image_id ASC
         LIMIT 1
       ) as image_url,
       COALESCE(ui.username, 'Unknown') as username
@@ -211,7 +205,7 @@ router.post('/post_product', upload.array('images', 5), (req, res) => {
     const imageValues = images.map((img, idx) => [
       listingId,
       '/uploads/' + img.filename,
-      idx === images.length - 1 // Last image is cover
+      idx === 0 // First image is cover
     ]);
     callbackConnection.query(imageSql, [imageValues], (err2) => {
       if (err2) {
@@ -238,7 +232,7 @@ router.get('/my_listing', (req, res) => {
           (
             SELECT image_url FROM listing_images img2
             WHERE img2.listing_id = l.listing_id
-            ORDER BY img2.image_id DESC
+            ORDER BY img2.image_id ASC
             LIMIT 1
           ) as image_url,
           COALESCE(
@@ -481,58 +475,165 @@ router.post('/listings/:id/mark_sold', (req, res) => {
 
 // Delete Listing Route
 router.delete('/listings/:id', (req, res) => {
+  console.log('=== DELETE LISTING REQUEST ===');
+  console.log('User session:', req.session.user);
+  console.log('Listing ID:', req.params.id);
+  
   if (!requireUserAuth(req, res)) return;
   
   const listingId = req.params.id;
   const userId = getUserId(req);
   
-  // Start transaction
-  callbackConnection.beginTransaction((err) => {
+  console.log('Processing delete for listing:', listingId, 'by user:', userId);
+  
+  // First verify the listing belongs to the user
+  const verifyQuery = 'SELECT listing_id, status FROM listings WHERE listing_id = ? AND user_id = ?';
+  
+  callbackConnection.query(verifyQuery, [listingId, userId], (err, result) => {
     if (err) {
-      console.error('Transaction error:', err);
-      return res.status(500).json({ error: 'Database error' });
+      console.error('❌ Database error during verification:', err);
+      return res.status(500).json({ error: 'Database error during verification' });
     }
     
-    // First delete images
-    const deleteImagesQuery = 'DELETE FROM listing_images WHERE listing_id = ?';
-    callbackConnection.query(deleteImagesQuery, [listingId], (err) => {
+    if (result.length === 0) {
+      console.log('❌ Listing not found or user does not have permission');
+      return res.status(404).json({ error: 'Listing not found or you do not have permission' });
+    }
+    
+    const listing = result[0];
+    console.log('✅ Listing verified:', listing);
+    
+    // Check if listing has active orders
+    const checkOrdersQuery = `
+      SELECT oi.order_item_id, o.status as order_status, o.order_id
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.order_id
+      WHERE oi.listing_id = ?
+    `;
+    
+    callbackConnection.query(checkOrdersQuery, [listingId], (err, orders) => {
       if (err) {
-        return callbackConnection.rollback(() => {
-          console.error('Delete images error:', err);
-          res.status(500).json({ error: 'Error deleting listing images' });
+        console.error('❌ Error checking orders:', err);
+        return res.status(500).json({ error: 'Error checking orders' });
+      }
+      
+      console.log('📦 Found orders for listing:', orders.length);
+      
+      // If there are completed or shipped orders, prevent deletion
+      const activeOrders = orders.filter(order => 
+        order.order_status === 'completed' || 
+        order.order_status === 'shipped' || 
+        order.order_status === 'paid'
+      );
+      
+      if (activeOrders.length > 0) {
+        console.log('❌ Cannot delete listing with active orders:', activeOrders.length);
+        return res.status(400).json({ 
+          error: 'Cannot delete listing with active orders. Please contact support if you need to remove this listing.' 
         });
       }
       
-      // Then delete the listing
-      const deleteListingQuery = 'DELETE FROM listings WHERE listing_id = ? AND user_id = ?';
-      callbackConnection.query(deleteListingQuery, [listingId, userId], (err, result) => {
+      // Start transaction
+      callbackConnection.beginTransaction((err) => {
         if (err) {
-          return callbackConnection.rollback(() => {
-            console.error('Delete listing error:', err);
-            res.status(500).json({ error: 'Error deleting listing' });
-          });
+          console.error('❌ Transaction error:', err);
+          return res.status(500).json({ error: 'Database transaction error' });
         }
         
-        if (result.affectedRows === 0) {
-          return callbackConnection.rollback(() => {
-            res.status(404).json({ error: 'Listing not found or you do not have permission' });
-          });
-        }
+        console.log('🔄 Transaction started');
         
-        callbackConnection.commit((err) => {
+        // Delete order items for this listing (cancelled/pending orders only)
+        const deleteOrderItemsQuery = `
+          DELETE oi FROM order_items oi
+          JOIN orders o ON oi.order_id = o.order_id
+          WHERE oi.listing_id = ? AND o.status IN ('pending', 'cancelled')
+        `;
+        
+        callbackConnection.query(deleteOrderItemsQuery, [listingId], (err, result) => {
           if (err) {
+            console.error('❌ Error deleting order items:', err);
             return callbackConnection.rollback(() => {
-              console.error('Commit error:', err);
-              res.status(500).json({ error: 'Error deleting listing' });
+              res.status(500).json({ error: 'Error deleting related orders' });
             });
           }
           
-          res.json({ success: true, message: 'Listing deleted successfully' });
-        });
-      });
-    });
-  });
-});
+          console.log('✅ Deleted order items:', result.affectedRows);
+          
+          // Delete cart items for this listing
+          const deleteCartItemsQuery = 'DELETE FROM cart WHERE listing_id = ?';
+          callbackConnection.query(deleteCartItemsQuery, [listingId], (err, result) => {
+            if (err) {
+              console.error('❌ Error deleting cart items:', err);
+              return callbackConnection.rollback(() => {
+                res.status(500).json({ error: 'Error deleting cart items' });
+              });
+            }
+            
+            console.log('✅ Deleted cart items:', result.affectedRows);
+            
+            // Delete images
+            const deleteImagesQuery = 'DELETE FROM listing_images WHERE listing_id = ?';
+            callbackConnection.query(deleteImagesQuery, [listingId], (err, result) => {
+              if (err) {
+                console.error('❌ Error deleting images:', err);
+                return callbackConnection.rollback(() => {
+                  res.status(500).json({ error: 'Error deleting listing images' });
+                });
+              }
+              
+                          console.log('✅ Deleted images:', result.affectedRows);
+              
+              // Delete conversations for this listing
+              const deleteConversationsQuery = 'DELETE FROM conversations WHERE listing_id = ?';
+              callbackConnection.query(deleteConversationsQuery, [listingId], (err, result) => {
+                if (err) {
+                  console.error('❌ Error deleting conversations:', err);
+                  return callbackConnection.rollback(() => {
+                    res.status(500).json({ error: 'Error deleting conversations' });
+                  });
+                }
+                
+                console.log('✅ Deleted conversations:', result.affectedRows);
+                
+                // Finally delete the listing
+                const deleteListingQuery = 'DELETE FROM listings WHERE listing_id = ? AND user_id = ?';
+                callbackConnection.query(deleteListingQuery, [listingId, userId], (err, result) => {
+                  if (err) {
+                    console.error('❌ Error deleting listing:', err);
+                    return callbackConnection.rollback(() => {
+                      res.status(500).json({ error: 'Error deleting listing' });
+                    });
+                  }
+                  
+                  if (result.affectedRows === 0) {
+                    console.log('❌ No listing was deleted');
+                    return callbackConnection.rollback(() => {
+                      res.status(404).json({ error: 'Listing not found or you do not have permission' });
+                    });
+                  }
+                  
+                  console.log('✅ Listing deleted successfully');
+                  
+                  callbackConnection.commit((err) => {
+                    if (err) {
+                      console.error('❌ Commit error:', err);
+                      return callbackConnection.rollback(() => {
+                        res.status(500).json({ error: 'Error committing transaction' });
+                      });
+                    }
+                    
+                    console.log('✅ Transaction committed successfully');
+                    res.json({ success: true, message: 'Listing deleted successfully' });
+                  });
+                }); // End of delete listing query
+              }); // End of delete conversations query
+            }); // End of delete images query
+          }); // End of delete cart items query
+        }); // End of delete order items query
+      }); // End of beginTransaction
+    }); // End of checkOrdersQuery
+  }); // End of verifyQuery
+}); // End of router.delete
 
 // Delete Image Route
 router.post('/delete_image', (req, res) => {
@@ -2352,7 +2453,7 @@ router.get('/orders', async (req, res) => {
   
   const userId = req.session.user.user_id || req.session.user.id;
 
-  const conn = await mysql.createConnection(dbConfig);
+  const conn = await createConnection();
 
   try {
     // Fetch purchases (orders where user is buyer)
@@ -2404,7 +2505,7 @@ router.get('/orders/details/:orderId', async (req, res) => {
   const userId = req.session.user.user_id || req.session.user.id;
   const orderId = req.params.orderId;
 
-  const conn = await mysql.createConnection(dbConfig);
+  const conn = await createConnection();
 
   try {
     // Check order ownership (as buyer or seller)
@@ -2903,7 +3004,7 @@ WHERE ui.username = ?
         SELECT image_url 
         FROM listing_images img2
         WHERE img2.listing_id = l.listing_id
-        ORDER BY img2.is_main DESC, img2.image_id ASC
+        ORDER BY img2.image_id ASC
         LIMIT 1
       ) as image_url
       FROM listings l
@@ -2982,5 +3083,28 @@ router.post('/reviews/add', (req, res) => {
         res.redirect('/purchases'); 
       }
     );
+  });
+});
+
+// Test database connection
+router.get('/test-db', (req, res) => {
+  console.log('Testing database connection...');
+  
+  const testQuery = 'SELECT 1 as test';
+  callbackConnection.query(testQuery, (err, result) => {
+    if (err) {
+      console.error('❌ Database test failed:', err);
+      return res.status(500).json({ 
+        error: 'Database connection failed',
+        details: err.message 
+      });
+    }
+    
+    console.log('✅ Database test successful:', result);
+    res.json({ 
+      success: true, 
+      message: 'Database connection is working',
+      result: result 
+    });
   });
 });
