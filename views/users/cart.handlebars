@@ -357,7 +357,17 @@ function updateCheckoutButton() {
   const hasItems = cartItems.length > 0;
   const hasAddress = selectedAddressId !== null && userAddresses.length > 0;
   
+  // Disable checkout button if no items or no address selected
   checkoutBtn.disabled = !hasItems || !hasAddress;
+  
+  // Update button text based on state
+  if (!hasItems) {
+    checkoutBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Add Items to Checkout';
+  } else if (!hasAddress) {
+    checkoutBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Select Shipping Address';
+  } else {
+    checkoutBtn.innerHTML = '<i class="fas fa-credit-card"></i> Proceed to Checkout';
+  }
 }
 
 // Display cart items
@@ -486,17 +496,31 @@ function updateCartSummary() {
 
 // Proceed to checkout
 async function proceedToCheckout() {
+  // Validate cart has items
   if (cartItems.length === 0) {
-    alert('Your cart is empty!');
+    alert('Your cart is empty! Please add items before checkout.');
     return;
   }
   
+  // Validate minimum 1 item
+  if (cartItems.length < 1) {
+    alert('You need at least 1 item in your cart to checkout.');
+    return;
+  }
+  
+  // Validate shipping address is selected
   if (selectedAddressId === null || userAddresses.length === 0) {
-    alert('Please select a shipping address!');
+    alert('Please select a shipping address before proceeding to checkout.');
     return;
   }
   
   const selectedAddress = userAddresses[selectedAddressId];
+  
+  // Disable checkout button to prevent double-clicking
+  const checkoutBtn = document.getElementById('checkoutBtn');
+  const originalText = checkoutBtn.innerHTML;
+  checkoutBtn.disabled = true;
+  checkoutBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
   
   try {
     // Create order in database with address information
@@ -513,47 +537,65 @@ async function proceedToCheckout() {
     if (response.ok) {
       const data = await response.json();
       
-      // STRIPE INTEGRATION - Create payment session
-      const paymentResponse = await fetch('/api/stripe/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          order_id: data.order_id,
-          amount: data.total
-        })
-      });
-      
-      if (paymentResponse.ok) {
-        const paymentData = await paymentResponse.json();
-        
-        // Redirect to Stripe Checkout
-        const stripe = Stripe(paymentData.publishableKey);
-        const { error } = await stripe.redirectToCheckout({
-          sessionId: paymentData.sessionId
+      // Check if Stripe is available
+      if (typeof Stripe !== 'undefined') {
+        // STRIPE INTEGRATION - Create payment session
+        const paymentResponse = await fetch('/api/stripe/create-payment-intent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            order_id: data.order_id,
+            amount: data.total
+          })
         });
         
-        if (error) {
-          console.error('Stripe error:', error);
-          alert('Payment error: ' + error.message);
+        if (paymentResponse.ok) {
+          const paymentData = await paymentResponse.json();
+          
+          // Redirect to Stripe Checkout
+          const stripe = Stripe(paymentData.publishableKey);
+          const { error } = await stripe.redirectToCheckout({
+            sessionId: paymentData.sessionId
+          });
+          
+          if (error) {
+            console.error('Stripe error:', error);
+            alert('Payment error: ' + error.message);
+            // Re-enable checkout button
+            checkoutBtn.disabled = false;
+            checkoutBtn.innerHTML = originalText;
+          }
+        } else {
+          const paymentError = await paymentResponse.json();
+          if (paymentResponse.status === 503) {
+            alert('Payment processing is currently unavailable. Please contact support.');
+          } else {
+            alert('Error setting up payment: ' + paymentError.error);
+          }
+          // Re-enable checkout button
+          checkoutBtn.disabled = false;
+          checkoutBtn.innerHTML = originalText;
         }
       } else {
-        const paymentError = await paymentResponse.json();
-        if (paymentResponse.status === 503) {
-          alert('Payment processing is currently unavailable. Please contact support.');
-        } else {
-          alert('Error setting up payment: ' + paymentError.error);
-        }
+        // Fallback: redirect to success page if Stripe is not available
+        window.location.href = '/checkout/success';
       }
       
     } else {
       const error = await response.json();
       alert('Error creating order: ' + error.error);
+      // Re-enable checkout button
+      checkoutBtn.disabled = false;
+      checkoutBtn.innerHTML = originalText;
     }
   } catch (error) {
     console.error('Error during checkout:', error);
     alert('Error during checkout. Please try again.');
+    // Re-enable checkout button
+    checkoutBtn.disabled = false;
+    checkoutBtn.innerHTML = originalText;
   }
 }
 

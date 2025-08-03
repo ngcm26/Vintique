@@ -6,19 +6,42 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
+// Import database configuration
+const { createConnection, callbackConnection } = require('./config/database');
+
+// Import multer configuration
+const { upload } = require('./config/multer');
+
+// Import authentication middleware
+const { requireAuth, requireStaff, requireAdmin } = require('./middlewares/authMiddleware');
+
 // ========== CONFIGURATION ==========
+// Validate required environment variables
+const requiredEnvVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingVars.join(', ')}. Please check your .env file.`);
+  process.exit(1);
+}
+
 // Initialize Stripe with error handling
 let stripe;
 try {
   if (process.env.STRIPE_SECRET_KEY) {
     stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    // Make Stripe globally available
+    global.stripe = stripe;
+    console.log('✅ Stripe initialized successfully');
   } else {
     console.warn('Warning: STRIPE_SECRET_KEY not found in environment variables. Stripe functionality will be disabled.');
     stripe = null;
+    global.stripe = null;
   }
 } catch (error) {
   console.warn('Warning: Failed to initialize Stripe. Stripe functionality will be disabled.');
   stripe = null;
+  global.stripe = null;
 }
 
 const app = express();
@@ -118,26 +141,7 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 // ========== AUTHENTICATION MIDDLEWARE ==========
-const requireAuth = (req, res, next) => {
-  if (!req.session.user) {
-    return res.redirect('/login');
-  }
-  next();
-};
-
-const requireStaff = (req, res, next) => {
-  if (!req.session.user || (req.session.user.role !== 'staff' && req.session.user.role !== 'admin')) {
-    return res.redirect('/login');
-  }
-  next();
-};
-
-const requireAdmin = (req, res, next) => {
-  if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.redirect('/login');
-  }
-  next();
-};
+// Authentication middleware is imported from middlewares/authMiddleware.js
 
 // ========== ROUTE IMPORTS ==========
 const authRoutes = require('./routes/auth');
@@ -152,6 +156,17 @@ app.use('/', userRoutes);
 app.use('/', staffRoutes);
 app.use('/', adminRoutes);
 app.use('/chat', chatbotRoutes);
+
+// ========== DATABASE CONNECTION HEALTH CHECK ==========
+// Test database connection on startup
+callbackConnection.ping((err) => {
+  if (err) {
+    console.error('❌ Database connection failed:', err);
+    console.log('⚠️  Application will continue but database features may not work properly.');
+  } else {
+    console.log('✅ Database connection is healthy');
+  }
+});
 
 // ========== ERROR HANDLING ==========
 // 404 handler

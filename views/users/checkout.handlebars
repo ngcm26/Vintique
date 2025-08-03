@@ -37,44 +37,93 @@
           
           <div class="row">
             <div class="col-md-6">
-              <h5>Shipping Information</h5>
-              <form id="checkoutForm">
-                <div class="mb-3">
-                  <label for="shipping_address" class="form-label">Shipping Address</label>
-                  <textarea class="form-control" id="shipping_address" name="shipping_address" rows="3" required></textarea>
-                </div>
-                
-                <div class="mb-3">
-                  <label for="payment_method" class="form-label">Payment Method</label>
-                  <select class="form-select" id="payment_method" name="payment_method" required>
-                    <option value="">Select payment method</option>
-                    <option value="credit_card">Credit Card</option>
-                    <option value="paypal">PayPal</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                  </select>
-                </div>
-              </form>
+                             <h5>Shipping Information</h5>
+               <form id="checkoutForm">
+                 <div class="row">
+                   <div class="col-md-6">
+                     <div class="mb-3">
+                       <label for="shipping_address_name" class="form-label">Full Name *</label>
+                       <input type="text" class="form-control" id="shipping_address_name" name="shipping_address_name" required>
+                     </div>
+                   </div>
+                   <div class="col-md-6">
+                     <div class="mb-3">
+                       <label for="shipping_address_phone" class="form-label">Phone Number *</label>
+                       <input type="tel" class="form-control" id="shipping_address_phone" name="shipping_address_phone" required>
+                     </div>
+                   </div>
+                 </div>
+                 
+                 <div class="mb-3">
+                   <label for="shipping_address_street" class="form-label">Street Address *</label>
+                   <input type="text" class="form-control" id="shipping_address_street" name="shipping_address_street" required>
+                 </div>
+                 
+                 <div class="row">
+                   <div class="col-md-6">
+                     <div class="mb-3">
+                       <label for="shipping_address_city" class="form-label">City *</label>
+                       <input type="text" class="form-control" id="shipping_address_city" name="shipping_address_city" required>
+                     </div>
+                   </div>
+                   <div class="col-md-6">
+                     <div class="mb-3">
+                       <label for="shipping_address_state" class="form-label">State/Province *</label>
+                       <input type="text" class="form-control" id="shipping_address_state" name="shipping_address_state" required>
+                     </div>
+                   </div>
+                 </div>
+                 
+                 <div class="row">
+                   <div class="col-md-6">
+                     <div class="mb-3">
+                       <label for="shipping_address_country" class="form-label">Country *</label>
+                       <input type="text" class="form-control" id="shipping_address_country" name="shipping_address_country" value="United States" required>
+                     </div>
+                   </div>
+                   <div class="col-md-6">
+                     <div class="mb-3">
+                       <label for="shipping_address_postal_code" class="form-label">Postal Code *</label>
+                       <input type="text" class="form-control" id="shipping_address_postal_code" name="shipping_address_postal_code" required>
+                     </div>
+                   </div>
+                 </div>
+                 
+                 <div class="mb-3">
+                   <label for="payment_method" class="form-label">Payment Method</label>
+                   <select class="form-select" id="payment_method" name="payment_method" required>
+                     <option value="">Select payment method</option>
+                     <option value="credit_card">Credit Card</option>
+                     <option value="paypal">PayPal</option>
+                     <option value="bank_transfer">Bank Transfer</option>
+                   </select>
+                 </div>
+               </form>
             </div>
             
             <div class="col-md-6">
-              <div class="card bg-light">
-                <div class="card-body">
-                  <h5 class="card-title">Order Total</h5>
-                  <div class="d-flex justify-content-between mb-2">
-                    <span>Subtotal:</span>
-                    <span>${{total}}</span>
-                  </div>
-                  <div class="d-flex justify-content-between mb-2">
-                    <span>Shipping:</span>
-                    <span>$5.00</span>
-                  </div>
-                  <hr>
-                  <div class="d-flex justify-content-between">
-                    <strong>Total:</strong>
-                    <strong class="text-primary">${{add total 5}}</strong>
-                  </div>
-                </div>
-              </div>
+                             <div class="card bg-light">
+                 <div class="card-body">
+                   <h5 class="card-title">Order Total</h5>
+                   <div class="d-flex justify-content-between mb-2">
+                     <span>Subtotal:</span>
+                     <span>${{subtotal}}</span>
+                   </div>
+                   <div class="d-flex justify-content-between mb-2">
+                     <span>Shipping:</span>
+                     <span>${{shipping}}</span>
+                   </div>
+                   <div class="d-flex justify-content-between mb-2">
+                     <span>Tax (8%):</span>
+                     <span>${{tax}}</span>
+                   </div>
+                   <hr>
+                   <div class="d-flex justify-content-between">
+                     <strong>Total:</strong>
+                     <strong class="text-primary">${{total}}</strong>
+                   </div>
+                 </div>
+               </div>
             </div>
           </div>
         </div>
@@ -108,32 +157,118 @@
   </div>
 </div>
 
+<script src="https://js.stripe.com/v3/"></script>
 <script>
-function processCheckout() {
+let stripe;
+let elements;
+
+// Initialize Stripe
+async function initializeStripe() {
+  try {
+    // Get the publishable key from the server
+    const response = await fetch('/api/stripe/get-publishable-key');
+    const data = await response.json();
+    
+    if (data.publishableKey) {
+      stripe = Stripe(data.publishableKey);
+      console.log('Stripe initialized successfully');
+    } else {
+      console.error('Failed to get Stripe publishable key');
+    }
+  } catch (error) {
+    console.error('Error initializing Stripe:', error);
+  }
+}
+
+async function processCheckout() {
   const form = document.getElementById('checkoutForm');
   const formData = new FormData(form);
   
-  fetch('/checkout/process', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      payment_method: formData.get('payment_method'),
-      shipping_address: formData.get('shipping_address')
-    })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      window.location.href = '/checkout/success';
-    } else {
-      alert('Error: ' + data.error);
+  // Collect all shipping address fields
+  const shippingData = {
+    shipping_address_name: formData.get('shipping_address_name'),
+    shipping_address_street: formData.get('shipping_address_street'),
+    shipping_address_city: formData.get('shipping_address_city'),
+    shipping_address_state: formData.get('shipping_address_state'),
+    shipping_address_country: formData.get('shipping_address_country'),
+    shipping_address_postal_code: formData.get('shipping_address_postal_code'),
+    shipping_address_phone: formData.get('shipping_address_phone')
+  };
+  
+  // Debug: Log the shipping data being sent
+  console.log('=== FRONTEND DEBUG ===');
+  console.log('Shipping data to be sent:', JSON.stringify(shippingData, null, 2));
+  console.log('======================');
+  
+  // Validate required fields
+  const requiredFields = ['shipping_address_name', 'shipping_address_street', 'shipping_address_city', 'shipping_address_state', 'shipping_address_postal_code', 'shipping_address_phone'];
+  const missingFields = requiredFields.filter(field => !shippingData[field]);
+  
+  if (missingFields.length > 0) {
+    console.log('Frontend validation failed - missing fields:', missingFields);
+    alert('Please fill in all required shipping information fields.');
+    return;
+  }
+  
+  // Show loading state
+  const checkoutButton = document.querySelector('button[onclick="processCheckout()"]');
+  const originalText = checkoutButton.innerHTML;
+  checkoutButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+  checkoutButton.disabled = true;
+  
+  try {
+         // First, create the order
+     const orderResponse = await fetch('/api/checkout', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+       },
+       body: JSON.stringify(shippingData)
+     });
+    
+    const orderData = await orderResponse.json();
+    
+    if (!orderData.success) {
+      throw new Error(orderData.error || 'Failed to create order');
     }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('An error occurred during checkout. Please try again.');
-  });
+    
+    // Then, create Stripe payment session
+    const paymentResponse = await fetch('/api/stripe/create-payment-intent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        order_id: orderData.order_id,
+        amount: orderData.total
+      })
+    });
+    
+    const paymentData = await paymentResponse.json();
+    
+    if (paymentData.sessionId) {
+      // Redirect to Stripe Checkout
+      const result = await stripe.redirectToCheckout({
+        sessionId: paymentData.sessionId
+      });
+      
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+    } else {
+      throw new Error(paymentData.error || 'Failed to create payment session');
+    }
+    
+  } catch (error) {
+    console.error('Checkout error:', error);
+    alert('Error during checkout: ' + error.message);
+    
+    // Reset button state
+    checkoutButton.innerHTML = originalText;
+    checkoutButton.disabled = false;
+  }
 }
+
+// Initialize Stripe when page loads
+document.addEventListener('DOMContentLoaded', initializeStripe);
 </script> 

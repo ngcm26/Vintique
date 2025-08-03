@@ -155,6 +155,19 @@
   box-shadow: 0 0 0 0.2rem rgba(255, 215, 0, 0.25);
 }
 
+.form-control[readonly] {
+  background-color: #f8f9fa;
+  color: #495057;
+  cursor: default;
+  border-color: #e9ecef;
+}
+
+.form-control[readonly]:focus {
+  border-color: #e9ecef;
+  box-shadow: none;
+  background-color: #f8f9fa;
+}
+
 .btn-save {
   background: linear-gradient(135deg, var(--primary-yellow), #FFA500);
   border: none;

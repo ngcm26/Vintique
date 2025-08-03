@@ -38,22 +38,26 @@
             <div class="row">
               <div class="col-md-6 form-group">
                 <label class="form-label">First Name</label>
-                <input type="text" class="form-control" name="first_name" id="firstName">
+                <input type="text" class="form-control" name="first_name" id="firstName" readonly>
               </div>
               <div class="col-md-6 form-group">
                 <label class="form-label">Last Name</label>
-                <input type="text" class="form-control" name="last_name" id="lastName">
+                <input type="text" class="form-control" name="last_name" id="lastName" readonly>
               </div>
             </div>
             <div class="form-group">
               <label class="form-label">Email Address</label>
-              <input type="email" class="form-control" name="email" id="userEmail">
+              <input type="email" class="form-control" name="email" id="userEmail" readonly>
             </div>
             <div class="form-group">
               <label class="form-label">Phone Number</label>
-              <input type="tel" class="form-control" name="phone_number" id="userPhone">
+              <input type="tel" class="form-control" name="phone_number" id="userPhone" readonly>
             </div>
-            <button type="submit" class="btn btn-save">Save Personal Info</button>
+            <div class="d-flex gap-2">
+              <button type="button" id="editPersonalInfoBtn" class="btn btn-save">Edit Information</button>
+              <button type="submit" id="savePersonalInfoBtn" class="btn btn-save" style="display: none;">Save Changes</button>
+              <button type="button" id="cancelPersonalInfoBtn" class="btn btn-secondary" style="display: none;">Cancel</button>
+            </div>
             <div id="personalInfoMsg" class="mt-2"></div>
           </div>
         </div>
@@ -64,7 +68,9 @@
         <div class="settings-section">
           <h3 class="settings-title">Address Details</h3>
           <div id="addressList"></div>
-          <button type="button" id="addAddressBtn" class="btn btn-save mt-2">Add Address</button>
+                     <div class="d-flex gap-2 mt-2">
+             <button type="button" id="addAddressBtn" class="btn btn-save">Add Address</button>
+           </div>
           <div id="addressMsg" class="mt-2"></div>
         </div>
       </div>
@@ -156,13 +162,27 @@
 document.addEventListener('DOMContentLoaded', function () {
   // ------------------ Prefill personal info ------------------
   fetch('/account-settings/api')
-    .then(res => res.json())
+    .then(res => {
+      console.log('Response status:', res.status);
+      return res.json();
+    })
     .then(data => {
-      if (!data) return;
+      console.log('Fetched user data:', data);
+      if (!data) {
+        console.log('No data received');
+        return;
+      }
+      
       const setVal = (id, v) => {
         const el = document.getElementById(id);
-        if (el) el.value = v || '';
+        if (el) {
+          el.value = v || '';
+          console.log(`Setting ${id} to:`, v || '');
+        } else {
+          console.log(`Element with id ${id} not found`);
+        }
       };
+      
       setVal('firstName', data.first_name);
       setVal('lastName', data.last_name);
       setVal('userEmail', data.email);
@@ -193,6 +213,9 @@ document.addEventListener('DOMContentLoaded', function () {
           profilePlaceholder.style.display = 'flex';
         }
       }
+    })
+    .catch(error => {
+      console.error('Error fetching user data:', error);
     });
 
   // ------------------ Profile image upload ------------------
@@ -301,21 +324,120 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ------------------ Personal info update ------------------
   const personalInfoForm = document.getElementById('personalInfoForm');
+  const editPersonalInfoBtn = document.getElementById('editPersonalInfoBtn');
+  const savePersonalInfoBtn = document.getElementById('savePersonalInfoBtn');
+  const cancelPersonalInfoBtn = document.getElementById('cancelPersonalInfoBtn');
+  const firstNameInput = document.getElementById('firstName');
+  const lastNameInput = document.getElementById('lastName');
+  const userEmailInput = document.getElementById('userEmail');
+  const userPhoneInput = document.getElementById('userPhone');
+
+  let isEditingPersonalInfo = false;
+  let originalPersonalInfo = {};
+
+  function togglePersonalInfoEditing() {
+    isEditingPersonalInfo = !isEditingPersonalInfo;
+    firstNameInput.readOnly = !isEditingPersonalInfo;
+    lastNameInput.readOnly = !isEditingPersonalInfo;
+    userEmailInput.readOnly = !isEditingPersonalInfo;
+    userPhoneInput.readOnly = !isEditingPersonalInfo;
+
+    if (isEditingPersonalInfo) {
+      // Store original values when entering edit mode
+      originalPersonalInfo = {
+        firstName: firstNameInput.value,
+        lastName: lastNameInput.value,
+        email: userEmailInput.value,
+        phone: userPhoneInput.value
+      };
+      editPersonalInfoBtn.style.display = 'none';
+      savePersonalInfoBtn.style.display = '';
+      cancelPersonalInfoBtn.style.display = '';
+    } else {
+      // Reset to original values when canceling
+      firstNameInput.value = originalPersonalInfo.firstName || '';
+      lastNameInput.value = originalPersonalInfo.lastName || '';
+      userEmailInput.value = originalPersonalInfo.email || '';
+      userPhoneInput.value = originalPersonalInfo.phone || '';
+      editPersonalInfoBtn.style.display = '';
+      savePersonalInfoBtn.style.display = 'none';
+      cancelPersonalInfoBtn.style.display = 'none';
+    }
+  }
+
+  editPersonalInfoBtn.addEventListener('click', togglePersonalInfoEditing);
+  cancelPersonalInfoBtn.addEventListener('click', togglePersonalInfoEditing);
+
   personalInfoForm.addEventListener('submit', function(e) {
     e.preventDefault();
-    const formData = new FormData(personalInfoForm);
-    formData.append('current_profile_image_url', document.getElementById('currentProfileImageUrl').value);
+    
+    // Check if any changes were made
+    const currentValues = {
+      firstName: firstNameInput.value.trim(),
+      lastName: lastNameInput.value.trim(),
+      email: userEmailInput.value.trim(),
+      phone: userPhoneInput.value.trim()
+    };
+
+    const hasChanges = 
+      currentValues.firstName !== (originalPersonalInfo.firstName || '') ||
+      currentValues.lastName !== (originalPersonalInfo.lastName || '') ||
+      currentValues.email !== (originalPersonalInfo.email || '') ||
+      currentValues.phone !== (originalPersonalInfo.phone || '');
+
+    if (!hasChanges) {
+      const msgDiv = document.getElementById('personalInfoMsg');
+      msgDiv.textContent = 'No changes to save.';
+      msgDiv.style.color = 'blue';
+      togglePersonalInfoEditing(); // Exit edit mode
+      return;
+    }
+
+    const formData = new FormData();
+    
+    // Only add non-empty values to prevent NULL errors
+    if (currentValues.firstName) formData.append('first_name', currentValues.firstName);
+    if (currentValues.lastName) formData.append('last_name', currentValues.lastName);
+    if (currentValues.email) formData.append('email', currentValues.email);
+    if (currentValues.phone) formData.append('phone_number', currentValues.phone);
+    
+    const currentProfileImageUrl = document.getElementById('currentProfileImageUrl').value;
+    if (currentProfileImageUrl) {
+      formData.append('current_profile_image_url', currentProfileImageUrl);
+    }
+    
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    // Show loading state
+    submitBtn.textContent = 'Saving...';
+    submitBtn.disabled = true;
+    
     fetch('/account-settings/api', { method: 'POST', body: formData })
       .then(res => res.json())
       .then(data => {
         const msgDiv = document.getElementById('personalInfoMsg');
         if (data.success) {
-          msgDiv.textContent = 'Personal information updated!';
+          msgDiv.textContent = 'Personal information updated successfully!';
           msgDiv.style.color = 'green';
+          // Update original values to current values after successful save
+          originalPersonalInfo = { ...currentValues };
+          togglePersonalInfoEditing(); // Exit edit mode
         } else {
           msgDiv.textContent = data.error || 'Failed to update personal information.';
           msgDiv.style.color = 'red';
         }
+      })
+      .catch(error => {
+        console.error('Update error:', error);
+        const msgDiv = document.getElementById('personalInfoMsg');
+        msgDiv.textContent = 'Failed to update personal information. Please try again.';
+        msgDiv.style.color = 'red';
+      })
+      .finally(() => {
+        // Reset button state
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
       });
   });
 
@@ -324,6 +446,14 @@ document.addEventListener('DOMContentLoaded', function () {
   passwordChangeForm.addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(passwordChangeForm);
+    
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    // Show loading state
+    submitBtn.textContent = 'Updating...';
+    submitBtn.disabled = true;
+    
     fetch('/account-settings/password', {
       method: 'POST',
       body: new URLSearchParams([...formData])
@@ -339,6 +469,17 @@ document.addEventListener('DOMContentLoaded', function () {
         msgDiv.textContent = data.error || 'Failed to update password.';
         msgDiv.style.color = 'red';
       }
+    })
+    .catch(error => {
+      console.error('Password update error:', error);
+      const msgDiv = document.getElementById('passwordChangeMsg');
+      msgDiv.textContent = 'Failed to update password. Please try again.';
+      msgDiv.style.color = 'red';
+    })
+    .finally(() => {
+      // Reset button state
+      submitBtn.textContent = originalText;
+      submitBtn.disabled = false;
     });
   });
 
@@ -346,6 +487,9 @@ document.addEventListener('DOMContentLoaded', function () {
   let addresses = [];
   let defaultAddressIndex = 1;
   let addressModal = new bootstrap.Modal(document.getElementById('addressModal'));
+  let originalAddresses = [];
+
+  const addAddressBtn = document.getElementById('addAddressBtn');
 
   function renderAddresses() {
     const list = document.getElementById('addressList');
@@ -355,16 +499,21 @@ document.addEventListener('DOMContentLoaded', function () {
       const isDefault = (defaultAddressIndex === idx + 1);
       const card = document.createElement('div');
       card.className = `address-card${isDefault ? ' default' : ''}`;
+      
+      const actionButtons = `
+        <div>
+          ${addresses.filter(a => a).length > 1 ? `<input type="radio" name="defaultAddress" value="${idx + 1}" ${isDefault ? 'checked' : ''} title="Set as default">` : ''}
+          <button type="button" class="btn btn-link btn-sm" onclick="editAddress(${idx})" title="Edit Address"><i class="fa fa-edit"></i></button>
+          <button type="button" class="btn btn-link btn-sm text-danger" onclick="deleteAddress(${idx})" title="Delete Address"><i class="fa fa-trash"></i></button>
+        </div>
+      `;
+      
       card.innerHTML = `
         <div class="d-flex justify-content-between align-items-center mb-2">
           <div>
             <strong>${addr.name || 'Address'}${isDefault ? '<span class="address-type">Default</span>' : ''}</strong>
           </div>
-          <div>
-            ${addresses.filter(a => a).length > 1 ? `<input type="radio" name="defaultAddress" value="${idx + 1}" ${isDefault ? 'checked' : ''} title="Set as default">` : ''}
-            <button type="button" class="btn btn-link btn-sm" onclick="editAddress(${idx})"><i class="fa fa-edit"></i> Edit</button>
-            <button type="button" class="btn btn-link btn-sm text-danger" onclick="deleteAddress(${idx})"><i class="fa fa-trash"></i> Delete</button>
-          </div>
+          ${actionButtons}
         </div>
         <div class="mt-2">
           <div>${addr.street || ''}</div>
@@ -375,8 +524,9 @@ document.addEventListener('DOMContentLoaded', function () {
       `;
       list.appendChild(card);
     });
-    document.getElementById('addAddressBtn').innerHTML = '<i class="fa fa-plus"></i> Add New Address';
-    document.getElementById('addAddressBtn').style.display = addresses.filter(a => a).length < 3 ? '' : 'none';
+    
+    // Show/hide add button based on number of addresses
+    addAddressBtn.style.display = addresses.filter(a => a).length < 3 ? '' : 'none';
   }
 
   function getAddressFields() {
@@ -421,12 +571,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const next = addresses.findIndex(a => a);
         defaultAddressIndex = next >= 0 ? next + 1 : 1;
       }
-      saveAddresses();
+      renderAddresses();
+      
+      // Automatically save to database after deletion
+      saveAddressesToDatabase();
     }
   };
 
-  document.getElementById('addAddressBtn').addEventListener('click', function(e) {
+  addAddressBtn.addEventListener('click', function(e) {
     e.preventDefault();
+    
     let idx = addresses.findIndex(a => !a);
     if (idx === -1) idx = addresses.length;
     openAddressModal(idx);
@@ -437,51 +591,88 @@ document.addEventListener('DOMContentLoaded', function () {
     const addr = getAddressFields();
     addresses[idx] = addr;
     if (addresses.filter(a => a).length === 1 || addr.isDefault) defaultAddressIndex = idx + 1;
-    saveAddresses();
+    renderAddresses();
     addressModal.hide();
+    
+    // Automatically save to database
+    saveAddressesToDatabase();
   });
 
   document.getElementById('addressList').addEventListener('change', function(e) {
     if (e.target.name === 'defaultAddress') {
       defaultAddressIndex = parseInt(e.target.value, 10);
-      saveAddresses();
     }
   });
 
-  function saveAddresses() {
+  // Function to save addresses to database
+  function saveAddressesToDatabase() {
     const data = new FormData();
-    data.append('first_name', document.getElementById('firstName').value);
-    data.append('last_name', document.getElementById('lastName').value);
-    data.append('email', document.getElementById('userEmail').value);
-    data.append('phone_number', document.getElementById('userPhone').value);
-    data.append('current_profile_image_url', document.getElementById('currentProfileImageUrl').value);
+    
+    // Add personal info
+    const firstName = document.getElementById('firstName').value.trim();
+    const lastName = document.getElementById('lastName').value.trim();
+    const userEmail = document.getElementById('userEmail').value.trim();
+    const userPhone = document.getElementById('userPhone').value.trim();
+    
+    if (firstName) data.append('first_name', firstName);
+    if (lastName) data.append('last_name', lastName);
+    if (userEmail) data.append('email', userEmail);
+    if (userPhone) data.append('phone_number', userPhone);
+    
+    const currentProfileImageUrl = document.getElementById('currentProfileImageUrl').value;
+    if (currentProfileImageUrl) {
+      data.append('current_profile_image_url', currentProfileImageUrl);
+    }
 
+    // Add address data
     for (let i = 0; i < 3; i++) {
       const addr = addresses[i] || {};
-      data.append(`address_name${i ? '_' + (i + 1) : ''}`, addr.name || '');
-      data.append(`address_street${i ? '_' + (i + 1) : ''}`, addr.street || '');
-      data.append(`address_city${i ? '_' + (i + 1) : ''}`, addr.city || '');
-      data.append(`address_state${i ? '_' + (i + 1) : ''}`, addr.state || '');
-      data.append(`address_country${i ? '_' + (i + 1) : ''}`, addr.country || '');
-      data.append(`address_postal_code${i ? '_' + (i + 1) : ''}`, addr.postal_code || '');
-      data.append(`address_phone${i ? '_' + (i + 1) : ''}`, addr.phone || '');
+      if (addr.name || addr.street || addr.city || addr.state || addr.country || addr.postal_code || addr.phone) {
+        data.append(`address_name${i ? '_' + (i + 1) : ''}`, addr.name || '');
+        data.append(`address_street${i ? '_' + (i + 1) : ''}`, addr.street || '');
+        data.append(`address_city${i ? '_' + (i + 1) : ''}`, addr.city || '');
+        data.append(`address_state${i ? '_' + (i + 1) : ''}`, addr.state || '');
+        data.append(`address_country${i ? '_' + (i + 1) : ''}`, addr.country || '');
+        data.append(`address_postal_code${i ? '_' + (i + 1) : ''}`, addr.postal_code || '');
+        data.append(`address_phone${i ? '_' + (i + 1) : ''}`, addr.phone || '');
+      }
     }
     data.append('default_address_index', defaultAddressIndex);
+
+    // Show loading state on the modal save button
+    const modalSaveBtn = document.getElementById('saveAddressModalBtn');
+    const originalText = modalSaveBtn.textContent;
+    modalSaveBtn.textContent = 'Saving...';
+    modalSaveBtn.disabled = true;
 
     fetch('/account-settings/api', { method: 'POST', body: data })
       .then(res => res.json())
       .then(data => {
         const msgDiv = document.getElementById('addressMsg');
         if (data.success) {
-          msgDiv.textContent = 'Address updated!';
+          msgDiv.textContent = 'Address saved successfully!';
           msgDiv.style.color = 'green';
+          // Update original addresses to current addresses after successful save
+          originalAddresses = JSON.parse(JSON.stringify(addresses));
         } else {
-          msgDiv.textContent = data.error || 'Failed to update address.';
+          msgDiv.textContent = data.error || 'Failed to save address.';
           msgDiv.style.color = 'red';
         }
-        renderAddresses();
+      })
+      .catch(error => {
+        console.error('Address save error:', error);
+        const msgDiv = document.getElementById('addressMsg');
+        msgDiv.textContent = 'Failed to save address. Please try again.';
+        msgDiv.style.color = 'red';
+      })
+      .finally(() => {
+        // Reset button state
+        modalSaveBtn.textContent = originalText;
+        modalSaveBtn.disabled = false;
       });
   }
+
+
 
   // Load addresses on page load
   fetch('/account-settings/api')

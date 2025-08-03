@@ -5,6 +5,8 @@ const { callbackConnection, createConnection } = require('../config/database');
 const { upload } = require('../config/multer');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 const mysql = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
 
 const dbConfig = {
   host: 'localhost',
@@ -12,6 +14,83 @@ const dbConfig = {
   password: '', //Add your own password here
   database: 'vintiquedb',
   port: 3306
+};
+
+// ========== HELPER FUNCTIONS ==========
+
+// Helper to get user ID from session
+const getUserId = (req) => req.session.user.id || req.session.user.user_id;
+
+// Helper to check authentication
+const requireUserAuth = (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  return true;
+};
+
+// Helper to fix image URLs
+const fixImageUrl = (imageUrl) => {
+  if (!imageUrl || imageUrl === 'null') {
+    return '/assets/logo.png';
+  }
+  return imageUrl.startsWith('/uploads/') ? imageUrl : `/uploads/${imageUrl}`;
+};
+
+// Helper to process listing images
+const processListingImages = (listings) => {
+  return listings.map(listing => ({
+    ...listing,
+    image_url: fixImageUrl(listing.image_url)
+  }));
+};
+
+// Helper to get user username
+const getUserUsername = (user) => {
+  return user.username || user.email.split('@')[0];
+};
+
+// Helper for database error handling
+const handleDbError = (err, res, customMessage = 'Database error') => {
+  console.error(customMessage + ':', err);
+  return res.status(500).json({ error: customMessage });
+};
+
+// Helper to verify listing ownership
+const verifyListingOwnership = (listingId, userId, callback) => {
+  const verifyQuery = 'SELECT listing_id FROM listings WHERE listing_id = ? AND user_id = ?';
+  callbackConnection.query(verifyQuery, [listingId, userId], callback);
+};
+
+// Helper to get listing with images
+const getListingWithImages = (listingId, callback) => {
+  const listingQuery = `
+    SELECT 
+      l.listing_id, 
+      l.title, 
+      l.description, 
+      l.price, 
+      l.category, 
+      l.item_condition, 
+      l.brand, 
+      l.size,
+      l.status,
+      l.created_at,
+      l.user_id,
+      u.email as username,
+      (
+        SELECT image_url 
+        FROM listing_images li 
+        WHERE li.listing_id = l.listing_id 
+        ORDER BY li.is_main DESC, li.image_id ASC 
+        LIMIT 1
+      ) as image_url
+    FROM listings l
+    LEFT JOIN users u ON l.user_id = u.user_id
+    WHERE l.listing_id = ? AND l.status = 'active'
+  `;
+  
+  callbackConnection.query(listingQuery, [listingId], callback);
 };
 
 // Home route
@@ -45,26 +124,19 @@ router.get('/marketplace', (req, res) => {
   const params = [];
   if (req.session.user && req.session.user.role === 'user') {
     sql += ' AND l.user_id != ?';
-    params.push(req.session.user.id || req.session.user.user_id);
+    params.push(getUserId(req));
   }
   sql += '\n    ORDER BY l.created_at DESC';
   callbackConnection.query(sql, params, (err, listings) => {
-    if (err) return res.status(500).send('Database error');
+    if (err) return handleDbError(err, res, 'Failed to load marketplace');
     
-    // Handle cases where no image is found
-    listings.forEach(listing => {
-      if (!listing.image_url || listing.image_url === 'null') {
-        listing.image_url = '/assets/logo.png';
-      } else {
-        // Ensure the image URL has the correct path
-        listing.image_url = listing.image_url.startsWith('/uploads/') ? listing.image_url : `/uploads/${listing.image_url}`;
-      }
-    });
+    // Use helper function to process images
+    const processedListings = processListingImages(listings);
     
     res.render('users/marketplace', {
       layout: 'user',
       activePage: 'shop',
-      listings: listings,
+      listings: processedListings,
       user: req.session.user
     });
   });
@@ -130,7 +202,7 @@ router.get('/my_listing', (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.redirect('/login');
   }
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
   const sql = `
     SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.status, l.created_at, l.updated_at, l.brand, l.size,
           (
@@ -154,7 +226,7 @@ router.get('/my_listing', (req, res) => {
     WHERE l.user_id = ?
     ORDER BY l.created_at DESC`;
   callbackConnection.query(sql, [userId], (err, listings) => {
-    if (err) return res.status(500).send('Database error');
+    if (err) return handleDbError(err, res, 'Failed to load my listings');
     res.render('users/my_listing', {
       layout: 'user',
       activePage: 'mylistings',
@@ -167,34 +239,7 @@ router.get('/my_listing', (req, res) => {
 router.get('/listing/:id', (req, res) => {
   const listingId = req.params.id;
   
-  // Get listing details with all images
-  const listingQuery = `
-    SELECT 
-      l.listing_id, 
-      l.title, 
-      l.description, 
-      l.price, 
-      l.category, 
-      l.item_condition, 
-      l.brand, 
-      l.size, 
-      l.status,
-      l.created_at,
-      l.user_id,
-      u.email as username,
-      (
-        SELECT image_url 
-        FROM listing_images li 
-        WHERE li.listing_id = l.listing_id 
-        ORDER BY li.is_main DESC, li.image_id ASC 
-        LIMIT 1
-      ) as image_url
-    FROM listings l
-    LEFT JOIN users u ON l.user_id = u.user_id
-    WHERE l.listing_id = ? AND l.status = 'active'
-  `;
-  
-  callbackConnection.query(listingQuery, [listingId], (err, listings) => {
+  getListingWithImages(listingId, (err, listings) => {
     if (err) {
       console.error('Database error:', err);
       return res.render('users/product_detail', {
@@ -212,12 +257,8 @@ router.get('/listing/:id', (req, res) => {
     
     const listing = listings[0];
     
-    // Fix image URL
-    if (!listing.image_url || listing.image_url === 'null') {
-      listing.image_url = '/assets/logo.png';
-    } else if (!listing.image_url.startsWith('/uploads/')) {
-      listing.image_url = `/uploads/${listing.image_url}`;
-    }
+    // Fix image URL using helper
+    listing.image_url = fixImageUrl(listing.image_url);
     
     // Get all additional images for this listing
     const imagesQuery = `
@@ -233,15 +274,8 @@ router.get('/listing/:id', (req, res) => {
         images = [];
       }
       
-      // Fix additional image URLs
-      const additionalImages = images.map(img => {
-        if (!img.image_url || img.image_url === 'null') {
-          return '/assets/logo.png';
-        } else if (!img.image_url.startsWith('/uploads/')) {
-          return `/uploads/${img.image_url}`;
-        }
-        return img.image_url;
-      });
+      // Fix additional image URLs using helper
+      const additionalImages = images.map(img => fixImageUrl(img.image_url));
       
       listing.additional_images = additionalImages;
       
@@ -390,12 +424,10 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
 
 // Mark as Sold Route
 router.post('/listings/:id/mark_sold', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
   
   const listingId = req.params.id;
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
   
   const updateQuery = `
     UPDATE listings 
@@ -419,12 +451,10 @@ router.post('/listings/:id/mark_sold', (req, res) => {
 
 // Delete Listing Route
 router.delete('/listings/:id', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
   
   const listingId = req.params.id;
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
   
   // Start transaction
   callbackConnection.beginTransaction((err) => {
@@ -476,12 +506,10 @@ router.delete('/listings/:id', (req, res) => {
 
 // Delete Image Route
 router.post('/delete_image', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
   
   const { imgUrl, listingId } = req.body;
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
   
   if (!imgUrl || !listingId) {
     return res.status(400).json({ error: 'Image URL and listing ID are required' });
@@ -611,15 +639,430 @@ router.get('/cart', (req, res) => {
   });
 });
 
-// Account Settings route
-router.get('/account-settings', (req, res) => {
+// Checkout route
+router.get('/checkout', async (req, res) => {
   if (!req.session.user) {
+    return res.redirect('/login');
+  }
+  
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id || req.session.user.id;
+    
+    // Get cart items
+    const [cartItems] = await connection.execute(`
+      SELECT c.cart_id, c.quantity,
+             l.listing_id, l.title, l.price, l.item_condition, l.category,
+             u.email as seller_username,
+             (
+               SELECT image_url 
+               FROM listing_images li 
+               WHERE li.listing_id = l.listing_id 
+               ORDER BY li.is_main DESC, li.image_id ASC 
+               LIMIT 1
+             ) as image_url
+      FROM cart c
+      JOIN listings l ON c.listing_id = l.listing_id
+      JOIN users u ON l.user_id = u.user_id
+      WHERE c.user_id = ? AND l.status = 'active'
+    `, [userId]);
+    
+    if (cartItems.length === 0) {
+      return res.redirect('/cart?error=empty');
+    }
+    
+    // Calculate total
+    const subtotal = cartItems.reduce((total, item) => {
+      return total + (parseFloat(item.price) * item.quantity);
+    }, 0);
+    
+    const shipping = subtotal >= 50 ? 0 : 5.99;
+    const tax = subtotal * 0.08; // 8% tax
+    const total = subtotal + shipping + tax;
+    
+    // Process images
+    const processedCartItems = cartItems.map(item => ({
+      ...item,
+      image_url: item.image_url ? `/uploads/${item.image_url}` : '/assets/logo.png'
+    }));
+    
+    res.render('users/checkout', {
+      layout: 'user',
+      activePage: 'checkout',
+      cartItems: processedCartItems,
+      total: total.toFixed(2),
+      subtotal: subtotal.toFixed(2),
+      shipping: shipping.toFixed(2),
+      tax: tax.toFixed(2)
+    });
+    
+  } catch (error) {
+    console.error('Checkout page error:', error);
+    res.status(500).render('error', { 
+      error: 'Failed to load checkout page',
+      layout: 'user'
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Checkout success route
+router.get('/checkout/success', (req, res) => {
+  if (!req.session.user) {
+    return res.redirect('/login');
+  }
+  res.render('users/checkout_success', {
+    layout: 'user',
+    activePage: 'checkout'
+  });
+});
+
+// ========== ACCOUNT SETTINGS ROUTES ==========
+
+// Account settings page
+router.get('/account-settings', (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
     return res.redirect('/login');
   }
   res.render('users/account_setting', {
     layout: 'user',
-    activePage: 'account'
+    activePage: 'account',
+    user: req.session.user
   });
+});
+
+// API: Get user info for account settings
+router.get('/account-settings/api', async (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id;
+    const sql = `SELECT username, first_name, last_name, email, phone_number, profile_image_url,
+      address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
+      address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
+      address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
+      default_address_index
+      FROM user_information WHERE user_id = ?`;
+    
+    const [results] = await connection.execute(sql, [userId]);
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(results[0]);
+  } catch (error) {
+    console.error('Account settings API error:', error);
+    res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// API: Update user info for account settings
+router.post('/account-settings/api', upload.single('profile_image'), async (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id;
+    
+    // First check if user exists in user_information table
+    const checkUserSql = `SELECT user_id FROM user_information WHERE user_id = ?`;
+    const [userCheck] = await connection.execute(checkUserSql, [userId]);
+    
+    if (userCheck.length === 0) {
+      // Create user_information entry if it doesn't exist
+      const createUserInfoSql = `INSERT INTO user_information (user_id, username, email, phone_number) 
+                                SELECT user_id, email, email, phone_number FROM users WHERE user_id = ?`;
+      await connection.execute(createUserInfoSql, [userId]);
+    }
+    
+    let {
+      first_name, last_name, email, phone_number,
+      address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
+      address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
+      address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
+      default_address_index
+    } = req.body;
+    
+    // If this is just a profile image upload (no other fields), get current user data
+    if (!first_name && !last_name && !email && !phone_number && req.file) {
+      const [currentUser] = await connection.execute(
+        'SELECT first_name, last_name, email, phone_number, profile_image_url FROM user_information WHERE user_id = ?',
+        [userId]
+      );
+      
+      if (currentUser.length > 0) {
+        const user = currentUser[0];
+        first_name = user.first_name;
+        last_name = user.last_name;
+        email = user.email;
+        phone_number = user.phone_number;
+        // Keep existing address fields as null since we're not updating them
+      }
+    }
+
+    // Convert empty strings and undefined values to null for address fields
+    const addressFields = [
+      'address_name', 'address_street', 'address_city', 'address_state', 'address_country', 'address_postal_code', 'address_phone',
+      'address_name_2', 'address_street_2', 'address_city_2', 'address_state_2', 'address_country_2', 'address_postal_code_2', 'address_phone_2',
+      'address_name_3', 'address_street_3', 'address_city_3', 'address_state_3', 'address_country_3', 'address_postal_code_3', 'address_phone_3'
+    ];
+    
+    // Clean up address fields - convert empty/undefined to null
+    addressFields.forEach(field => {
+      if (req.body[field] === '' || req.body[field] === undefined || req.body[field] === 'undefined' || req.body[field] === null) {
+        req.body[field] = null;
+      }
+    });
+    
+    // Also handle undefined values for main fields
+    if (first_name === undefined || first_name === 'undefined') first_name = null;
+    if (last_name === undefined || last_name === 'undefined') last_name = null;
+    if (email === undefined || email === 'undefined') email = null;
+    if (phone_number === undefined || phone_number === 'undefined') phone_number = null;
+
+    // Validate default_address_index
+    let defaultIndex = 1; // Default to 1
+    if (default_address_index !== undefined && default_address_index !== null && default_address_index !== '') {
+      const parsed = parseInt(default_address_index, 10);
+      if ([1, 2, 3].includes(parsed)) {
+        defaultIndex = parsed;
+      }
+    }
+
+    let profile_image_url = req.body.current_profile_image_url || null;
+    if (req.file) {
+      profile_image_url = '/uploads/profilephoto/' + req.file.filename;
+    }
+    
+    // Check if we have address data or other fields to update
+    const hasAddressData = req.body.address_name || req.body.address_street || req.body.address_city || 
+                          req.body.address_name_2 || req.body.address_street_2 || req.body.address_city_2 ||
+                          req.body.address_name_3 || req.body.address_street_3 || req.body.address_city_3 ||
+                          default_address_index;
+    
+    const hasPersonalData = first_name || last_name || email || phone_number;
+    
+    // If this is just a profile image upload (no other fields), use a simpler query
+    let sql, params;
+    
+    if (req.file && !hasPersonalData && !hasAddressData) {
+      // Only updating profile image
+      sql = `UPDATE user_information SET profile_image_url = ? WHERE user_id = ?`;
+      params = [profile_image_url, userId];
+    } else {
+      // Full update with all fields - ensure all parameters are properly handled
+      sql = `UPDATE user_information SET first_name=?, last_name=?, email=?, phone_number=?, profile_image_url=?,
+        address_name=?, address_street=?, address_city=?, address_state=?, address_country=?, address_postal_code=?, address_phone=?,
+        address_name_2=?, address_street_2=?, address_city_2=?, address_state_2=?, address_country_2=?, address_postal_code_2=?, address_phone_2=?,
+        address_name_3=?, address_street_3=?, address_city_3=?, address_state_3=?, address_country_3=?, address_postal_code_3=?, address_phone_3=?,
+        default_address_index=?
+        WHERE user_id=?`;
+      
+      // Ensure all parameters are properly defined (not undefined)
+      params = [
+        first_name || null, 
+        last_name || null, 
+        email || null, 
+        phone_number || null, 
+        profile_image_url || null,
+        req.body.address_name || null, 
+        req.body.address_street || null, 
+        req.body.address_city || null, 
+        req.body.address_state || null, 
+        req.body.address_country || null, 
+        req.body.address_postal_code || null, 
+        req.body.address_phone || null,
+        req.body.address_name_2 || null, 
+        req.body.address_street_2 || null, 
+        req.body.address_city_2 || null, 
+        req.body.address_state_2 || null, 
+        req.body.address_country_2 || null, 
+        req.body.address_postal_code_2 || null, 
+        req.body.address_phone_2 || null,
+        req.body.address_name_3 || null, 
+        req.body.address_street_3 || null, 
+        req.body.address_city_3 || null, 
+        req.body.address_state_3 || null, 
+        req.body.address_country_3 || null, 
+        req.body.address_postal_code_3 || null, 
+        req.body.address_phone_3 || null,
+        defaultIndex, 
+        userId
+      ];
+    }
+    
+    // Debug: Log the parameters to see what's being sent
+    console.log('Profile update parameters:', {
+      userId,
+      first_name,
+      last_name,
+      email,
+      phone_number,
+      profile_image_url,
+      defaultIndex,
+      hasAddressData,
+      hasPersonalData,
+      addressFields: {
+        address_name: req.body.address_name,
+        address_street: req.body.address_street,
+        address_city: req.body.address_city,
+        address_name_2: req.body.address_name_2,
+        address_street_2: req.body.address_street_2,
+        address_city_2: req.body.address_city_2,
+        address_name_3: req.body.address_name_3,
+        address_street_3: req.body.address_street_3,
+        address_city_3: req.body.address_city_3
+      }
+    });
+    
+    // Log the SQL and params for debugging
+    console.log('SQL Query:', sql);
+    console.log('Parameters:', params);
+    console.log('Parameter types:', params.map(p => typeof p));
+    
+    await connection.execute(sql, params);
+    
+    res.json({ success: true, profile_image_url });
+  } catch (error) {
+    console.error('Account settings update error:', error);
+    res.status(500).json({ error: 'Database error: ' + error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// API: Change user password
+router.post('/account-settings/password', async (req, res) => {
+  if (!req.session.user || req.session.user.role !== 'user') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id;
+    const { current_password, new_password, confirm_password } = req.body;
+    
+    if (!current_password || !new_password || !confirm_password) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+    if (new_password !== confirm_password) {
+      return res.status(400).json({ error: 'New passwords do not match.' });
+    }
+    
+    // Check current password
+    const [users] = await connection.execute('SELECT password FROM users WHERE user_id = ?', [userId]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    if (users[0].password !== current_password) {
+      return res.status(400).json({ error: 'Current password is incorrect.' });
+    }
+    
+    // Update password
+    await connection.execute('UPDATE users SET password = ? WHERE user_id = ?', [new_password, userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({ error: 'Database error: ' + error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// API: Get user addresses for checkout
+router.get('/api/user/addresses', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id;
+    
+    // First check if user exists in user_information table
+    const checkUserSql = `SELECT user_id FROM user_information WHERE user_id = ?`;
+    const [userCheck] = await connection.execute(checkUserSql, [userId]);
+    
+    if (userCheck.length === 0) {
+      // Create user_information entry if it doesn't exist
+      const createUserInfoSql = `INSERT INTO user_information (user_id, username, email, phone_number) 
+                                SELECT user_id, email, email, phone_number FROM users WHERE user_id = ?`;
+      await connection.execute(createUserInfoSql, [userId]);
+    }
+    
+    const sql = `SELECT 
+      address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
+      address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
+      address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
+      default_address_index
+      FROM user_information WHERE user_id = ?`;
+    
+    const [results] = await connection.execute(sql, [userId]);
+    
+    if (results.length === 0) {
+      return res.json({ addresses: [] });
+    }
+    
+    const userData = results[0];
+    const addresses = [];
+    
+    // Process address 1
+    if (userData.address_street || userData.address_city || userData.address_country) {
+      addresses.push({
+        name: userData.address_name || 'Address 1',
+        street: userData.address_street,
+        city: userData.address_city,
+        state: userData.address_state,
+        country: userData.address_country,
+        postal_code: userData.address_postal_code,
+        phone: userData.address_phone,
+        isDefault: userData.default_address_index === 1
+      });
+    }
+    
+    // Process address 2
+    if (userData.address_street_2 || userData.address_city_2 || userData.address_country_2) {
+      addresses.push({
+        name: userData.address_name_2 || 'Address 2',
+        street: userData.address_street_2,
+        city: userData.address_city_2,
+        state: userData.address_state_2,
+        country: userData.address_country_2,
+        postal_code: userData.address_postal_code_2,
+        phone: userData.address_phone_2,
+        isDefault: userData.default_address_index === 2
+      });
+    }
+    
+    // Process address 3
+    if (userData.address_street_3 || userData.address_city_3 || userData.address_country_3) {
+      addresses.push({
+        name: userData.address_name_3 || 'Address 3',
+        street: userData.address_street_3,
+        city: userData.address_city_3,
+        state: userData.address_state_3,
+        country: userData.address_country_3,
+        postal_code: userData.address_postal_code_3,
+        phone: userData.address_phone_3,
+        isDefault: userData.default_address_index === 3
+      });
+    }
+    
+    res.json({ addresses });
+  } catch (error) {
+    console.error('Error fetching user addresses:', error);
+    res.status(500).json({ error: 'Database error' });
+  } finally {
+    if (connection) await connection.end();
+  }
 });
 
 // Messages page route - FIXED VERSION FOR YOUR DATABASE SCHEMA
@@ -902,12 +1345,10 @@ router.post('/start-conversation', (req, res) => {
 
 // API: Get messages for a conversation - FIXED VERSION
 router.get('/api/conversations/:conversationId/messages', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
 
   const conversationId = req.params.conversationId;
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
 
   // First, verify user has access to this conversation
   const accessQuery = `
@@ -975,12 +1416,10 @@ router.get('/api/conversations/:conversationId/messages', (req, res) => {
 
 // API: Send a message - FIXED VERSION
 router.post('/api/conversations/:conversationId/messages', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
 
   const conversationId = req.params.conversationId;
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
   const { message_content } = req.body;
 
   // Get user's username
@@ -1065,11 +1504,9 @@ router.post('/api/conversations/:conversationId/messages', (req, res) => {
 
 // API: Start a new conversation
 router.post('/api/conversations', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
 
-  const buyerId = req.session.user.id || req.session.user.user_id;
+  const buyerId = getUserId(req);
   const { seller_email, initial_message, listing_id } = req.body;
 
   if (!seller_email || !initial_message) {
@@ -1204,9 +1641,7 @@ router.post('/api/conversations', (req, res) => {
 
 // Submit new question
 router.post('/api/qa', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
 
   const { category, question_text, details } = req.body;
 
@@ -1219,8 +1654,8 @@ router.post('/api/qa', (req, res) => {
     VALUES (?, ?, ?, ?, ?, NOW(), 0, NOW())
   `;
 
-  const userId = req.session.user.id || req.session.user.user_id;
-  const username = req.session.user.username || req.session.user.email.split('@')[0];
+  const userId = getUserId(req);
+  const username = getUserUsername(req.session.user);
 
   const values = [
     userId,
@@ -1246,9 +1681,7 @@ router.post('/api/qa', (req, res) => {
 
 // Submit answer to question
 router.post('/api/qa/:qaId/answer', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
 
   const qaId = req.params.qaId;
   const { answer_content } = req.body;
@@ -1262,8 +1695,8 @@ router.post('/api/qa/:qaId/answer', (req, res) => {
     VALUES (?, ?, ?, ?, NOW())
   `;
 
-  const userId = req.session.user.id || req.session.user.user_id;
-  const username = req.session.user.username || req.session.user.email.split('@')[0];
+  const userId = getUserId(req);
+  const username = getUserUsername(req.session.user);
 
   const values = [
     qaId,
@@ -1288,12 +1721,10 @@ router.post('/api/qa/:qaId/answer', (req, res) => {
 
 // Vote helpful on question
 router.post('/api/qa/:qaId/vote', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
 
   const qaId = req.params.qaId;
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
 
   // Check if user already voted
   const checkVoteQuery = 'SELECT * FROM qa_votes WHERE qa_id = ? AND user_id = ?';
@@ -1356,11 +1787,9 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
 
 // Get user's vote status for questions
 router.get('/api/qa/votes/status', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
 
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
   const query = 'SELECT qa_id FROM qa_votes WHERE user_id = ?';
   
   callbackConnection.query(query, [userId], (err, votes) => {
@@ -1449,30 +1878,21 @@ router.get('/api/cart', (req, res) => {
   
   callbackConnection.query(cartQuery, [userId], (err, items) => {
     if (err) {
-      console.error('Cart query error:', err);
-      return res.status(500).json({ error: 'Database error' });
+      return handleDbError(err, res, 'Cart query error');
     }
     
-    // Fix image URLs
-    items.forEach(item => {
-      if (!item.image_url || item.image_url === 'null') {
-        item.image_url = '/assets/logo.png';
-      } else if (!item.image_url.startsWith('/uploads/')) {
-        item.image_url = `/uploads/${item.image_url}`;
-      }
-    });
+    // Fix image URLs using helper
+    const processedItems = processListingImages(items);
     
-    res.json({ items: items });
+    res.json({ items: processedItems });
   });
 });
 
 // Add item to cart
 router.post('/api/cart', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
   
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
   const { listing_id, quantity = 1 } = req.body;
   
   if (!listing_id) {
@@ -1537,13 +1957,38 @@ router.post('/api/cart', (req, res) => {
   });
 });
 
-// Remove item from cart
-router.delete('/api/cart/:cartId', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
+// Update cart item quantity
+router.put('/api/cart/:cartId', (req, res) => {
+  if (!requireUserAuth(req, res)) return;
+  
+  const userId = getUserId(req);
+  const cartId = req.params.cartId;
+  const { quantity } = req.body;
+  
+  if (!quantity || quantity < 1) {
+    return res.status(400).json({ error: 'Valid quantity is required' });
   }
   
-  const userId = req.session.user.id || req.session.user.user_id;
+  const updateQuery = 'UPDATE cart SET quantity = ? WHERE cart_id = ? AND user_id = ?';
+  callbackConnection.query(updateQuery, [quantity, cartId, userId], (err, result) => {
+    if (err) {
+      console.error('Update cart quantity error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Item not found in cart' });
+    }
+    
+    res.json({ success: true, message: 'Cart quantity updated' });
+  });
+});
+
+// Remove item from cart
+router.delete('/api/cart/:cartId', (req, res) => {
+  if (!requireUserAuth(req, res)) return;
+  
+  const userId = getUserId(req);
   const cartId = req.params.cartId;
   
   const deleteQuery = 'DELETE FROM cart WHERE cart_id = ? AND user_id = ?';
@@ -1563,11 +2008,9 @@ router.delete('/api/cart/:cartId', (req, res) => {
 
 // Clear entire cart
 router.delete('/api/cart', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
+  if (!requireUserAuth(req, res)) return;
   
-  const userId = req.session.user.id || req.session.user.user_id;
+  const userId = getUserId(req);
   const deleteQuery = 'DELETE FROM cart WHERE user_id = ?';
   
   callbackConnection.query(deleteQuery, [userId], (err, result) => {
@@ -1577,193 +2020,6 @@ router.delete('/api/cart', (req, res) => {
     }
     
     res.json({ success: true, message: 'Cart cleared successfully' });
-  });
-});
-
-// ========== CHECKOUT API ROUTES ==========
-
-// Single item checkout (Buy Now)
-router.post('/api/checkout/single', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  
-  const userId = req.session.user.id || req.session.user.user_id;
-  const { listing_id } = req.body;
-  
-  if (!listing_id) {
-    return res.status(400).json({ error: 'Listing ID is required' });
-  }
-  
-  // Get listing details
-  const listingQuery = `
-    SELECT listing_id, title, price, user_id, status
-    FROM listings 
-    WHERE listing_id = ? AND status = 'active'
-  `;
-  
-  callbackConnection.query(listingQuery, [listing_id], (err, listings) => {
-    if (err) {
-      console.error('Listing query error:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-    
-    if (listings.length === 0) {
-      return res.status(404).json({ error: 'Listing not found or no longer available' });
-    }
-    
-    const listing = listings[0];
-    
-    if (listing.user_id === userId) {
-      return res.status(400).json({ error: 'You cannot purchase your own items' });
-    }
-    
-    const subtotal = parseFloat(listing.price);
-    const shipping = subtotal >= 50 ? 0 : 5.99;
-    const tax = subtotal * 0.08; // 8% tax
-    const total = subtotal + shipping + tax;
-    
-    // Create order
-    const createOrderQuery = `
-      INSERT INTO orders (user_id, total_amount, status, created_at)
-      VALUES (?, ?, 'pending', NOW())
-    `;
-    
-    callbackConnection.query(createOrderQuery, [userId, total], (err, orderResult) => {
-      if (err) {
-        console.error('Create order error:', err);
-        return res.status(500).json({ error: 'Failed to create order' });
-      }
-      
-      const orderId = orderResult.insertId;
-      
-      // Add order item
-      const addItemQuery = `
-        INSERT INTO order_items (order_id, listing_id, quantity, price)
-        VALUES (?, ?, 1, ?)
-      `;
-      
-      callbackConnection.query(addItemQuery, [orderId, listing_id, listing.price], (err) => {
-        if (err) {
-          console.error('Add order item error:', err);
-          return res.status(500).json({ error: 'Failed to add order item' });
-        }
-        
-        res.json({
-          success: true,
-          order_id: orderId,
-          total: total,
-          message: 'Order created successfully'
-        });
-      });
-    });
-  });
-});
-
-// Regular cart checkout
-router.post('/api/checkout', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  
-  const userId = req.session.user.id || req.session.user.user_id;
-  const { shipping_address } = req.body;
-  
-  // Get cart items
-  const cartQuery = `
-    SELECT 
-      c.cart_id,
-      c.listing_id,
-      c.quantity,
-      l.price,
-      l.title,
-      l.user_id as seller_id,
-      l.status
-    FROM cart c
-    JOIN listings l ON c.listing_id = l.listing_id
-    WHERE c.user_id = ?
-  `;
-  
-  callbackConnection.query(cartQuery, [userId], (err, cartItems) => {
-    if (err) {
-      console.error('Cart query error:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-    
-    if (cartItems.length === 0) {
-      return res.status(400).json({ error: 'Cart is empty' });
-    }
-    
-    // Check if all items are still available
-    const unavailableItems = cartItems.filter(item => item.status !== 'active');
-    if (unavailableItems.length > 0) {
-      return res.status(400).json({ 
-        error: 'Some items in your cart are no longer available',
-        unavailable_items: unavailableItems.map(item => item.title)
-      });
-    }
-    
-    // Calculate totals
-    const subtotal = cartItems.reduce((total, item) => {
-      return total + (parseFloat(item.price) * item.quantity);
-    }, 0);
-    
-    const shipping = subtotal >= 50 ? 0 : 5.99;
-    const tax = subtotal * 0.08; // 8% tax
-    const total = subtotal + shipping + tax;
-    
-    // Create order
-    const createOrderQuery = `
-      INSERT INTO orders (user_id, total_amount, shipping_address, status, created_at)
-      VALUES (?, ?, ?, 'pending', NOW())
-    `;
-    
-    const shippingAddressJson = JSON.stringify(shipping_address);
-    
-    callbackConnection.query(createOrderQuery, [userId, total, shippingAddressJson], (err, orderResult) => {
-      if (err) {
-        console.error('Create order error:', err);
-        return res.status(500).json({ error: 'Failed to create order' });
-      }
-      
-      const orderId = orderResult.insertId;
-      
-      // Add order items
-      const orderItemsData = cartItems.map(item => [
-        orderId,
-        item.listing_id,
-        item.quantity,
-        item.price
-      ]);
-      
-      const addItemsQuery = `
-        INSERT INTO order_items (order_id, listing_id, quantity, price)
-        VALUES ?
-      `;
-      
-      callbackConnection.query(addItemsQuery, [orderItemsData], (err) => {
-        if (err) {
-          console.error('Add order items error:', err);
-          return res.status(500).json({ error: 'Failed to add order items' });
-        }
-        
-        // Clear cart after successful order creation
-        const clearCartQuery = 'DELETE FROM cart WHERE user_id = ?';
-        callbackConnection.query(clearCartQuery, [userId], (err) => {
-          if (err) {
-            console.warn('Clear cart warning:', err);
-            // Don't fail the order if cart clearing fails
-          }
-          
-          res.json({
-            success: true,
-            order_id: orderId,
-            total: total,
-            message: 'Order created successfully'
-          });
-        });
-      });
-    });
   });
 });
 
@@ -1788,8 +2044,7 @@ router.get('/api/listings/:listingId', (req, res) => {
 
   callbackConnection.query(listingQuery, [listingId], (err, listings) => {
     if (err) {
-      console.error('Error fetching listing:', err);
-      return res.status(500).json({ error: 'Database error' });
+      return handleDbError(err, res, 'Error fetching listing');
     }
 
     if (listings.length === 0) {
@@ -1798,12 +2053,8 @@ router.get('/api/listings/:listingId', (req, res) => {
 
     const listing = listings[0];
     
-    // Fix image URL
-    if (!listing.image_url || listing.image_url === 'null') {
-      listing.image_url = '/assets/logo.png';
-    } else if (!listing.image_url.startsWith('/uploads/')) {
-      listing.image_url = `/uploads/${listing.image_url}`;
-    }
+    // Fix image URL using helper
+    listing.image_url = fixImageUrl(listing.image_url);
 
     res.json(listing);
   });
@@ -1829,20 +2080,13 @@ router.get('/api/listings', (req, res) => {
 
   callbackConnection.query(listingsQuery, (err, listings) => {
     if (err) {
-      console.error('Error fetching listings:', err);
-      return res.status(500).json({ error: 'Database error' });
+      return handleDbError(err, res, 'Error fetching listings');
     }
 
-    // Fix image URLs
-    listings.forEach(listing => {
-      if (!listing.image_url || listing.image_url === 'null') {
-        listing.image_url = '/assets/logo.png';
-      } else if (!listing.image_url.startsWith('/uploads/')) {
-        listing.image_url = `/uploads/${listing.image_url}`;
-      }
-    });
+    // Fix image URLs using helper
+    const processedListings = processListingImages(listings);
 
-    res.json(listings);
+    res.json(processedListings);
   });
 });
 
@@ -1966,6 +2210,430 @@ router.get('/orders/details/:orderId', async (req, res) => {
     console.error('Order details error:', error);
     await conn.end();
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// ========== STRIPE API ENDPOINTS ==========
+
+// Get Stripe publishable key
+router.get('/api/stripe/get-publishable-key', (req, res) => {
+  try {
+    if (!process.env.STRIPE_PUBLISHABLE_KEY) {
+      return res.status(503).json({ 
+        error: 'Stripe publishable key not configured.' 
+      });
+    }
+    
+    res.json({
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY
+    });
+  } catch (error) {
+    console.error('Error getting publishable key:', error);
+    res.status(500).json({ error: 'Failed to get publishable key.' });
+  }
+});
+
+// Create Stripe payment intent
+router.post('/api/stripe/create-payment-intent', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    // Check if Stripe is configured
+    if (!global.stripe) {
+      return res.status(503).json({ 
+        error: 'Payment processing is currently unavailable. Please contact support.' 
+      });
+    }
+    
+    connection = await createConnection();
+    const { order_id, amount } = req.body;
+    
+    // Create Stripe checkout session
+    const session = await global.stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `Order #${order_id}`,
+            description: 'Vintique Purchase',
+          },
+          unit_amount: Math.round(amount * 100), // Convert to cents
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.BASE_URL || 'http://localhost:3000'}/checkout/success?session_id={CHECKOUT_SESSION_ID}&order_id=${order_id}`,
+      cancel_url: `${process.env.BASE_URL || 'http://localhost:3000'}/checkout/success?session_id={CHECKOUT_SESSION_ID}&order_id=${order_id}&cancelled=true`,
+      metadata: {
+        order_id: order_id
+      }
+    });
+    
+    res.json({
+      sessionId: session.id,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY
+    });
+    
+  } catch (error) {
+    console.error('Stripe payment intent error:', error);
+    res.status(500).json({ error: 'Payment setup failed.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Manual payment verification endpoint
+router.post('/api/stripe/verify-payment', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    // Check if Stripe is configured
+    if (!global.stripe) {
+      return res.status(503).json({ 
+        error: 'Payment processing is currently unavailable.' 
+      });
+    }
+    
+    const { sessionId, orderId } = req.body;
+    
+    if (!sessionId || !orderId) {
+      return res.status(400).json({ error: 'Session ID and Order ID are required.' });
+    }
+    
+    // Retrieve the session from Stripe
+    const session = await global.stripe.checkout.sessions.retrieve(sessionId);
+    console.log('Payment status:', session.payment_status);
+    
+    connection = await createConnection();
+    
+    if (session.payment_status === 'paid') {
+      // Start transaction
+      await connection.beginTransaction();
+      
+      try {
+        // Update order status to paid
+        await connection.execute(`
+          UPDATE orders SET status = 'paid' WHERE order_id = ?
+        `, [orderId]);
+        
+        // Get order items to mark listings as sold
+        const [orderItems] = await connection.execute(`
+          SELECT listing_id FROM order_items WHERE order_id = ?
+        `, [orderId]);
+        
+        // Mark all listings in the order as sold
+        for (const item of orderItems) {
+          await connection.execute(`
+            UPDATE listings SET status = 'sold' WHERE listing_id = ?
+          `, [item.listing_id]);
+        }
+        
+        // Commit transaction
+        await connection.commit();
+        
+        res.json({ 
+          success: true, 
+          payment_status: 'paid',
+          message: 'Payment verified successfully. Items marked as sold.',
+          items_sold: orderItems.length
+        });
+      } catch (error) {
+        // Rollback on error
+        await connection.rollback();
+        throw error;
+      }
+    } else {
+      // Update order status to failed
+      await connection.execute(`
+        UPDATE orders SET status = 'failed' WHERE order_id = ?
+      `, [orderId]);
+      
+      res.json({ 
+        success: false, 
+        payment_status: session.payment_status,
+        message: 'Payment was not completed.' 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    res.status(500).json({ error: 'Payment verification failed.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ========== CHECKOUT API ENDPOINTS ==========
+
+// Create order from cart
+router.post('/api/checkout', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id || req.session.user.id;
+    
+                    // Debug: Log the entire request body
+                console.log('=== CHECKOUT DEBUG ===');
+                console.log('Request body:', JSON.stringify(req.body, null, 2));
+                console.log('Content-Type:', req.get('Content-Type'));
+                
+                // Extract shipping fields from nested object
+                const shippingAddress = req.body.shipping_address || {};
+                const shipping_address_name = shippingAddress.name;
+                const shipping_address_street = shippingAddress.street;
+                const shipping_address_city = shippingAddress.city;
+                const shipping_address_state = shippingAddress.state;
+                const shipping_address_country = shippingAddress.country;
+                const shipping_address_postal_code = shippingAddress.postal_code;
+                const shipping_address_phone = shippingAddress.phone;
+                
+                // Debug: Log extracted values
+                console.log('Extracted shipping fields:');
+                console.log('- shipping_address_name:', shipping_address_name);
+                console.log('- shipping_address_street:', shipping_address_street);
+                console.log('- shipping_address_city:', shipping_address_city);
+                console.log('- shipping_address_state:', shipping_address_state);
+                console.log('- shipping_address_country:', shipping_address_country);
+                console.log('- shipping_address_postal_code:', shipping_address_postal_code);
+                console.log('- shipping_address_phone:', shipping_address_phone);
+                console.log('=====================');
+                
+                // Validate shipping address fields
+                const requiredFields = ['shipping_address_name', 'shipping_address_street', 'shipping_address_city', 'shipping_address_state', 'shipping_address_postal_code', 'shipping_address_phone'];
+                const missingFields = requiredFields.filter(field => {
+                  const fieldValue = {
+                    shipping_address_name,
+                    shipping_address_street,
+                    shipping_address_city,
+                    shipping_address_state,
+                    shipping_address_postal_code,
+                    shipping_address_phone
+                  }[field];
+                  return !fieldValue;
+                });
+    
+    if (missingFields.length > 0) {
+      console.log('Missing fields:', missingFields);
+      return res.status(400).json({ error: `Missing required shipping fields: ${missingFields.join(', ')}` });
+    }
+    
+    // Get cart items
+    const [cartItems] = await connection.execute(`
+      SELECT c.cart_id, c.quantity,
+             l.listing_id, l.title, l.price, l.item_condition,
+             u.email as seller_username
+      FROM cart c
+      JOIN listings l ON c.listing_id = l.listing_id
+      JOIN users u ON l.user_id = u.user_id
+      WHERE c.user_id = ? AND l.status = 'active'
+    `, [userId]);
+    
+    if (cartItems.length === 0) {
+      return res.status(400).json({ error: 'Cart is empty.' });
+    }
+    
+    // Calculate total
+    const subtotal = cartItems.reduce((total, item) => {
+      return total + (parseFloat(item.price) * item.quantity);
+    }, 0);
+    
+    const shipping = subtotal >= 50 ? 0 : 5.99;
+    const tax = subtotal * 0.08; // 8% tax
+    const total = subtotal + shipping + tax;
+    
+    // Start transaction
+    await connection.beginTransaction();
+    
+    try {
+      // Create order with shipping address information
+      const [orderResult] = await connection.execute(`
+        INSERT INTO orders (
+          user_id, 
+          total_amount, 
+          status,
+          shipping_address_name,
+          shipping_address_street,
+          shipping_address_city,
+          shipping_address_state,
+          shipping_address_country,
+          shipping_address_postal_code,
+          shipping_address_phone
+        ) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        userId, 
+        total,
+        shipping_address_name,
+        shipping_address_street,
+        shipping_address_city,
+        shipping_address_state,
+        shipping_address_country,
+        shipping_address_postal_code,
+        shipping_address_phone
+      ]);
+      
+      const orderId = orderResult.insertId;
+      
+      // Create order items
+      for (const item of cartItems) {
+        await connection.execute(`
+          INSERT INTO order_items (order_id, listing_id, quantity, price) 
+          VALUES (?, ?, ?, ?)
+        `, [orderId, item.listing_id, item.quantity, item.price]);
+      }
+      
+      // Clear cart
+      await connection.execute(`
+        DELETE FROM cart WHERE user_id = ?
+      `, [userId]);
+      
+      // Commit transaction
+      await connection.commit();
+      
+      res.json({ 
+        success: true, 
+        order_id: orderId,
+        total: total,
+        message: 'Order created successfully.'
+      });
+      
+    } catch (error) {
+      // Rollback on error
+      await connection.rollback();
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error('Checkout error:', error);
+    res.status(500).json({ error: 'Server error during checkout.' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Create order for single item (Buy Now)
+router.post('/api/checkout/single', requireAuth, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.user_id || req.session.user.id;
+    // Extract shipping fields from nested object
+    const shippingAddress = req.body.shipping_address || {};
+    const shipping_address_name = shippingAddress.name;
+    const shipping_address_street = shippingAddress.street;
+    const shipping_address_city = shippingAddress.city;
+    const shipping_address_state = shippingAddress.state;
+    const shipping_address_country = shippingAddress.country;
+    const shipping_address_postal_code = shippingAddress.postal_code;
+    const shipping_address_phone = shippingAddress.phone;
+    
+    const { listing_id } = req.body;
+    
+    if (!listing_id) {
+      return res.status(400).json({ error: 'Listing ID is required.' });
+    }
+    
+    // Validate shipping address fields
+    const requiredFields = ['shipping_address_name', 'shipping_address_street', 'shipping_address_city', 'shipping_address_state', 'shipping_address_postal_code', 'shipping_address_phone'];
+    const missingFields = requiredFields.filter(field => {
+      const fieldValue = {
+        shipping_address_name,
+        shipping_address_street,
+        shipping_address_city,
+        shipping_address_state,
+        shipping_address_postal_code,
+        shipping_address_phone
+      }[field];
+      return !fieldValue;
+    });
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({ error: `Missing required shipping fields: ${missingFields.join(', ')}` });
+    }
+    
+    // Get listing details
+    const [listings] = await connection.execute(`
+      SELECT l.listing_id, l.title, l.price, l.item_condition, l.user_id,
+             u.email as seller_username
+      FROM listings l
+      JOIN users u ON l.user_id = u.user_id
+      WHERE l.listing_id = ? AND l.status = 'active'
+    `, [listing_id]);
+    
+    if (listings.length === 0) {
+      return res.status(404).json({ error: 'Listing not found or not available.' });
+    }
+    
+    const listing = listings[0];
+    
+    // Check if user is trying to buy their own listing
+    if (listing.user_id === userId) {
+      return res.status(400).json({ error: 'You cannot purchase your own listing.' });
+    }
+    
+    // Calculate total
+    const subtotal = parseFloat(listing.price);
+    const shipping = subtotal >= 50 ? 0 : 5.99;
+    const tax = subtotal * 0.08; // 8% tax
+    const total = subtotal + shipping + tax;
+    
+    // Start transaction
+    await connection.beginTransaction();
+    
+    try {
+      // Create order with shipping address information
+      const [orderResult] = await connection.execute(`
+        INSERT INTO orders (
+          user_id, 
+          total_amount, 
+          status,
+          shipping_address_name,
+          shipping_address_street,
+          shipping_address_city,
+          shipping_address_state,
+          shipping_address_country,
+          shipping_address_postal_code,
+          shipping_address_phone
+        ) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        userId, 
+        total,
+        shipping_address_name,
+        shipping_address_street,
+        shipping_address_city,
+        shipping_address_state,
+        shipping_address_country,
+        shipping_address_postal_code,
+        shipping_address_phone
+      ]);
+      
+      const orderId = orderResult.insertId;
+      
+      // Create order item
+      await connection.execute(`
+        INSERT INTO order_items (order_id, listing_id, quantity, price) 
+        VALUES (?, ?, 1, ?)
+      `, [orderId, listing.listing_id, listing.price]);
+      
+      // Commit transaction
+      await connection.commit();
+      
+      res.json({ 
+        success: true, 
+        order_id: orderId,
+        total: total,
+        message: 'Order created successfully.'
+      });
+      
+    } catch (error) {
+      // Rollback on error
+      await connection.rollback();
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error('Single item checkout error:', error);
+    res.status(500).json({ error: 'Server error during checkout.' });
+  } finally {
+    if (connection) await connection.end();
   }
 });
 
