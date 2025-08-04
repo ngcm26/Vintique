@@ -6,6 +6,7 @@ const { upload } = require('../config/multer');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 const mysql = require('mysql2/promise');
 const fs = require('fs');
+const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../utils/helpers');
 const path = require('path');
 const app = express();
 app.use(express.json()); // ← Add this to parse JSON requests
@@ -190,11 +191,33 @@ router.post('/post_product', upload.array('images', 5), (req, res) => {
   const { title, description, brand, size, category, condition, price } = req.body;
   const images = req.files;
 
-  if (!title || !description || !category || !condition || !price || !images || images.length === 0) {
+  // Enhanced validation
+  const errors = [];
+  
+  if (!title || title.trim().length < 5) {
+    errors.push('Title must be at least 5 characters long');
+  }
+  if (!description || description.trim().length < 20) {
+    errors.push('Description must be at least 20 characters long');
+  }
+  if (!category) {
+    errors.push('Please select a category');
+  }
+  if (!condition) {
+    errors.push('Please select a condition');
+  }
+  if (!price || isNaN(price) || parseFloat(price) <= 0) {
+    errors.push('Please enter a valid price greater than 0');
+  }
+  if (!images || images.length === 0) {
+    errors.push('Please upload at least one image');
+  }
+
+  if (errors.length > 0) {
     return res.render('users/post_product', {
       layout: 'user',
       activePage: 'sell',
-      error: 'All required fields and at least one image must be provided.'
+      error: errors.join('. ')
     });
   }
 
@@ -202,7 +225,11 @@ router.post('/post_product', upload.array('images', 5), (req, res) => {
   callbackConnection.query(insertListingSql, [userId, title, description, brand, size, category, condition, price], (err, result) => {
     if (err) {
       console.error('Insert listing error:', err);
-      return res.status(500).send('Database error');
+      return res.render('users/post_product', {
+        layout: 'user',
+        activePage: 'sell',
+        error: 'Failed to create listing. Please try again.'
+      });
     }
     const listingId = result.insertId;
     const imageSql = `INSERT INTO listing_images (listing_id, image_url, is_main) VALUES ?`;
@@ -214,12 +241,16 @@ router.post('/post_product', upload.array('images', 5), (req, res) => {
     callbackConnection.query(imageSql, [imageValues], (err2) => {
       if (err2) {
         console.error('Insert images error:', err2);
-        return res.status(500).send('Database error');
+        return res.render('users/post_product', {
+          layout: 'user',
+          activePage: 'sell',
+          error: 'Listing created but failed to upload images. Please contact support.'
+        });
       }
       res.render('users/post_product', {
         layout: 'user',
         activePage: 'sell',
-        success: 'Product posted successfully!'
+        success: 'Product posted successfully! Your listing is now live on Vintique.'
       });
     });
   });
@@ -2930,65 +2961,80 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
     connection = await createConnection();
     const userId = req.session.user.user_id || req.session.user.id;
     
-                    // Debug: Log the entire request body
-                console.log('=== CHECKOUT DEBUG ===');
-                console.log('Request body:', JSON.stringify(req.body, null, 2));
-                console.log('Content-Type:', req.get('Content-Type'));
-                
-                // Extract shipping fields from nested object
-                const shippingAddress = req.body.shipping_address || {};
-                const shipping_address_name = shippingAddress.name;
-                const shipping_address_street = shippingAddress.street;
-                const shipping_address_city = shippingAddress.city;
-                const shipping_address_state = shippingAddress.state;
-                const shipping_address_country = shippingAddress.country;
-                const shipping_address_postal_code = shippingAddress.postal_code;
-                const shipping_address_phone = shippingAddress.phone;
-                
-                // Debug: Log extracted values
-                console.log('Extracted shipping fields:');
-                console.log('- shipping_address_name:', shipping_address_name);
-                console.log('- shipping_address_street:', shipping_address_street);
-                console.log('- shipping_address_city:', shipping_address_city);
-                console.log('- shipping_address_state:', shipping_address_state);
-                console.log('- shipping_address_country:', shipping_address_country);
-                console.log('- shipping_address_postal_code:', shipping_address_postal_code);
-                console.log('- shipping_address_phone:', shipping_address_phone);
-                console.log('=====================');
-                
-                // Validate shipping address fields
-                const requiredFields = ['shipping_address_name', 'shipping_address_street', 'shipping_address_city', 'shipping_address_state', 'shipping_address_postal_code', 'shipping_address_phone'];
-                const missingFields = requiredFields.filter(field => {
-                  const fieldValue = {
-                    shipping_address_name,
-                    shipping_address_street,
-                    shipping_address_city,
-                    shipping_address_state,
-                    shipping_address_postal_code,
-                    shipping_address_phone
-                  }[field];
-                  return !fieldValue;
-                });
+    // Debug: Log the entire request body
+    console.log('=== CHECKOUT DEBUG ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Content-Type:', req.get('Content-Type'));
     
+    // Extract shipping fields from nested object
+    const shippingAddress = req.body.shipping_address || {};
+    const shipping_address_name = shippingAddress.name;
+    const shipping_address_street = shippingAddress.street;
+    const shipping_address_city = shippingAddress.city;
+    const shipping_address_state = shippingAddress.state;
+    const shipping_address_country = shippingAddress.country;
+    const shipping_address_postal_code = shippingAddress.postal_code;
+    const shipping_address_phone = shippingAddress.phone;
+    
+    // Debug: Log extracted values
+    console.log('Extracted shipping fields:');
+    console.log('- shipping_address_name:', shipping_address_name);
+    console.log('- shipping_address_street:', shipping_address_street);
+    console.log('- shipping_address_city:', shipping_address_city);
+    console.log('- shipping_address_state:', shipping_address_state);
+    console.log('- shipping_address_country:', shipping_address_country);
+    console.log('- shipping_address_postal_code:', shipping_address_postal_code);
+    console.log('- shipping_address_phone:', shipping_address_phone);
+    console.log('=====================');
+    
+    // Validate shipping address fields
+    const requiredFields = ['shipping_address_name', 'shipping_address_street', 'shipping_address_city', 'shipping_address_state', 'shipping_address_postal_code', 'shipping_address_phone'];
+    const missingFields = requiredFields.filter(field => {
+      const fieldValue = {
+        shipping_address_name,
+        shipping_address_street,
+        shipping_address_city,
+        shipping_address_state,
+        shipping_address_postal_code,
+        shipping_address_phone
+      }[field];
+      return !fieldValue;
+    });
+
     if (missingFields.length > 0) {
       console.log('Missing fields:', missingFields);
       return res.status(400).json({ error: `Missing required shipping fields: ${missingFields.join(', ')}` });
     }
     
-    // Get cart items
+    // Get cart items with seller information
     const [cartItems] = await connection.execute(`
       SELECT c.cart_id, c.quantity,
-             l.listing_id, l.title, l.price, l.item_condition,
-             u.email as seller_username
+             l.listing_id, l.title, l.price, l.item_condition, l.user_id as seller_id,
+             u.email as seller_email, ui.username as seller_username
       FROM cart c
       JOIN listings l ON c.listing_id = l.listing_id
       JOIN users u ON l.user_id = u.user_id
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE c.user_id = ? AND l.status = 'active'
     `, [userId]);
     
     if (cartItems.length === 0) {
       return res.status(400).json({ error: 'Cart is empty.' });
     }
+    
+    // Get customer information
+    const [customerInfo] = await connection.execute(`
+      SELECT ui.username, u.email FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.user_id = ?
+    `, [userId]);
+    
+    if (customerInfo.length === 0) {
+      return res.status(400).json({ error: 'Customer information not found.' });
+    }
+    
+    const customerName = customerInfo[0].username;
+    const customerEmail = customerInfo[0].email;
     
     // Calculate total
     const subtotal = cartItems.reduce((total, item) => {
@@ -3046,6 +3092,94 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
       
       // Commit transaction
       await connection.commit();
+      
+      // Send email notifications (non-blocking)
+      const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../utils/helpers');
+      
+      // Prepare order data for customer email
+      const customerOrderData = {
+        orderId: orderId,
+        orderDate: new Date(),
+        total: total,
+        shippingAddress: {
+          name: shipping_address_name,
+          street: shipping_address_street,
+          city: shipping_address_city,
+          state: shipping_address_state,
+          country: shipping_address_country,
+          postal_code: shipping_address_postal_code,
+          phone: shipping_address_phone
+        },
+        items: cartItems.map(item => ({
+          title: item.title,
+          condition: item.item_condition,
+          price: item.price,
+          seller: item.seller_username
+        }))
+      };
+      
+      // Send customer confirmation email
+      sendOrderConfirmationEmail(customerEmail, customerName, customerOrderData)
+        .then(success => {
+          if (success) {
+            console.log('✅ Customer confirmation email sent for order #', orderId);
+          } else {
+            console.log('❌ Failed to send customer confirmation email for order #', orderId);
+          }
+        })
+        .catch(error => {
+          console.error('❌ Error sending customer confirmation email:', error);
+        });
+      
+      // Send seller notification emails
+      const sellerGroups = {};
+      cartItems.forEach(item => {
+        if (!sellerGroups[item.seller_id]) {
+          sellerGroups[item.seller_id] = {
+            sellerEmail: item.seller_email,
+            sellerName: item.seller_username,
+            items: []
+          };
+        }
+        sellerGroups[item.seller_id].items.push(item);
+      });
+      
+      // Send notification to each seller
+      for (const sellerId in sellerGroups) {
+        const seller = sellerGroups[sellerId];
+        const sellerOrderData = {
+          orderId: orderId,
+          orderDate: new Date(),
+          customerName: customerName,
+          customerEmail: customerEmail,
+          shippingAddress: {
+            name: shipping_address_name,
+            street: shipping_address_street,
+            city: shipping_address_city,
+            state: shipping_address_state,
+            country: shipping_address_country,
+            postal_code: shipping_address_postal_code,
+            phone: shipping_address_phone
+          },
+          item: {
+            title: seller.items[0].title,
+            condition: seller.items[0].item_condition,
+            price: seller.items[0].price
+          }
+        };
+        
+        sendOrderNotificationEmail(seller.sellerEmail, seller.sellerName, sellerOrderData)
+          .then(success => {
+            if (success) {
+              console.log('✅ Seller notification email sent for order #', orderId, 'to seller:', seller.sellerName);
+            } else {
+              console.log('❌ Failed to send seller notification email for order #', orderId, 'to seller:', seller.sellerName);
+            }
+          })
+          .catch(error => {
+            console.error('❌ Error sending seller notification email:', error);
+          });
+      }
       
       res.json({ 
         success: true, 
@@ -3108,10 +3242,10 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
       return res.status(400).json({ error: `Missing required shipping fields: ${missingFields.join(', ')}` });
     }
     
-    // Get listing details
+    // Get listing details with seller information
     const [listings] = await connection.execute(`
       SELECT l.listing_id, l.title, l.price, l.item_condition, l.user_id,
-             u.email as seller_username
+             u.email as seller_email, u.username as seller_username
       FROM listings l
       JOIN users u ON l.user_id = u.user_id
       WHERE l.listing_id = ? AND l.status = 'active'
@@ -3127,6 +3261,20 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
     if (listing.user_id === userId) {
       return res.status(400).json({ error: 'You cannot purchase your own listing.' });
     }
+    
+    // Get customer information
+    const [customerInfo] = await connection.execute(`
+      SELECT ui.username, u.email FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.user_id = ?
+    `, [userId]);
+    
+    if (customerInfo.length === 0) {
+      return res.status(400).json({ error: 'Customer information not found.' });
+    }
+    
+    const customerName = customerInfo[0].username;
+    const customerEmail = customerInfo[0].email;
     
     // Calculate total
     const subtotal = parseFloat(listing.price);
@@ -3174,6 +3322,79 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
       
       // Commit transaction
       await connection.commit();
+      
+      // Send email notifications (non-blocking)
+      const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../utils/helpers');
+      
+      // Prepare order data for customer email
+      const customerOrderData = {
+        orderId: orderId,
+        orderDate: new Date(),
+        total: total,
+        shippingAddress: {
+          name: shipping_address_name,
+          street: shipping_address_street,
+          city: shipping_address_city,
+          state: shipping_address_state,
+          country: shipping_address_country,
+          postal_code: shipping_address_postal_code,
+          phone: shipping_address_phone
+        },
+        items: [{
+          title: listing.title,
+          condition: listing.item_condition,
+          price: listing.price,
+          seller: listing.seller_username
+        }]
+      };
+      
+      // Send customer confirmation email
+      sendOrderConfirmationEmail(customerEmail, customerName, customerOrderData)
+        .then(success => {
+          if (success) {
+            console.log('✅ Customer confirmation email sent for order #', orderId);
+          } else {
+            console.log('❌ Failed to send customer confirmation email for order #', orderId);
+          }
+        })
+        .catch(error => {
+          console.error('❌ Error sending customer confirmation email:', error);
+        });
+      
+      // Prepare order data for seller email
+      const sellerOrderData = {
+        orderId: orderId,
+        orderDate: new Date(),
+        customerName: customerName,
+        customerEmail: customerEmail,
+        shippingAddress: {
+          name: shipping_address_name,
+          street: shipping_address_street,
+          city: shipping_address_city,
+          state: shipping_address_state,
+          country: shipping_address_country,
+          postal_code: shipping_address_postal_code,
+          phone: shipping_address_phone
+        },
+        item: {
+          title: listing.title,
+          condition: listing.item_condition,
+          price: listing.price
+        }
+      };
+      
+      // Send seller notification email
+      sendOrderNotificationEmail(listing.seller_email, listing.seller_username, sellerOrderData)
+        .then(success => {
+          if (success) {
+            console.log('✅ Seller notification email sent for order #', orderId, 'to seller:', listing.seller_username);
+          } else {
+            console.log('❌ Failed to send seller notification email for order #', orderId, 'to seller:', listing.seller_username);
+          }
+        })
+        .catch(error => {
+          console.error('❌ Error sending seller notification email:', error);
+        });
       
       res.json({ 
         success: true, 
@@ -3534,4 +3755,76 @@ router.get('/test-db', (req, res) => {
       result: result 
     });
   });
+});
+
+// Test email route
+router.get('/test-email', async (req, res) => {
+  try {
+    // Sample order data for testing
+    const customerEmail = req.query.email || 'test@example.com';
+    const customerName = 'Test Customer';
+    
+    const orderData = {
+      orderId: 'TEST-12345',
+      orderDate: new Date(),
+      total: 299.99,
+      shippingAddress: {
+        name: 'Test Customer',
+        street: '123 Test Street',
+        city: 'Test City',
+        state: 'TS',
+        postal_code: '12345',
+        country: 'United States',
+        phone: '+1-555-123-4567'
+      },
+      items: [
+        {
+          title: 'Vintage Denim Jacket',
+          condition: 'Excellent',
+          price: 199.99,
+          seller: 'vintage_seller'
+        },
+        {
+          title: 'Classic White Sneakers',
+          condition: 'Good',
+          price: 100.00,
+          seller: 'sneaker_store'
+        }
+      ]
+    };
+
+    // Send customer confirmation email
+    const customerResult = await sendOrderConfirmationEmail(customerEmail, customerName, orderData);
+    
+    // Send seller notification email (using same email for testing)
+    const sellerOrderData = {
+      orderId: 'TEST-12345',
+      orderDate: new Date(),
+      customerName: 'Test Customer',
+      customerEmail: 'test@example.com',
+      item: {
+        title: 'Vintage Denim Jacket',
+        condition: 'Excellent',
+        price: 199.99
+      },
+      shippingAddress: orderData.shippingAddress
+    };
+    
+    const sellerResult = await sendOrderNotificationEmail(customerEmail, 'Test Seller', sellerOrderData);
+
+    res.json({
+      success: true,
+      message: 'Test emails sent successfully!',
+      customerEmail: customerResult,
+      sellerEmail: sellerResult,
+      sentTo: customerEmail
+    });
+    
+  } catch (error) {
+    console.error('❌ Test email error:', error);
+    res.status(500).json({
+      error: 'Failed to send test emails',
+      details: error.message
+    });
+  }
 });
