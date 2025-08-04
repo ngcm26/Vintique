@@ -1,10 +1,12 @@
 ﻿// ========== IMPORTS AND SETUP ==========
 const express = require('express');
-const { engine } = require('express-handlebars');
+const exphbs = require('express-handlebars');
 const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
+
+const hbsHelpers = require('handlebars-helpers')(); // <-- all the extra helpers
 
 // Import database configuration
 const { createConnection, callbackConnection } = require('./config/database');
@@ -30,7 +32,6 @@ let stripe;
 try {
   if (process.env.STRIPE_SECRET_KEY) {
     stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-    // Make Stripe globally available
     global.stripe = stripe;
     console.log('✅ Stripe initialized successfully');
   } else {
@@ -60,82 +61,67 @@ app.use(session({
   cookie: { secure: false }
 }));
 
-// Configure Handlebars with proper helper registration
-app.engine('handlebars', engine({
+// ===== MERGE HANDLEBARS HELPERS (built-in + custom) =====
+Object.assign(hbsHelpers, {
+  eq: function(a, b) { return a === b; },
+  gt: function(a, b) { return a > b; },
+  formatDate: function(date) {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  },
+  timeAgo: function(date) {
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + ' years ago';
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + ' months ago';
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + ' days ago';
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + ' hours ago';
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + ' minutes ago';
+    return Math.floor(seconds) + ' seconds ago';
+  },
+  conditionClass: function(condition) {
+    const conditionMap = {
+      'new': 'badge-success',
+      'like new': 'badge-info',
+      'good': 'badge-warning',
+      'fair': 'badge-secondary',
+      'poor': 'badge-danger'
+    };
+    return conditionMap[condition?.toLowerCase?.()] || 'badge-secondary';
+  },
+  capitalize: function(str) {
+    if (typeof str !== 'string') return '';
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  },
+  isExpired: function(expiryDate) {
+    if (!expiryDate) return false;
+    const now = new Date();
+    const expiry = new Date(expiryDate);
+    return expiry < now;
+  },
+  substring: function(str, start, end) {
+    if (typeof str !== 'string') return '';
+    return str.substring(start, end);
+  },
+  add: function(a, b) { return a + b; },
+  or: function(a, b) { return a || b; }
+});
+
+// ========== HANDLEBARS SETUP ==========
+app.engine('handlebars', exphbs.engine({
   defaultLayout: 'user',
   layoutsDir: path.join(__dirname, 'views/layouts'),
-  helpers: {
-    eq: function(a, b) { 
-      return a === b; 
-    },
-    gt: function(a, b) { 
-      return a > b; 
-    },
-    formatDate: function(date) {
-      return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    },
-    timeAgo: function(date) {
-      const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-      
-      let interval = seconds / 31536000;
-      if (interval > 1) return Math.floor(interval) + ' years ago';
-      
-      interval = seconds / 2592000;
-      if (interval > 1) return Math.floor(interval) + ' months ago';
-      
-      interval = seconds / 86400;
-      if (interval > 1) return Math.floor(interval) + ' days ago';
-      
-      interval = seconds / 3600;
-      if (interval > 1) return Math.floor(interval) + ' hours ago';
-      
-      interval = seconds / 60;
-      if (interval > 1) return Math.floor(interval) + ' minutes ago';
-      
-      return Math.floor(seconds) + ' seconds ago';
-    },
-    conditionClass: function(condition) {
-      const conditionMap = {
-        'new': 'badge-success',
-        'like new': 'badge-info',
-        'good': 'badge-warning',
-        'fair': 'badge-secondary',
-        'poor': 'badge-danger'
-      };
-      return conditionMap[condition.toLowerCase()] || 'badge-secondary';
-    },
-    capitalize: function(str) {
-      if (typeof str !== 'string') return '';
-      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-    },
-
-    isExpired: function(expiryDate) {
-      if (!expiryDate) return false;
-      const now = new Date();
-      const expiry = new Date(expiryDate);
-      return expiry < now;
-    },
-    // FIXED: Add the missing substring helper
-    substring: function(str, start, end) {
-      if (typeof str !== 'string') return '';
-      return str.substring(start, end);
-    },
-    // Add helper for adding numbers (used in product detail template)
-    add: function(a, b) {
-      return a + b;
-    },
-    
-    or: function(a, b) { return a || b; },
-
-  }
+  helpers: hbsHelpers
 }));
-
 app.set('view engine', 'handlebars');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -150,9 +136,6 @@ app.use((req, res, next) => {
 // Serve uploads statically
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
-// ========== AUTHENTICATION MIDDLEWARE ==========
-// Authentication middleware is imported from middlewares/authMiddleware.js
-
 // ========== ROUTE IMPORTS ==========
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
@@ -161,7 +144,6 @@ const adminRoutes = require('./routes/admin');
 const chatbotRoutes = require('./routes/chatbot');
 const staffVoucherRoutes = require('./routes/staffVouchers'); 
 const voucherRoutes = require('./routes/vouchers');       
-
 
 // ========== ROUTE REGISTRATION ==========
 app.use('/', authRoutes);
@@ -173,7 +155,6 @@ app.use('/staff/vouchers', staffVoucherRoutes);
 app.use('/vouchers', voucherRoutes);  
 
 // ========== DATABASE CONNECTION HEALTH CHECK ==========
-// Test database connection on startup
 callbackConnection.ping((err) => {
   if (err) {
     console.error('❌ Database connection failed:', err);
