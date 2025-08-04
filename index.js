@@ -115,6 +115,11 @@ const hbs = exphbs.create({
     },
     divide: (a, b) => b ? Number(a) / Number(b) : 0,
     or: (a, b) => a || b,
+    includes: function(array, value) {
+      if (!array) return false;
+      // Convert all values to string for safe comparison (since voucher_id may be int or string)
+      return array.map(String).includes(String(value));
+    }
   }
 });
 

@@ -1,77 +1,73 @@
 <style>
   .create-voucher-container {
     max-width: 800px;
-    margin: 140px auto 4rem; /* 140px pushes content below fixed navbar */
+    margin: 140px auto 4rem;
     padding: 2rem;
     background: white;
     border-radius: 20px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
     font-family: 'DM Sans', sans-serif;
   }
-
   .create-voucher-container h1 {
     font-size: 2.5rem;
     font-weight: 700;
-    color: #333;
+    color: #222;
     margin-bottom: 2rem;
     text-align: center;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, #ffd700, #fabd3b);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
-
   .create-voucher-container .form-label {
     font-weight: 600;
     color: #555;
   }
-
   .create-voucher-container .form-control,
   .create-voucher-container .form-select {
     border-radius: 12px;
     padding: 0.75rem 1rem;
-    border: 1px solid #ced4da;
-    transition: border-color 0.3s ease;
+    border: 1.5px solid #ffeaa7;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
   }
-
   .create-voucher-container .form-control:focus,
   .create-voucher-container .form-select:focus {
-    border-color: #764ba2;
-    box-shadow: 0 0 0 0.2rem rgba(118, 75, 162, 0.25);
+    border-color: #ffd700;
+    box-shadow: 0 0 0 0.2rem rgba(255, 215, 0, 0.20);
   }
-
   .create-voucher-container .btn-success {
-    background: linear-gradient(135deg, #28a745, #218838);
+    background: linear-gradient(135deg, #ffd700, #fabd3b);
+    color: #333;
     border: none;
     padding: 0.75rem 2rem;
     font-weight: 600;
     border-radius: 25px;
-    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.18);
     transition: all 0.3s ease;
   }
-
   .create-voucher-container .btn-success:hover {
-    background: linear-gradient(135deg, #218838, #28a745);
-    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.5);
+    background: linear-gradient(135deg, #fabd3b, #ffd700);
+    color: #222;
+    box-shadow: 0 6px 20px rgba(255, 215, 0, 0.24);
     transform: translateY(-2px);
   }
-
   .create-voucher-container .btn-secondary {
-    background: linear-gradient(135deg, #6c757d, #5a6268);
+    background: linear-gradient(135deg, #ffeaa7, #fbeea5);
+    color: #ad9e36;
     border: none;
     padding: 0.75rem 2rem;
     font-weight: 600;
     border-radius: 25px;
-    color: white;
-    box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.09);
     transition: all 0.3s ease;
   }
-
   .create-voucher-container .btn-secondary:hover {
-    background: linear-gradient(135deg, #5a6268, #6c757d);
+    background: linear-gradient(135deg, #ffd700, #ffeaa7);
+    color: #333;
     transform: translateY(-2px);
-    color: white;
   }
 </style>
+
 
 <div class="create-voucher-container">
   <h1>Create New Voucher</h1>
