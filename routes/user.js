@@ -3391,16 +3391,36 @@ router.post('/staff/reviews/edit/:id', (req, res) => {
 router.post('/staff/reviews/delete/:id', (req, res) => {
   const reviewID = req.params.id;
 
-  const sql = `DELETE FROM reviews WHERE reviewID = ?`;
+  // First get the sellerID for redirect
+  const getSellerSql = `SELECT sellerID FROM reviews WHERE reviewID = ?`;
 
-  callbackConnection.query(sql, [reviewID], (err, result) => {
+  callbackConnection.query(getSellerSql, [reviewID], (err, rows) => {
     if (err) {
-      console.error('Error deleting review:', err);
-      return res.status(500).send('Failed to delete review.');
+      console.error('Error fetching sellerID:', err);
+      return res.status(500).send('Failed to retrieve seller ID.');
     }
-    res.redirect('back');
+
+    if (rows.length === 0) {
+      return res.status(404).send('Review not found.');
+    }
+
+    const sellerID = rows[0].sellerID;
+
+    // Then delete the review
+    const deleteSql = `DELETE FROM reviews WHERE reviewID = ?`;
+    callbackConnection.query(deleteSql, [reviewID], (err, result) => {
+      if (err) {
+        console.error('Error deleting review:', err);
+        return res.status(500).send('Failed to delete review.');
+      }
+
+      // Optional: Flash success message
+      req.session.success = 'Review successfully deleted.';
+      res.redirect(`/user/id/${sellerID}`);
+    });
   });
 });
+
 
 
 

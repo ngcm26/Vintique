@@ -38,6 +38,7 @@
             {{/if}}
           </td>
           <td>
+            <button class="btn btn-sm btn-info" onclick="goToUserProfile(this)">Select</button>
             {{#if this.isBanned}}
               <button class="btn btn-sm btn-success action-btn" onclick="toggleSuspend(this)">Unsuspend</button>
             {{else}}
@@ -307,6 +308,18 @@
       row.style.display = statusMatch && textMatch ? '' : 'none';
     });
   }
+
+  function goToUserProfile(btn) {
+  const row = btn.closest('tr');
+  const userId = row.cells[0].textContent.trim();
+
+  if (userId) {
+    window.location.href = `/user/id/${userId}`;
+  } else {
+    alert('User ID not found.');
+  }
+}
+
 
   userSearch.addEventListener('input', filterTable);
   statusFilter.addEventListener('change', filterTable);
