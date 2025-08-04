@@ -9,16 +9,31 @@ router.get('/', requireStaff, async (req, res) => {
   try {
     connection = await createConnection();
     const [vouchers] = await connection.execute('SELECT * FROM vouchers ORDER BY created_at DESC');
-    
-    const totalClaims = vouchers.reduce((sum, v) => sum + (v.used_count || 0), 0);
-    const activeCount = vouchers.filter(v => v.status === 'active').length;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Active: status = active and not expired
+    const activeCount = vouchers.filter(v => {
+      if (v.status !== 'active') return false;
+      if (!v.expiry_date) return false;
+      // Make sure expiry is at the end of the day
+      const expiry = new Date(v.expiry_date + 'T23:59:59');
+      return expiry >= new Date();
+    }).length;
+
+
+
+
+    // Total Claims: count from user_vouchers table
+    const [claims] = await connection.execute('SELECT COUNT(*) as total FROM user_vouchers');
+    const totalClaims = claims[0].total;
+
 
     res.render('staff/vouchers/list', {
       layout: 'staff',
       title: 'Manage Vouchers',
       vouchers,
-      totalClaims,   // pass this in
-      activeCount,   // and this
+      totalClaims,
+      activeCount,
       error: req.query.error
     });
   } catch (err) {
@@ -27,12 +42,15 @@ router.get('/', requireStaff, async (req, res) => {
       layout: 'staff',
       title: 'Manage Vouchers',
       vouchers: [],
+      totalClaims: 0,
+      activeCount: 0,
       error: 'Failed to load vouchers'
     });
   } finally {
     if (connection) await connection.end();
   }
 });
+
 
 
 
