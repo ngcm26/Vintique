@@ -13,13 +13,23 @@ router.get('/center', async (req, res) => {
       `SELECT v.* FROM vouchers v
        WHERE v.status = 'active' AND v.expiry_date >= ?
        ORDER BY v.expiry_date ASC`, [today]);
-    
-    // Render the page with activePage set for CSS loading & navbar highlight
+
+    // --- New: Get claimed voucher IDs for this user (if logged in) ---
+    let claimedVoucherIds = [];
+    if (req.session.user) {
+      const userId = req.session.user.user_id || req.session.user.id;
+      const [claimed] = await connection.execute(
+        `SELECT voucher_id FROM user_vouchers WHERE user_id = ?`, [userId]);
+      claimedVoucherIds = claimed.map(v => v.voucher_id);
+    }
+    // --------------------------------------------------------------
+
     res.render('users/vouchers/center', {
       layout: 'user',
       title: 'Voucher Center',
       activePage: 'voucherCenter',
       vouchers,
+      claimedVoucherIds,   // <--- Pass to template!
       error: req.query.error,
       success: req.query.success
     });
@@ -30,12 +40,14 @@ router.get('/center', async (req, res) => {
       title: 'Voucher Center',
       activePage: 'voucherCenter',
       vouchers: [],
+      claimedVoucherIds: [],  // Pass empty on error
       error: 'Failed to load vouchers.'
     });
   } finally {
     if (connection) await connection.end();
   }
 });
+
 
 
 // POST /vouchers/:id/claim – User claims a voucher (adds to user_vouchers)

@@ -1,9 +1,141 @@
 <head>
-  <link rel="stylesheet" href="/assets/css/users/orders.css">
+  <link href="https://fonts.googleapis.com/css?family=DM+Sans:400,500,700&display=swap" rel="stylesheet">
+  <style>
+    .orders-archived-container {
+      font-family: 'DM Sans', sans-serif;
+      background: #f8f9fa;
+      color: #222;
+      max-width: 1100px;
+      margin: 40px auto 0 auto;
+      background: #fff;
+      border-radius: 28px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.09);
+      padding: 2.5rem 2rem 3rem 2rem;
+    }
+    .orders-archived-container h1 {
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: #222;
+      margin-bottom: 0.7rem;
+    }
+    .orders-archived-container .btn-outline-primary {
+      border: 2px solid #ffd700;
+      color: #222;
+      background: #fff;
+      border-radius: 24px;
+      padding: 0.6rem 1.3rem;
+      font-weight: 600;
+      transition: all 0.2s cubic-bezier(.4,2,.6,1);
+      margin-bottom: 1.3rem;
+    }
+    .orders-archived-container .btn-outline-primary:hover {
+      background: #ffd700;
+      color: #222;
+      box-shadow: 0 4px 12px rgba(255, 215, 0, 0.13);
+    }
+    .orders-archived-container .nav-tabs {
+      border-bottom: none;
+      margin-bottom: 2rem;
+    }
+    .orders-archived-container .nav-link {
+      font-weight: 600;
+      color: #888;
+      border: none;
+      border-radius: 22px 22px 0 0;
+      padding: 0.7rem 2.2rem;
+      background: #f5f5f5;
+      margin-right: 0.6rem;
+      transition: all 0.18s;
+    }
+    .orders-archived-container .nav-link.active, 
+    .orders-archived-container .nav-link:hover {
+      background: #ffeaa7;
+      color: #222;
+      box-shadow: 0 4px 18px rgba(255, 215, 0, 0.07);
+    }
+    .orders-archived-container .card {
+      background: #fff;
+      border-radius: 24px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+      margin-bottom: 1.2rem;
+      border: 1.5px solid #ffeaa7;
+      transition: box-shadow .17s cubic-bezier(.4,2,.6,1);
+    }
+    .orders-archived-container .card:hover {
+      box-shadow: 0 16px 48px rgba(0,0,0,0.13);
+      border-color: #ffd700;
+    }
+    .orders-archived-container .card-title {
+      font-size: 1.13rem;
+      font-weight: 700;
+      color: #222;
+      margin-bottom: 0.7rem;
+    }
+    .orders-archived-container .badge {
+      display: inline-block;
+      padding: 0.4rem 1.2rem;
+      border-radius: 18px;
+      font-size: 0.96rem;
+      font-weight: 700;
+      color: #fff;
+      background: #ffd700;
+      box-shadow: 0 2px 8px rgba(255, 215, 0, 0.12);
+      margin-right: 0.35rem;
+    }
+    .orders-archived-container .bg-info { background: #17a2b8!important; }
+    .orders-archived-container .bg-success { background: #27ae60!important; }
+    .orders-archived-container .bg-primary { background: #4263eb!important; }
+    .orders-archived-container .bg-warning { background: #ffa500!important; color: #222!important;}
+    .orders-archived-container .bg-danger { background: #dc3545!important; }
+    .orders-archived-container .bg-secondary { background: #b2bec3!important; color: #222!important;}
+    .orders-archived-container .btn-danger.btn-sm {
+      font-size: 0.98rem;
+      border-radius: 20px;
+      padding: 0.38rem 1.1rem;
+      font-weight: 600;
+      border: none;
+      background: #dc3545;
+      color: #fff;
+      margin-top: 0.2rem;
+      transition: all 0.18s;
+    }
+    .orders-archived-container .btn-danger.btn-sm:hover {
+      background: #c82333;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(220, 53, 69, 0.14);
+    }
+    .orders-archived-container .list-unstyled { list-style: none; padding: 0; margin: 0; }
+    .orders-archived-container .alert-info, 
+    .orders-archived-container .empty-state {
+      background: #ffd900;
+      color: #fff;
+      border-radius: 22px;
+      text-align: center;
+      padding: 2.2rem 0.7rem;
+      font-size: 1.13rem;
+      margin: 2.3rem auto;
+      max-width: 350px;
+      box-shadow: 0 4px 24px rgba(253, 121, 168, 0.07);
+      letter-spacing: 0.2px;
+      border: none;
+    }
+    .orders-archived-container .alert-info i, 
+    .orders-archived-container .empty-state i {
+      font-size: 2.2rem;
+      margin-bottom: 1rem;
+      display: block;
+      opacity: 0.8;
+    }
+    @media (max-width: 768px) {
+      .orders-archived-container { padding: 1.2rem 0.7rem 2rem 0.7rem; }
+      .orders-archived-container .nav-link { padding: 0.5rem 1.3rem; font-size: 0.97rem; }
+      .orders-archived-container h1 { font-size: 1.45rem; }
+      .orders-archived-container .card-body { padding: 1.1rem 0.5rem; }
+    }
+  </style>
 </head>
 
-
-<div class="container py-5">
+<div class="orders-archived-container">
     <h1 class="mb-4 fw-bold">Archived Orders</h1>
     <a href="/orders" class="btn btn-outline-primary mb-3"><i class="bi bi-arrow-left"></i> Back to Orders</a>
     <ul class="nav nav-tabs mb-4" id="archivedOrdersTab" role="tablist">
@@ -47,14 +179,11 @@
                                                 <i class="bi bi-trash"></i> Delete
                                             </button>
                                             {{/if}}
-
                                         </li>
-                                        <li><span class="fw-semibold text-secondary">Seller:</span> {{seller_email}}
-                                        </li>
+                                        <li><span class="fw-semibold text-secondary">Seller:</span> {{seller_email}}</li>
                                         <li><span class="fw-semibold text-secondary">Quantity:</span> {{quantity}}</li>
                                         <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
-                                        <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}
-                                        </li>
+                                        <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
                                     </ul>
                                 </div>
                                 <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
@@ -73,7 +202,10 @@
                 {{/each}}
             </div>
             {{else}}
-            <div class="alert alert-info rounded-4">No archived purchases yet.</div>
+            <div class="alert alert-info rounded-4 empty-state">
+                <i class="bi bi-archive"></i>
+                No archived purchases yet.
+            </div>
             {{/if}}
         </div>
 
@@ -103,13 +235,11 @@
                                                 <i class="bi bi-trash"></i> Delete
                                             </button>
                                             {{/if}}
-
                                         </li>
                                         <li><span class="fw-semibold text-secondary">Buyer:</span> {{buyer_email}}</li>
                                         <li><span class="fw-semibold text-secondary">Quantity:</span> {{quantity}}</li>
                                         <li><span class="fw-semibold text-secondary">Price:</span> ${{price}}</li>
-                                        <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}
-                                        </li>
+                                        <li><span class="fw-semibold text-secondary">Order Date:</span> {{created_at}}</li>
                                     </ul>
                                 </div>
                                 <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
@@ -128,7 +258,10 @@
                 {{/each}}
             </div>
             {{else}}
-            <div class="alert alert-info rounded-4">No archived sales yet.</div>
+            <div class="alert alert-info rounded-4 empty-state">
+                <i class="bi bi-archive"></i>
+                No archived sales yet.
+            </div>
             {{/if}}
         </div>
     </div>
@@ -157,4 +290,3 @@ document.querySelectorAll('.delete-order-btn').forEach(btn => {
   });
 });
 </script>
-
