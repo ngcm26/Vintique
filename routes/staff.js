@@ -5,13 +5,6 @@ const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 const mysql = require('mysql2/promise');
 
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '', //Add your own password here
-  database: 'vintiquedb',
-  port: 3306
-};
 
 // Staff Dashboard
 router.get('/staff/dashboard', requireStaff, (req, res) => {

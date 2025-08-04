@@ -2540,6 +2540,89 @@ router.get('/orders/details/:orderId', async (req, res) => {
   }
 });
 
+
+router.post('/orders/mark-received/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+  const orderId = req.params.orderId;
+  const userId = req.session.user.user_id || req.session.user.id;
+
+  const conn = await createConnection();
+
+  try {
+    // Check if user is the buyer for this order
+    const [result] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM orders WHERE order_id = ? AND user_id = ?`,
+      [orderId, userId]
+    );
+    if (!result[0].cnt) {
+      await conn.end();
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    await conn.execute(`UPDATE orders SET status = 'completed' WHERE order_id = ?`, [orderId]);
+    await conn.end();
+
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+
+
+// Archived Orders History
+router.get('/orders/archived', async (req, res) => {
+  if (!req.session.user) {
+    return res.redirect('/login');
+  }
+
+  const userId = req.session.user.user_id || req.session.user.id;
+  const conn = await createConnection();
+
+  try {
+    // Fetch archived purchases
+    const [purchases] = await conn.execute(
+      `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image, l.listing_id as listing_id,
+              oi.quantity, oi.price, oi.order_item_id as orderItemId, r.reviewID IS NOT NULL AS hasReviewed
+       FROM orders o
+       JOIN order_items oi ON o.order_id = oi.order_id
+       JOIN listings l ON oi.listing_id = l.listing_id
+       JOIN users u ON l.user_id = u.user_id
+       LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+       LEFT JOIN reviews r ON r.userID = o.user_id AND r.orderItemID = oi.order_item_id
+       WHERE o.user_id = ? AND o.archived = 1`, [userId]
+    );
+
+    // Fetch archived sales
+    const [sales] = await conn.execute(
+      `SELECT o.*, l.title AS listing_title, o.user_id AS buyer_id, u.email AS buyer_email, li.image_url AS listing_image,
+              oi.quantity, oi.price
+       FROM orders o
+       JOIN order_items oi ON o.order_id = oi.order_id
+       JOIN listings l ON oi.listing_id = l.listing_id
+       JOIN users u ON o.user_id = u.user_id
+       LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+       WHERE l.user_id = ? AND o.archived = 1`, [userId]
+    );
+
+    await conn.end();
+
+    res.render('users/orders_archived', {
+      layout: 'user',
+      activePage: 'orders',
+      purchases,
+      sales
+    });
+  } catch (error) {
+    console.error('Archived orders page error:', error);
+    await conn.end();
+    res.status(500).send('Database error');
+  }
+});
+
+
 // ========== STRIPE API ENDPOINTS ==========
 
 // Get Stripe publishable key

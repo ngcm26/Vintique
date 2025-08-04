@@ -3,17 +3,11 @@ const router = express.Router();
 const mysql = require('mysql2/promise');
 const OpenAI = require("openai");
 const { handleIntent } = require("./intentHandler");
-
+const { callbackConnection, createConnection } = require('../config/database');
 require('dotenv').config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'vintiquedb'
-};
 
 
 
@@ -24,7 +18,7 @@ router.post('/send', async (req, res) => {
 
   if (!userId) return res.status(401).json({ error: "Not logged in" });
 
-  const conn = await mysql.createConnection(dbConfig);
+  const conn = await createConnection();
   try {
     // Save user message
     await conn.execute(
@@ -137,7 +131,7 @@ router.get('/chat/history', async (req, res) => {
   const userId = req.session.user?.user_id;
   if (!userId) return res.status(401).json({ error: "Not logged in" });
 
-  const conn = await mysql.createConnection(dbConfig);
+  const conn = await createConnection();
   const [rows] = await conn.execute(
     `SELECT message, isFromUser FROM ChatbotMessages WHERE userId = ? ORDER BY id DESC LIMIT 10`,
     [userId]
