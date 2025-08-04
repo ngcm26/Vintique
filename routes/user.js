@@ -545,12 +545,12 @@ router.delete('/listings/:id', (req, res) => {
         }
         
         console.log('🔄 Transaction started');
-        
-        // Delete order items for this listing (cancelled/pending orders only)
+
+        // Delete order items for this listing (cancelled/confirmed orders only)
         const deleteOrderItemsQuery = `
           DELETE oi FROM order_items oi
           JOIN orders o ON oi.order_id = o.order_id
-          WHERE oi.listing_id = ? AND o.status IN ('pending', 'cancelled')
+          WHERE oi.listing_id = ? AND o.status IN ('confirmed', 'cancelled')
         `;
         
         callbackConnection.query(deleteOrderItemsQuery, [listingId], (err, result) => {
@@ -3005,7 +3005,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
           shipping_address_country,
           shipping_address_postal_code,
           shipping_address_phone
-        ) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?)
       `, [
         userId, 
         total,
@@ -3140,7 +3140,7 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
           shipping_address_country,
           shipping_address_postal_code,
           shipping_address_phone
-        ) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?)
       `, [
         userId, 
         total,
