@@ -136,14 +136,6 @@ function showFailure(paymentStatus) {
   // Update icon
   document.getElementById('resultIcon').innerHTML = '<i class="fas fa-times-circle" style="font-size: 4rem; color: #dc3545;"></i>';
   
-  // Fallback: If Font Awesome fails, use Unicode
-  setTimeout(() => {
-    const icon = document.querySelector('#resultIcon i');
-    if (icon && !icon.textContent && !icon.innerHTML.includes('\\')) {
-      icon.innerHTML = '✗';
-    }
-  }, 100);
-  
   // Update title and message
   document.getElementById('resultTitle').textContent = 'Payment Failed';
   document.getElementById('resultMessage').textContent = 'We couldn\'t process your payment. Please try again or contact support.';
@@ -241,14 +233,6 @@ function showCancelled() {
 function showError(message) {
   // Update icon
   document.getElementById('resultIcon').innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: #ffc107;"></i>';
-  
-  // Fallback: If Font Awesome fails, use Unicode
-  setTimeout(() => {
-    const icon = document.querySelector('#resultIcon i');
-    if (icon && !icon.textContent && !icon.innerHTML.includes('\\')) {
-      icon.innerHTML = '⚠';
-    }
-  }, 100);
   
   // Update title and message
   document.getElementById('resultTitle').textContent = 'Verification Error';

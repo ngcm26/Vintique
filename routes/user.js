@@ -894,6 +894,17 @@ router.get('/checkout/success', (req, res) => {
   });
 });
 
+// Temporary test route for payment failed page
+router.get('/test-payment-failed', (req, res) => {
+  if (!req.session.user) {
+    return res.redirect('/login');
+  }
+  res.render('users/checkout_success', {
+    layout: 'user',
+    activePage: 'checkout'
+  });
+});
+
 // ========== ACCOUNT SETTINGS ROUTES ==========
 
 // Account settings page
