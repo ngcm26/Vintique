@@ -3096,7 +3096,7 @@ module.exports = router;
 
 // ------------------------------- User Profile -----------------------------------------------
 
-router.get('/user/:username', (req, res) => {
+router.get('/user/username/:username', (req, res) => {
   const username = req.params.username;
 
   const sql = `
@@ -3162,6 +3162,138 @@ WHERE ui.username = ?
     });
   });
 });
+
+router.get('/user/id/:id', (req, res) => {
+  const id = req.params.id;
+  const user_now = req.session.user;
+  const role = user_now.role;
+  const is_staff = role =="admin" || role =="staff";
+  
+
+  const sql = `
+    SELECT u.user_id, u.email, ui.username, ui.first_name, ui.last_name,
+           ui.profile_image_url
+    FROM users u
+    JOIN user_information ui ON u.user_id = ui.user_id
+    WHERE u.user_id = ?
+  `;
+
+  callbackConnection.query(sql, [id], (err, users) => {
+    if (err) {
+      console.error('Error fetching user profile:', err);
+      return res.status(500).send('Internal Server Error');
+    }
+
+    if (users.length === 0) {
+      return res.status(404).render('users/user_not_found', {
+        layout: 'user',
+        message: 'User not found.'
+      });
+    }
+
+    const user = users[0];
+
+    // Fetch listings
+    const listingSql = `
+      SELECT l.listing_id, l.title, l.price, l.category, l.item_condition, l.created_at,
+        (
+          SELECT image_url 
+          FROM listing_images img2
+          WHERE img2.listing_id = l.listing_id
+          ORDER BY img2.image_id ASC
+          LIMIT 1
+        ) as image_url
+      FROM listings l
+      WHERE l.user_id = ?
+        AND l.status = 'active'
+      ORDER BY l.created_at DESC
+    `;
+
+    callbackConnection.query(listingSql, [user.user_id], (err, listings) => {
+      if (err) {
+        console.error('Error fetching listings:', err);
+        return res.status(500).send('Error loading user listings.');
+      }
+
+      listings.forEach(listing => {
+        listing.image_url = listing.image_url
+          ? `/uploads/${listing.image_url}`
+          : '/assets/logo.png';
+      });
+
+      // Fetch reviews
+      const reviewSql = `
+        SELECT r.reviewID AS review_id, r.reviewText, r.rating, r.createdAt,
+       CONCAT(ui.first_name, ' ', ui.last_name) AS reviewer_name
+
+        FROM reviews r
+        JOIN users u ON r.userID = u.user_id
+        JOIN user_information ui ON u.user_id = ui.user_id
+        WHERE r.sellerID = ?
+        ORDER BY r.createdAt DESC
+      `;
+
+      callbackConnection.query(reviewSql, [user.user_id], (err, reviews) => {
+        if (err) {
+          console.error('Error fetching reviews:', err);
+          return res.status(500).send('Error loading user reviews.');
+        }
+
+        // Add star visualization (e.g., "★★★☆☆")
+        const formattedReviews = reviews.map(review => ({
+          ...review,
+          stars: '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating)
+        }));
+
+        res.render('users/profile_display', {
+          layout: 'user',
+          profileUser: user,
+          listings: listings,
+          reviews: formattedReviews,
+          activePage: null,
+          user: { ...req.session.user, is_staff: is_staff, id: id }
+
+        });
+      });
+    });
+  });
+});
+
+router.post('/staff/reviews/edit/:id', (req, res) => {
+  const reviewID = req.params.id;
+  const { reviewText, rating, userID } = req.body;
+  console.log(userID);
+  const sql = `
+    UPDATE reviews
+    SET reviewText = ?, rating = ?
+    WHERE reviewID = ?
+  `;
+
+  callbackConnection.query(sql, [reviewText, rating, reviewID], (err, result) => {
+    if (err) {
+      console.error('Error updating review:', err);
+      return res.status(500).send('Failed to update review.');
+    }
+    // ✅ Redirect to the user's profile
+    res.redirect(`/user/id/${userID}`);
+  });
+});
+
+
+router.post('/staff/reviews/delete/:id', (req, res) => {
+  const reviewID = req.params.id;
+
+  const sql = `DELETE FROM reviews WHERE reviewID = ?`;
+
+  callbackConnection.query(sql, [reviewID], (err, result) => {
+    if (err) {
+      console.error('Error deleting review:', err);
+      return res.status(500).send('Failed to delete review.');
+    }
+    res.redirect('back');
+  });
+});
+
 
 
 
