@@ -764,15 +764,43 @@ router.get('/qa', (req, res) => {
 });
 
 // Cart route
-router.get('/cart', (req, res) => {
+router.get('/cart', async (req, res) => {
   if (!req.session.user) {
     return res.redirect('/login');
   }
-  res.render('users/cart', {
-    layout: 'user',
-    activePage: 'cart'
-  });
+  
+  let connection;
+  try {
+    connection = await createConnection();
+    const userId = req.session.user.id || req.session.user.user_id;
+    const now = new Date().toISOString().split('T')[0];
+
+    // Fetch user's available vouchers
+    const [userVouchers] = await connection.execute(
+      `SELECT v.*
+       FROM user_vouchers uv
+       JOIN vouchers v ON uv.voucher_id = v.voucher_id
+       WHERE uv.user_id = ? AND v.status = 'active' AND v.expiry_date >= ?
+       ORDER BY v.expiry_date ASC`,
+      [userId, now]
+    );
+
+    res.render('users/cart', {
+      layout: 'user',
+      activePage: 'cart',
+      userVouchers // <--- this will be available in your handlebars
+    });
+  } catch (error) {
+    console.error('Cart page error:', error);
+    res.status(500).render('error', { 
+      error: 'Failed to load cart page',
+      layout: 'user'
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
 });
+
 
 // Checkout route
 router.get('/checkout', async (req, res) => {
@@ -821,6 +849,17 @@ router.get('/checkout', async (req, res) => {
       ...item,
       image_url: item.image_url ? `/uploads/${item.image_url}` : '/assets/logo.png'
     }));
+
+    const now = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+    // Inside your try block after fetching cartItems and calculating totals
+    const [userVouchers] = await connection.execute(
+      `SELECT v.*
+        FROM user_vouchers uv
+        JOIN vouchers v ON uv.voucher_id = v.voucher_id
+        WHERE uv.user_id = ? AND v.status = 'active' AND v.expiry_date >= ?
+        ORDER BY v.expiry_date ASC`, [userId, now]);
+
     
     res.render('users/checkout', {
       layout: 'user',
@@ -829,7 +868,8 @@ router.get('/checkout', async (req, res) => {
       total: total.toFixed(2),
       subtotal: subtotal.toFixed(2),
       shipping: shipping.toFixed(2),
-      tax: tax.toFixed(2)
+      tax: tax.toFixed(2),
+      userVouchers
     });
     
   } catch (error) {
