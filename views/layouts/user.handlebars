@@ -24,6 +24,7 @@
   {{#if (eq activePage 'cart')}}
   <link rel="stylesheet" href="/assets/css/users/cart.css">
   {{/if}}
+
 </head>
 
 <body>
@@ -48,6 +49,14 @@
               <a class="nav-link{{#if (eq activePage 'mylistings')}} active{{/if}}" href="/my_listing">My Listings</a>
             </li>
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="/qa">Q&amp;A</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {{#if (eq activePage 'voucherCenter')}}active{{/if}}" href="/vouchers/center">Voucher
+                Center</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {{#if (eq activePage 'myVouchers')}}active{{/if}}" href="/vouchers/my-vouchers">My
+                Vouchers</a>
             </li>
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'messages')}}active{{/if}}"
                 href="/messages">Messages</a></li>

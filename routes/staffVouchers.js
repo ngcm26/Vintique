@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createConnection } = require('../config/database');
+const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth, requireStaff } = require('../middlewares/authMiddleware');
 
 // GET /staff/vouchers – List all vouchers

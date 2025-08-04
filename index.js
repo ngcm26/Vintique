@@ -114,6 +114,13 @@ app.engine('handlebars', engine({
       if (typeof str !== 'string') return '';
       return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
     },
+
+    isExpired: function(expiryDate) {
+      if (!expiryDate) return false;
+      const now = new Date();
+      const expiry = new Date(expiryDate);
+      return expiry < now;
+    },
     // FIXED: Add the missing substring helper
     substring: function(str, start, end) {
       if (typeof str !== 'string') return '';

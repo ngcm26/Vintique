@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createConnection } = require('../config/database');
+const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth } = require('../middlewares/authMiddleware');
 
 // GET /vouchers/center – User can see available vouchers (active, not expired)
@@ -13,9 +13,12 @@ router.get('/center', async (req, res) => {
       `SELECT v.* FROM vouchers v
        WHERE v.status = 'active' AND v.expiry_date >= ?
        ORDER BY v.expiry_date ASC`, [today]);
+    
+    // Render the page with activePage set for CSS loading & navbar highlight
     res.render('users/vouchers/center', {
       layout: 'user',
       title: 'Voucher Center',
+      activePage: 'voucherCenter',
       vouchers,
       error: req.query.error,
       success: req.query.success
@@ -25,6 +28,7 @@ router.get('/center', async (req, res) => {
     res.status(500).render('users/vouchers/center', {
       layout: 'user',
       title: 'Voucher Center',
+      activePage: 'voucherCenter',
       vouchers: [],
       error: 'Failed to load vouchers.'
     });
@@ -32,6 +36,7 @@ router.get('/center', async (req, res) => {
     if (connection) await connection.end();
   }
 });
+
 
 // POST /vouchers/:id/claim – User claims a voucher (adds to user_vouchers)
 router.post('/:id/claim', requireAuth, async (req, res) => {
@@ -83,6 +88,7 @@ router.get('/my-vouchers', requireAuth, async (req, res) => {
     res.status(500).render('users/vouchers/my_vouchers', {
       layout: 'user',
       title: 'My Vouchers',
+      activePage: 'myVouchers', 
       vouchers: [],
       error: 'Failed to load your vouchers.'
     });
