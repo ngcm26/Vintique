@@ -7,6 +7,10 @@ const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/auth
 const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
+const app = express();
+app.use(express.json()); // ← Add this to parse JSON requests
+app.use(express.urlencoded({ extended: true })); 
+
 
 // Database configuration is handled by config/database.js
 
@@ -3127,27 +3131,24 @@ router.post('/reviews/add', (req, res) => {
   const { listing_id, order_item_id, rating, reviewText } = req.body;
   const userID = req.session.user.user_id || req.session.user.id;
 
-
   if (!listing_id || !order_item_id || !rating) {
-    return res.status(400).send('Missing required fields.');
+    return res.status(400).json({ error: 'Missing required fields.' });
   }
 
-  // First, get sellerID from listings table
   const getSellerSql = 'SELECT user_id AS sellerID FROM listings WHERE listing_id = ?';
 
   callbackConnection.query(getSellerSql, [listing_id], (err, listingRows) => {
     if (err) {
       console.error('Error fetching seller:', err);
-      return res.status(500).send('Server error.');
+      return res.status(500).json({ error: 'Server error fetching seller.' });
     }
 
     if (listingRows.length === 0) {
-      return res.status(400).send('Invalid listing.');
+      return res.status(400).json({ error: 'Invalid listing.' });
     }
 
     const sellerID = listingRows[0].sellerID;
 
-    // Insert the review now
     const insertReviewSql = `
       INSERT INTO reviews (userID, sellerID, listingID, orderItemID, rating, reviewText)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -3159,15 +3160,15 @@ router.post('/reviews/add', (req, res) => {
       (err, result) => {
         if (err) {
           console.error('Error inserting review:', err);
-          return res.status(500).send('Server error.');
+          return res.status(500).json({ error: 'Error saving review.' });
         }
 
-        // Success, redirect or render a page as needed
-        res.redirect('/purchases'); 
+        return res.status(200).json({ message: 'Review submitted successfully' });
       }
     );
   });
 });
+
 
 // Test database connection
 router.get('/test-db', (req, res) => {

@@ -191,7 +191,7 @@
 <!-- Review Modal -->
 <div class="modal fade" id="leaveReviewModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
-    <form id="reviewForm" method="POST" action="/reviews/add">
+    <form id="reviewForm">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Leave a Review</h5>
@@ -201,8 +201,18 @@
           <input type="hidden" name="orderItemId" id="reviewOrderItemId">
 
           <div class="mb-3">
-            <label for="rating" class="form-label">Rating (1–5)</label>
-            <input type="number" name="rating" id="rating" class="form-control" min="1" max="5" required>
+            <label class="form-label fw-bold">Rate this seller:</label>
+            <div class="star-rating d-flex justify-content-center">
+              <span class="star fs-3 mx-1" data-rating="1">★</span>
+              <span class="star fs-3 mx-1" data-rating="2">★</span>
+              <span class="star fs-3 mx-1" data-rating="3">★</span>
+              <span class="star fs-3 mx-1" data-rating="4">★</span>
+              <span class="star fs-3 mx-1" data-rating="5">★</span>
+            </div>
+            <input type="hidden" name="rating" id="rating" required>
+            <div class="text-center mt-2">
+              <small class="text-muted" id="ratingText">Click to rate</small>
+            </div>
           </div>
           <div class="mb-3">
             <label for="reviewText" class="form-label">Your Review</label>
@@ -448,7 +458,16 @@ document.getElementById('reviewForm').addEventListener('submit', async function 
     alertDiv.textContent = '✅ Review submitted successfully!';
     document.body.appendChild(alertDiv);
 
-    // Auto-dismiss after 3 seconds
+    // Update the review button to "Reviewed"
+    const reviewButton = document.querySelector(`.leave-review-btn[data-order-item-id="${order_item_id}"]`);
+    if (reviewButton) {
+      const reviewedBadge = document.createElement('span');
+      reviewedBadge.className = 'badge bg-secondary ms-2';
+      reviewedBadge.textContent = 'Reviewed';
+      reviewButton.replaceWith(reviewedBadge);
+    }
+
+    // Auto-dismiss alert after 3 seconds
     setTimeout(() => alertDiv.remove(), 3000);
   } else {
     const errorText = await response.text();
@@ -456,6 +475,22 @@ document.getElementById('reviewForm').addEventListener('submit', async function 
   }
 });
 
+  const stars = document.querySelectorAll('.star-rating .star');
+  const ratingInput = document.getElementById('rating');
+  const ratingText = document.getElementById('ratingText');
 
+  stars.forEach(star => {
+    star.addEventListener('click', function () {
+      const rating = this.getAttribute('data-rating');
+      ratingInput.value = rating;
+
+      // Highlight stars up to selected
+      stars.forEach(s => {
+        s.classList.toggle('text-warning', s.getAttribute('data-rating') <= rating);
+      });
+
+      ratingText.textContent = `You rated ${rating} star${rating > 1 ? 's' : ''}`;
+    });
+  });
 
 </script>

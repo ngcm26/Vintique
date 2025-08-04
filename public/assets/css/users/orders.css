@@ -207,3 +207,12 @@ ul.list-unstyled {
   .page-title { font-size: 1.05rem; }
 }
 
+
+  .star {
+    cursor: pointer;
+    color: #ccc;
+  }
+
+  .star.text-warning {
+    color: gold;
+  }
