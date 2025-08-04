@@ -628,3 +628,27 @@ body {
     opacity: 1;
   }
 }
+
+/* User and Seller Link Styles */
+.seller-link,
+.user-link {
+  color: #FFD700;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border-bottom: 1px solid transparent;
+}
+
+.seller-link:hover,
+.user-link:hover {
+  color: #FFA500;
+  border-bottom-color: #FFA500;
+  text-decoration: none;
+}
+
+.seller-link:focus,
+.user-link:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.3);
+  border-radius: 4px;
+}

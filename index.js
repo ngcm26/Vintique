@@ -107,6 +107,12 @@ const hbs = exphbs.create({
     add: (a, b) => Number(a) + Number(b),
     subtract: (a, b) => Number(a) - Number(b),
     multiply: (a, b) => Number(a) * Number(b),
+    hasActiveListings: (listings) => {
+      return listings && listings.some(listing => listing.status === 'active');
+    },
+    hasSoldListings: (listings) => {
+      return listings && listings.some(listing => listing.status === 'sold');
+    },
     divide: (a, b) => b ? Number(a) / Number(b) : 0,
     or: (a, b) => a || b,
   }

@@ -118,7 +118,7 @@
           {{#if this.details}}
             <div class="question-details">{{this.details}}</div>
           {{/if}}
-          <div class="questioner">Asked by {{#if this.asker_username}}@{{this.asker_username}}{{else}}{{this.asker_email}}{{/if}}</div>
+          <div class="questioner">Asked by {{#if this.asker_username}}<a href="/user/{{this.asker_username}}" class="user-link">@{{this.asker_username}}</a>{{else}}{{this.asker_email}}{{/if}}</div>
           
           {{#if this.answers}}
             {{#if (gt this.answers.length 0)}}
@@ -141,7 +141,7 @@
                     <div class="answer {{#if @first}}latest-answer{{else}}older-answer{{/if}}" {{#unless @first}}style="display: none;"{{/unless}}>
                       <div class="answerer">
                         <i class="fas fa-check-circle me-1"></i>
-                        Answered by {{#if this.answerer_username}}@{{this.answerer_username}}{{else}}{{this.answerer_email}}{{/if}}
+                        Answered by {{#if this.answerer_username}}<a href="/user/{{this.answerer_username}}" class="user-link">@{{this.answerer_username}}</a>{{else}}{{this.answerer_email}}{{/if}}
                         <span class="answer-date">{{timeAgo this.answered_at}}</span>
                       </div>
                       <div class="answer-text">{{this.answer_content}}</div>

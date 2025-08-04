@@ -1,0 +1,56 @@
+{{!< user}}
+
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8 text-center">
+      <div class="error-container">
+        <div class="error-icon">
+          <i class="fas fa-user-slash fa-4x text-muted"></i>
+        </div>
+        <h2 class="error-title mt-4">User Not Found</h2>
+        <p class="error-message text-muted">{{message}}</p>
+        <div class="error-actions mt-4">
+          <a href="/marketplace" class="btn btn-primary me-3">
+            <i class="fas fa-store me-2"></i>Browse Marketplace
+          </a>
+          <a href="/" class="btn btn-outline-secondary">
+            <i class="fas fa-home me-2"></i>Go Home
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.error-container {
+  padding: 3rem 0;
+}
+
+.error-icon {
+  margin-bottom: 1rem;
+}
+
+.error-title {
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.error-message {
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
+}
+
+.error-actions .btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.error-actions .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+</style> 

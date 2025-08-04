@@ -1,146 +1,202 @@
-<!DOCTYPE html>
-<html lang="en">
+{{!< user}}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Useer Profile</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/assets/css/users/profile_display.css">
-</head>
+<div style="width: 100vw; position: relative; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw;">
+  <section class="hero-section">
+    <div class="hero-content">
+      <h1 class="hero-title">User Profile</h1>
+      <p class="hero-subtitle">View {{profileUser.first_name}} {{profileUser.last_name}}'s listings and reviews on Vintique.</p>
+    </div>
+  </section>
+</div>
 
-<body>
-    <div class="container mt-4">
-        <div class="profile-header d-flex align-items-center mb-4">
-            <img src="{{#if profileUser.profile_picture}}{{profileUser.profile_picture}}{{else}}https://ui-avatars.com/api/?name={{profileUser.username}}&background=random{{/if}}"
-                class="rounded-circle me-3" alt="Profile picture" style="width: 80px; height: 80px; object-fit: cover;">
-            <div>
-                <h3 class="mb-0">{{profileUser.first_name}} {{profileUser.last_name}}</h3>
-                <p class="text-muted mb-0">@{{profileUser.username}}</p>
-            </div>
-        </div>
+<div class="container mt-4">
+  <div class="profile-header d-flex align-items-center mb-4">
+    <img src="{{#if profileUser.profile_image_url}}{{profileUser.profile_image_url}}{{else}}https://ui-avatars.com/api/?name={{profileUser.username}}&background=random{{/if}}"
+        class="rounded-circle me-3" alt="Profile picture" style="width: 80px; height: 80px; object-fit: cover;">
+    <div>
+      <h3 class="mb-0">{{profileUser.first_name}} {{profileUser.last_name}}</h3>
+      <p class="text-muted mb-0">@{{profileUser.username}}</p>
+    </div>
+  </div>
 
-        <ul class="nav nav-tabs" id="profileTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="reviews-tab" data-bs-toggle="tab" data-bs-target="#reviews" type="button"
-                    role="tab" aria-controls="reviews" aria-selected="false">
-                    Reviews
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="listings-tab" data-bs-toggle="tab" data-bs-target="#listings"
-                    type="button" role="tab" aria-controls="listings" aria-selected="true">
-                    Listings
-                </button>
-            </li>
-        </ul>
-        <div class="tab-content mt-3" id="profileTabsContent">
-            <!-- Listings Tab -->
-            <div class="tab-pane fade show active" id="listings" role="tabpanel" aria-labelledby="listings-tab">
-                {{#if listings.length}}
-                <div class="profile-listings-grid">
-                    {{#each listings}}
-                    <div class="profile-listing-card" onclick="window.location.href='/listing/{{listing_id}}'">
-                        <div class="profile-listing-image">
-                            <img src="{{image_url}}" alt="{{title}}">
-                        </div>
-                        <div class="profile-listing-info">
-                            <h3 class="profile-listing-title">{{title}}</h3>
-                            <p class="profile-listing-price">${{price}}</p>
-                            <p class="profile-listing-category">{{category}}</p>
-                        </div>
-                    </div>
-                    {{/each}}
-                </div>
-                {{else}}
-                <p class="text-muted">This user hasn't listed any products yet.</p>
-                {{/if}}
-            </div>
-        </div>
-
-        <!-- Reviews Tab -->
-        <div class="tab-pane fade" id="reviews" role="tabpanel" aria-labelledby="reviews-tab">
-            {{#if reviews.length}}
-            {{#each reviews}}
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h6 class="card-subtitle mb-1 text-muted">{{this.reviewer_name}} said:</h6>
-                    <p class="card-text mb-1">{{this.reviewText}}</p>
-                    <small class="text-muted">Rating: {{this.stars}}</small>
-        
-                    {{#if ../user.is_staff}} <!-- Only show if session user is staff -->
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-warning edit-review-btn" data-review-id="{{this.review_id}}"
-                            data-review-text="{{this.reviewText}}" data-rating="{{this.rating}}" data-user-id="{{profileUser.user_id}}">
-                            Edit
-                        </button>
-                        <form action="/staff/reviews/delete/{{this.review_id}}" method="POST" style="display:inline;">
-                            <button type="submit" class="btn btn-sm btn-danger"
-                                onclick="return confirm('Delete this review?');">
-                                Delete
-                            </button>
-                        </form>
-                    </div>
+  <ul class="nav nav-tabs" id="profileTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="listings-tab" data-bs-toggle="tab" data-bs-target="#listings"
+          type="button" role="tab" aria-controls="listings" aria-selected="true">
+          Listings
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="reviews-tab" data-bs-toggle="tab" data-bs-target="#reviews" type="button"
+          role="tab" aria-controls="reviews" aria-selected="false">
+          Reviews
+      </button>
+    </li>
+  </ul>
+  
+  <div class="tab-content mt-3" id="profileTabsContent">
+    <!-- Listings Tab -->
+    <div class="tab-pane fade show active" id="listings" role="tabpanel" aria-labelledby="listings-tab">
+      {{#if listings.length}}
+        <!-- Active Listings Section -->
+        {{#if (hasActiveListings listings)}}
+          <h4 class="mb-3 text-success">
+            <i class="fas fa-circle me-2"></i>Active Listings
+          </h4>
+          <div class="products-grid">
+            {{#each listings}}
+              {{#if (eq status 'active')}}
+                <div class="product-card" data-category="{{category}}" data-price="{{price}}" data-condition="{{item_condition}}" data-listing-id="{{listing_id}}" onclick="window.location.href='/listing/{{listing_id}}'">
+                  <div class="product-image">
+                    {{#if image_url}}
+                      <img src="{{image_url}}" alt="{{title}}">
+                    {{else}}
+                      <img src="/assets/logo.png" alt="{{title}}">
                     {{/if}}
-                </div>
-            </div>
-            {{/each}}
-            {{else}}
-            <p>This user hasn't received any reviews yet.</p>
-            {{/if}}
-        </div>
-
-        <div class="modal fade" id="editReviewModal" tabindex="-1" role="dialog" aria-labelledby="editReviewModalLabel"
-            aria-hidden="true">
-            <div class="modal-dialog" role="document">
-                <form id="editReviewForm" method="POST">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Edit Review</h5>
-                            <input type="hidden" name="userID" id="editReviewUserID">
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="editReviewText" class="form-label">Review Text</label>
-                                <textarea class="form-control" name="reviewText" id="editReviewText" required></textarea>
-                            </div>
-                        
-                            <div class="mb-3">
-                                <label for="editReviewRating" class="form-label">Rating (1–5)</label>
-                                <input type="number" name="rating" id="editReviewRating" min="1" max="5" class="form-control" required>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="submit" class="btn btn-primary">Save Changes</button>
-                        </div>
+                  </div>
+                  <div class="product-info">
+                    <div class="product-category">{{category}}</div>
+                    <h3 class="product-title">{{title}}</h3>
+                    <div class="product-details">
+                      <div class="product-price">${{price}}</div>
+                      <div class="product-condition {{conditionClass item_condition}}">
+                        {{capitalize item_condition}}
+                      </div>
+                      <div class="product-status active">
+                        <i class="fas fa-circle"></i> ACTIVE
+                      </div>
                     </div>
-                </form>
-            </div>
-        </div>
+                    <div class="product-date">Listed {{timeAgo created_at}}</div>
+                  </div>
+                </div>
+              {{/if}}
+            {{/each}}
+          </div>
+        {{/if}}
+
+        <!-- Sold Listings Section -->
+        {{#if (hasSoldListings listings)}}
+          <h4 class="mb-3 text-danger mt-4">
+            <i class="fas fa-check-circle me-2"></i>Sold Items
+          </h4>
+          <div class="products-grid">
+            {{#each listings}}
+              {{#if (eq status 'sold')}}
+                <div class="product-card" data-category="{{category}}" data-price="{{price}}" data-condition="{{item_condition}}" data-listing-id="{{listing_id}}" onclick="window.location.href='/listing/{{listing_id}}'">
+                  <div class="product-image">
+                    {{#if image_url}}
+                      <img src="{{image_url}}" alt="{{title}}">
+                    {{else}}
+                      <img src="/assets/logo.png" alt="{{title}}">
+                    {{/if}}
+                  </div>
+                  <div class="product-info">
+                    <div class="product-category">{{category}}</div>
+                    <h3 class="product-title">{{title}}</h3>
+                    <div class="product-details">
+                      <div class="product-price">${{price}}</div>
+                      <div class="product-condition {{conditionClass item_condition}}">
+                        {{capitalize item_condition}}
+                      </div>
+                      <div class="product-status sold">
+                        <i class="fas fa-check-circle"></i> SOLD
+                      </div>
+                    </div>
+                    <div class="product-date">Listed {{timeAgo created_at}}</div>
+                    {{#if sold_date}}
+                      <div class="product-date">Sold {{timeAgo sold_date}}</div>
+                    {{/if}}
+                  </div>
+                </div>
+              {{/if}}
+            {{/each}}
+          </div>
+        {{/if}}
+      {{else}}
+        <div class="alert alert-info">This user hasn't listed any products yet.</div>
+      {{/if}}
     </div>
 
-</body>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Reviews Tab -->
+    <div class="tab-pane fade" id="reviews" role="tabpanel" aria-labelledby="reviews-tab">
+      {{#if reviews.length}}
+        {{#each reviews}}
+          <div class="card mb-3">
+            <div class="card-body">
+              <h6 class="card-subtitle mb-1 text-muted">{{this.reviewer_name}} said:</h6>
+              <p class="card-text mb-1">{{this.reviewText}}</p>
+              <small class="text-muted">Rating: {{this.stars}}</small>
+  
+              {{#if ../user.is_staff}} <!-- Only show if session user is staff -->
+                <div class="mt-2">
+                  <button class="btn btn-sm btn-warning edit-review-btn" data-review-id="{{this.review_id}}"
+                      data-review-text="{{this.reviewText}}" data-rating="{{this.rating}}" data-user-id="{{profileUser.user_id}}">
+                    Edit
+                  </button>
+                  <form action="/staff/reviews/delete/{{this.review_id}}" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-danger"
+                        onclick="return confirm('Delete this review?');">
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              {{/if}}
+            </div>
+          </div>
+        {{/each}}
+      {{else}}
+        <p>This user hasn't received any reviews yet.</p>
+      {{/if}}
+    </div>
+  </div>
+
+  <div class="modal fade" id="editReviewModal" tabindex="-1" role="dialog" aria-labelledby="editReviewModalLabel"
+      aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <form id="editReviewForm" method="POST">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Edit Review</h5>
+            <input type="hidden" name="userID" id="editReviewUserID">
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="editReviewText" class="form-label">Review Text</label>
+              <textarea class="form-control" name="reviewText" id="editReviewText" required></textarea>
+            </div>
+          
+            <div class="mb-3">
+              <label for="editReviewRating" class="form-label">Rating (1–5)</label>
+              <input type="number" name="rating" id="editReviewRating" min="1" max="5" class="form-control" required>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
-  document.querySelectorAll('.edit-review-btn').forEach(button => {
-    button.addEventListener('click', function () {
-      const reviewId = this.dataset.reviewId;
-      const reviewText = this.dataset.reviewText;
-      const rating = this.dataset.rating;
-      const userId = this.dataset.userId;
+document.querySelectorAll('.edit-review-btn').forEach(button => {
+  button.addEventListener('click', function () {
+    const reviewId = this.dataset.reviewId;
+    const reviewText = this.dataset.reviewText;
+    const rating = this.dataset.rating;
+    const userId = this.dataset.userId;
 
-      document.getElementById('editReviewText').value = reviewText;
-      document.getElementById('editReviewRating').value = rating;
-      document.getElementById('editReviewForm').action = `/staff/reviews/edit/${reviewId}`;
-      document.getElementById('editReviewUserID').value = userId;
+    document.getElementById('editReviewText').value = reviewText;
+    document.getElementById('editReviewRating').value = rating;
+    document.getElementById('editReviewForm').action = `/staff/reviews/edit/${reviewId}`;
+    document.getElementById('editReviewUserID').value = userId;
 
-
-      const modal = new bootstrap.Modal(document.getElementById('editReviewModal'));
-      modal.show();
-    });
+    const modal = new bootstrap.Modal(document.getElementById('editReviewModal'));
+    modal.show();
   });
+});
 </script>
 
-</html>
+<link rel="stylesheet" href="/assets/css/users/marketplace.css">

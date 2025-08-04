@@ -94,7 +94,11 @@
           <!-- Replace this line of code to allow user to go to user profile page
           <div class="product-seller">by @{{username}}</div> -->
           <div class="product-seller">
-            by <a href="/user/{{username}}" class="seller-link">@{{username}}</a>
+            {{#if username}}
+              by <a href="/user/username/{{username}}" class="seller-link">@{{username}}</a>
+            {{else}}
+              by <span class="text-muted">Unknown Seller</span>
+            {{/if}}
           </div>
 
           <div class="product-details">

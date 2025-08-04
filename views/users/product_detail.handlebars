@@ -77,7 +77,11 @@
             <h1 class="product-title">{{listing.title}}</h1>
             
             <div class="product-seller">
-              Sold by <a href="#" onclick="contactSeller('{{listing.username}}', '{{listing.title}}')">@{{listing.username}}</a>
+              {{#if listing.username}}
+                Sold by <a href="/user/username/{{listing.username}}" class="seller-link">@{{listing.username}}</a>
+              {{else}}
+                Sold by <span class="text-muted">Unknown Seller</span>
+              {{/if}}
             </div>
             
             <div class="product-price">${{listing.price}}</div>
