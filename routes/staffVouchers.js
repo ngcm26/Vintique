@@ -9,10 +9,17 @@ router.get('/', requireStaff, async (req, res) => {
   try {
     connection = await createConnection();
     const [vouchers] = await connection.execute('SELECT * FROM vouchers ORDER BY created_at DESC');
+    
+    const totalClaims = vouchers.reduce((sum, v) => sum + (v.used_count || 0), 0);
+    const activeCount = vouchers.filter(v => v.status === 'active').length;
+
     res.render('staff/vouchers/list', {
       layout: 'staff',
       title: 'Manage Vouchers',
-      vouchers
+      vouchers,
+      totalClaims,   // pass this in
+      activeCount,   // and this
+      error: req.query.error
     });
   } catch (err) {
     console.error('Voucher list error:', err);
@@ -26,6 +33,8 @@ router.get('/', requireStaff, async (req, res) => {
     if (connection) await connection.end();
   }
 });
+
+
 
 
 // GET /staff/vouchers/new – Show create voucher form

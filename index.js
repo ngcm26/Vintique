@@ -61,46 +61,31 @@ app.use(session({
 }));
 
 // Configure Handlebars with proper helper registration
-app.engine('handlebars', engine({
+const exphbs = require('express-handlebars');
+const hbs = exphbs.create({
   defaultLayout: 'user',
   layoutsDir: path.join(__dirname, 'views/layouts'),
   helpers: {
-    eq: function(a, b) { 
-      return a === b; 
-    },
-    gt: function(a, b) { 
-      return a > b; 
-    },
-    formatDate: function(date) {
-      return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    },
-    timeAgo: function(date) {
+    eq: (a, b) => a === b,
+    gt: (a, b) => a > b,
+    formatDate: (date) => new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    }),
+    timeAgo: (date) => {
       const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-      
       let interval = seconds / 31536000;
       if (interval > 1) return Math.floor(interval) + ' years ago';
-      
       interval = seconds / 2592000;
       if (interval > 1) return Math.floor(interval) + ' months ago';
-      
       interval = seconds / 86400;
       if (interval > 1) return Math.floor(interval) + ' days ago';
-      
       interval = seconds / 3600;
       if (interval > 1) return Math.floor(interval) + ' hours ago';
-      
       interval = seconds / 60;
       if (interval > 1) return Math.floor(interval) + ' minutes ago';
-      
       return Math.floor(seconds) + ' seconds ago';
     },
-    conditionClass: function(condition) {
+    conditionClass: (condition) => {
       const conditionMap = {
         'new': 'badge-success',
         'like new': 'badge-info',
@@ -108,36 +93,28 @@ app.engine('handlebars', engine({
         'fair': 'badge-secondary',
         'poor': 'badge-danger'
       };
-      return conditionMap[condition.toLowerCase()] || 'badge-secondary';
+      return conditionMap[condition?.toLowerCase()] || 'badge-secondary';
     },
-    capitalize: function(str) {
-      if (typeof str !== 'string') return '';
-      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-    },
-
-    isExpired: function(expiryDate) {
+    capitalize: (str) => typeof str === 'string'
+      ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '',
+    isExpired: (expiryDate) => {
       if (!expiryDate) return false;
       const now = new Date();
       const expiry = new Date(expiryDate);
       return expiry < now;
     },
-    // FIXED: Add the missing substring helper
-    substring: function(str, start, end) {
-      if (typeof str !== 'string') return '';
-      return str.substring(start, end);
-    },
-    // Add helper for adding numbers (used in product detail template)
-    add: function(a, b) {
-      return a + b;
-    },
-    
-    or: function(a, b) { return a || b; },
-
+    substring: (str, start, end) => typeof str === 'string' ? str.substring(start, end) : '',
+    add: (a, b) => Number(a) + Number(b),
+    subtract: (a, b) => Number(a) - Number(b),
+    multiply: (a, b) => Number(a) * Number(b),
+    divide: (a, b) => b ? Number(a) / Number(b) : 0,
+    or: (a, b) => a || b,
   }
-}));
+});
 
+app.engine('handlebars', hbs.engine);
 app.set('view engine', 'handlebars');
-app.set('views', path.join(__dirname, 'views'));
+
 
 // ========== MIDDLEWARE ==========
 // Global middleware to make user available to all views

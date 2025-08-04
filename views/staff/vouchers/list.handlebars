@@ -1,41 +1,668 @@
 {{!-- views/staff/vouchers/list.handlebars --}}
-<h1 class="mb-4 fw-bold">Manage Vouchers</h1>
-{{#if error}}
-  <div class="alert alert-danger">{{error}}</div>
-{{/if}}
-<a href="/staff/vouchers/new" class="btn btn-primary mb-3">Create New Voucher</a>
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th>Code</th>
-      <th>Type</th>
-      <th>Value</th>
-      <th>Min Spend</th>
-      <th>Expiry</th>
-      <th>Usage</th>
-      <th>Status</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
+<!-- Staff Voucher Management Page -->
+<style>
+  /* Staff Voucher Management Styles */
+  body {
+    font-family: 'DM Sans', sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* Admin Hero Section */
+  .staff-vouchers-hero-section {
+    width: 100vw;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    position: relative;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    padding: 160px 0 80px;
+    margin-top: -100px;
+    margin-bottom: 3rem;
+    overflow: hidden;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+  }
+
+  .staff-vouchers-hero-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="15" height="15" fill="rgba(255,255,255,0.1)" rx="2"/><rect x="70" y="30" width="10" height="10" fill="rgba(255,255,255,0.15)" rx="1"/><rect x="30" y="60" width="12" height="12" fill="rgba(255,255,255,0.1)" rx="1.5"/><rect x="80" y="70" width="8" height="8" fill="rgba(255,255,255,0.2)" rx="1"/></svg>');
+    background-size: 100px 100px;
+    opacity: 0.4;
+    animation: adminFloat 25s ease-in-out infinite;
+  }
+
+  .staff-vouchers-hero-section::after {
+    content: '⚙️';
+    position: absolute;
+    top: 25%;
+    right: 12%;
+    font-size: 2rem;
+    animation: rotate 8s linear infinite;
+  }
+
+  @keyframes adminFloat {
+
+    0%,
+    100% {
+      transform: translateY(0px) translateX(0px);
+    }
+
+    25% {
+      transform: translateY(-8px) translateX(4px);
+    }
+
+    50% {
+      transform: translateY(0px) translateX(8px);
+    }
+
+    75% {
+      transform: translateY(8px) translateX(4px);
+    }
+  }
+
+  @keyframes rotate {
+    0% {
+      transform: rotate(0deg);
+    }
+
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes pulse {
+
+    0%,
+    100% {
+      opacity: 0.7;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+  }
+
+  .staff-vouchers-hero-content {
+    text-align: center;
+    color: white;
+    position: relative;
+    z-index: 2;
+    max-width: none;
+    margin: 0 auto;
+    width: 100%;
+    padding: 0 2rem;
+  }
+
+  .staff-vouchers-hero-title {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    color: white;
+    position: relative;
+  }
+
+  .staff-vouchers-hero-title::before {
+    content: '🎫';
+    position: absolute;
+    left: -70px;
+    top: 15px;
+    font-size: 1.8rem;
+    animation: pulse 3s ease-in-out infinite;
+    z-index: 3;
+  }
+
+  .staff-vouchers-hero-title::after {
+    content: '📊';
+    position: absolute;
+    right: -70px;
+    top: 15px;
+    font-size: 1.8rem;
+    animation: pulse 3s ease-in-out infinite 1.5s;
+    z-index: 3;
+  }
+
+  .staff-vouchers-hero-subtitle {
+    font-size: 1.2rem;
+    font-weight: 300;
+    margin-bottom: 0;
+    opacity: 0.9;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Container */
+  .staff-vouchers-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 1rem;
+  }
+
+  /* Action Bar */
+  .staff-action-bar {
+    background: white;
+    padding: 2rem;
+    border-radius: 20px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .staff-action-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #333;
+    margin: 0;
+  }
+
+  .btn-create-voucher {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: 50px;
+    color: white;
+    font-weight: 700;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  }
+
+  .btn-create-voucher:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+    background: linear-gradient(135deg, #764ba2, #667eea);
+    color: white;
+    text-decoration: none;
+  }
+
+  /* Stats Section */
+  .staff-stats-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 20px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 3rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+
+  .staff-stat-item {
+    text-align: center;
+    padding: 1rem;
+    border-radius: 15px;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border: 1px solid #e9ecef;
+  }
+
+  .staff-stat-number {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #667eea;
+    margin-bottom: 0.5rem;
+  }
+
+  .staff-stat-label {
+    color: #666;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+
+  /* Alert Styles */
+  .staff-alerts {
+    margin-bottom: 2rem;
+  }
+
+  .staff-alert {
+    padding: 1rem 1.5rem;
+    border-radius: 15px;
+    margin-bottom: 1rem;
+    font-weight: 500;
+    box-shadow: 0 3px 15px rgba(0, 0, 0, 0.1);
+  }
+
+  .staff-alert-error {
+    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    border: 1px solid #dc3545;
+    color: #721c24;
+  }
+
+  /* Voucher Management Grid */
+  .staff-vouchers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+  }
+
+  .staff-voucher-card {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid transparent;
+  }
+
+  .staff-voucher-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #667eea, #764ba2, #f093fb);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1;
+  }
+
+  .staff-voucher-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+    border-color: #667eea;
+  }
+
+  .staff-voucher-card:hover::before {
+    opacity: 0.03;
+  }
+
+  .staff-voucher-card>* {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Status-based styling */
+  .staff-voucher-card.status-expired {
+    border-color: #dc3545;
+    opacity: 0.8;
+  }
+
+  .staff-voucher-card.status-inactive {
+    border-color: #6c757d;
+    opacity: 0.7;
+  }
+
+  .voucher-admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #f8f9fa;
+  }
+
+  .voucher-admin-code {
+    background: linear-gradient(135deg, #495057, #6c757d);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 25px;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 15px rgba(73, 80, 87, 0.3);
+    font-family: 'Courier New', monospace;
+  }
+
+  .voucher-admin-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .voucher-admin-details {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .admin-detail-item {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 12px;
+    border-left: 4px solid #667eea;
+  }
+
+  .admin-detail-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+  }
+
+  .admin-detail-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .voucher-usage-bar {
+    background: #e9ecef;
+    border-radius: 10px;
+    height: 8px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+  }
+
+  .voucher-usage-fill {
+    height: 100%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+  }
+
+  .voucher-admin-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .admin-status-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .admin-status-active {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    color: #155724;
+    border: 1px solid #28a745;
+  }
+
+  .admin-status-expired {
+    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    color: #721c24;
+    border: 1px solid #dc3545;
+  }
+
+  .admin-status-inactive {
+    background: linear-gradient(135deg, #e2e3e5, #d6d8db);
+    color: #383d41;
+    border: 1px solid #6c757d;
+  }
+
+  .usage-info {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+  }
+
+  .voucher-admin-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    padding-top: 1rem;
+    border-top: 1px solid #e9ecef;
+  }
+
+  .btn-admin-edit {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 25px;
+    color: #212529;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 3px 10px rgba(255, 193, 7, 0.3);
+  }
+
+  .btn-admin-edit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 193, 7, 0.5);
+    background: linear-gradient(135deg, #fd7e14, #ffc107);
+    color: #212529;
+    text-decoration: none;
+  }
+
+  .btn-admin-delete {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 25px;
+    color: white;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 3px 10px rgba(220, 53, 69, 0.3);
+  }
+
+  .btn-admin-delete:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5);
+    background: linear-gradient(135deg, #c82333, #dc3545);
+  }
+
+  /* Empty State */
+  .staff-vouchers-empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .staff-vouchers-empty-state i {
+    font-size: 4rem;
+    color: #667eea;
+    margin-bottom: 1rem;
+  }
+
+  .staff-vouchers-empty-state h3 {
+    color: #333;
+    margin-bottom: 1rem;
+  }
+
+  .staff-vouchers-empty-state p {
+    color: #666;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .staff-vouchers-hero-title {
+      font-size: 2.2rem;
+    }
+
+    .staff-vouchers-hero-title::before,
+    .staff-vouchers-hero-title::after {
+      display: none;
+    }
+
+    .staff-stats-section {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .staff-vouchers-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .staff-voucher-card {
+      padding: 1.5rem;
+    }
+
+    .voucher-admin-details {
+      grid-template-columns: 1fr;
+    }
+
+    .staff-action-bar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .voucher-admin-actions {
+      flex-direction: column;
+    }
+  }
+</style>
+
+<!-- Hero Section -->
+<section class="staff-vouchers-hero-section">
+  <div class="staff-vouchers-hero-content">
+    <h1 class="staff-vouchers-hero-title">Voucher Management</h1>
+    <p class="staff-vouchers-hero-subtitle">Create, manage, and track promotional vouchers for your customers</p>
+  </div>
+</section>
+
+<!-- Main Content -->
+<div class="staff-vouchers-container">
+  <!-- Action Bar -->
+  <div class="staff-action-bar">
+    <h2 class="staff-action-title">Voucher Dashboard</h2>
+    <a href="/staff/vouchers/new" class="btn-create-voucher">
+      <i class="fas fa-plus-circle"></i>
+      Create New Voucher
+    </a>
+  </div>
+
+  <!-- Stats Section -->
+  <div class="staff-stats-section">
+    <div class="staff-stat-item">
+      <div class="staff-stat-number">{{#if vouchers}}{{vouchers.length}}{{else}}0{{/if}}</div>
+      <div class="staff-stat-label">Total Vouchers</div>
+    </div>
+    <div class="staff-stat-item">
+      <div class="staff-stat-number">{{activeCount}}</div>
+      <div class="staff-stat-label">Active</div>
+    </div>
+    <div class="staff-stat-item">
+      <div class="staff-stat-number">{{totalClaims}}</div>
+      <div class="staff-stat-label">Total Claims</div>
+    </div>
+  </div>
+
+
+  <!-- Alerts -->
+  {{#if error}}
+  <div class="staff-alerts">
+    <div class="staff-alert staff-alert-error">
+      <i class="fas fa-exclamation-triangle me-2"></i>{{error}}
+    </div>
+  </div>
+  {{/if}}
+
+  <!-- Voucher Management Grid -->
+  {{#if vouchers}}
+  <div class="staff-vouchers-grid">
     {{#each vouchers}}
-    <tr>
-      <td>{{code}}</td>
-      <td>{{capitalize discount_type}}</td>
-      <td>
-        {{#if (eq discount_type 'percentage')}}{{discount_value}}%{{else}}${{discount_value}}{{/if}}
-      </td>
-      <td>${{min_spend}}</td>
-      <td>{{formatDate expiry_date}}</td>
-      <td>{{used_count}} / {{usage_limit}}</td>
-      <td>{{capitalize status}}</td>
-      <td>
-        <a href="/staff/vouchers/{{voucher_id}}/edit" class="btn btn-sm btn-warning">Edit</a>
-        <form action="/staff/vouchers/{{voucher_id}}/delete" method="POST" style="display:inline;" onsubmit="return confirm('Delete this voucher?');">
-          <button class="btn btn-sm btn-danger">Delete</button>
+    <div class="staff-voucher-card status-{{status}}">
+      <div class="voucher-admin-header">
+        <div class="voucher-admin-code">{{code}}</div>
+        <div class="voucher-admin-value">
+          {{#if (eq discount_type 'percentage')}}
+          {{discount_value}}% OFF
+          {{else}}
+          ${{discount_value}} OFF
+          {{/if}}
+        </div>
+      </div>
+
+      <div class="voucher-admin-details">
+        <div class="admin-detail-item">
+          <div class="admin-detail-label">Type</div>
+          <div class="admin-detail-value">{{capitalize discount_type}}</div>
+        </div>
+        <div class="admin-detail-item">
+          <div class="admin-detail-label">Min Spend</div>
+          <div class="admin-detail-value">${{min_spend}}</div>
+        </div>
+        <div class="admin-detail-item">
+          <div class="admin-detail-label">Expires</div>
+          <div class="admin-detail-value">{{formatDate expiry_date}}</div>
+        </div>
+        <div class="admin-detail-item">
+          <div class="admin-detail-label">Usage</div>
+          <div class="admin-detail-value">
+            {{used_count}} / {{usage_limit}}
+            <div class="voucher-usage-bar">
+              <div class="voucher-usage-fill"
+                style="width: {{#if usage_limit}}{{multiply (divide used_count usage_limit) 100}}{{else}}0{{/if}}%">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="voucher-admin-status">
+        <div class="admin-status-badge admin-status-{{status}}">
+          {{#if (eq status 'active')}}
+          <i class="fas fa-check-circle me-1"></i>Active
+          {{else if (eq status 'expired')}}
+          <i class="fas fa-times-circle me-1"></i>Expired
+          {{else}}
+          <i class="fas fa-pause-circle me-1"></i>{{capitalize status}}
+          {{/if}}
+        </div>
+
+        <div class="usage-info">
+          <i class="fas fa-chart-line me-1"></i>
+          {{#if usage_limit}}{{subtract usage_limit used_count}} remaining{{else}}Unlimited{{/if}}
+        </div>
+      </div>
+
+      <div class="voucher-admin-actions">
+        <a href="/staff/vouchers/{{voucher_id}}/edit" class="btn-admin-edit">
+          <i class="fas fa-edit"></i>Edit
+        </a>
+        <form action="/staff/vouchers/{{voucher_id}}/delete" method="POST" style="display:inline;"
+          onsubmit="return confirm('Are you sure you want to delete this voucher? This action cannot be undone.');">
+          <button type="submit" class="btn-admin-delete">
+            <i class="fas fa-trash"></i>Delete
+          </button>
         </form>
-      </td>
-    </tr>
+      </div>
+    </div>
     {{/each}}
-  </tbody>
-</table>
+  </div>
+  {{else}}
+  <div class="staff-vouchers-empty-state">
+    <i class="fas fa-ticket-alt"></i>
+    <h3>No vouchers created yet</h3>
+    <p>Start creating promotional vouchers to boost customer engagement and sales!</p>
+    <a href="/staff/vouchers/new" class="btn-create-voucher">
+      <i class="fas fa-plus-circle me-2"></i>Create Your First Voucher
+    </a>
+  </div>
+  {{/if}}
+</div>

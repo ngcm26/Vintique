@@ -2615,6 +2615,99 @@ router.post('/orders/mark-received/:orderId', async (req, res) => {
 });
 
 
+router.post('/orders/update-status/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+  const orderId = req.params.orderId;
+  const userId = req.session.user.user_id || req.session.user.id;
+  const { status } = req.body;
+  const allowedStatuses = ['confirmed', 'packing', 'shipped', 'out_for_delivery', 'completed'];
+
+  const conn = await createConnection();
+
+  try {
+    // Check if user is seller
+    const [orderItems] = await conn.execute(`
+      SELECT l.user_id AS seller_id, o.status as current_status
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      JOIN listings l ON oi.listing_id = l.listing_id
+      WHERE o.order_id = ?
+      LIMIT 1
+    `, [orderId]);
+
+    if (orderItems.length === 0) {
+      await conn.end();
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const { seller_id } = orderItems[0];
+    if (userId !== seller_id) {
+      await conn.end();
+      return res.status(403).json({ error: "Only seller can update order status" });
+    }
+
+    if (!allowedStatuses.includes(status)) {
+      await conn.end();
+      return res.status(400).json({ error: "Invalid status update" });
+    }
+
+    await conn.execute(`UPDATE orders SET status = ? WHERE order_id = ?`, [status, orderId]);
+    await conn.end();
+
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+
+// Archive an order (buyer or seller can archive if completed)
+router.post('/orders/archive/:orderId', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+  const orderId = req.params.orderId;
+  const userId = req.session.user.user_id || req.session.user.id;
+  const conn = await createConnection();
+
+  try {
+    // Check if the user is buyer or seller for the order
+    const [rows] = await conn.execute(
+      `SELECT o.order_id, o.user_id AS buyer_id, l.user_id AS seller_id, o.status
+       FROM orders o
+       JOIN order_items oi ON o.order_id = oi.order_id
+       JOIN listings l ON oi.listing_id = l.listing_id
+       WHERE o.order_id = ?
+       LIMIT 1`,
+      [orderId]
+    );
+    if (rows.length === 0) {
+      await conn.end();
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const { buyer_id, seller_id, status } = rows[0];
+    if (userId !== buyer_id && userId !== seller_id) {
+      await conn.end();
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    if (status !== 'completed') {
+      await conn.end();
+      return res.status(400).json({ error: 'Only completed orders can be archived.' });
+    }
+
+    await conn.execute(
+      `UPDATE orders SET archived = 1 WHERE order_id = ?`,
+      [orderId]
+    );
+    await conn.end();
+    res.json({ success: true });
+  } catch (err) {
+    await conn.end();
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 
 // Archived Orders History
 router.get('/orders/archived', async (req, res) => {
@@ -2665,6 +2758,7 @@ router.get('/orders/archived', async (req, res) => {
     res.status(500).send('Database error');
   }
 });
+
 
 
 // ========== STRIPE API ENDPOINTS ==========
