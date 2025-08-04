@@ -7,6 +7,14 @@ const { generateOTP, generateResetToken, sendVerificationEmail, sendPasswordRese
 router.get('/login', (req, res) => {
   const { message, verified, email, error } = req.query;
   
+  // Clear session if there's a message (likely from password reset redirect)
+  // This ensures the non-logged-in navbar is displayed
+  if (message) {
+    req.session.destroy(err => {
+      if (err) console.error('Session clear error:', err);
+    });
+  }
+  
   // If user just verified their email, pre-fill the email field
   const formData = verified && email ? { email } : {};
   
@@ -405,9 +413,9 @@ router.post('/forgot-password', async (req, res) => {
   try {
     connection = await createConnection();
 
-    // Check if user exists
+    // Check if user exists and get their role
     const [users] = await connection.execute(`
-      SELECT u.user_id, ui.username, ui.first_name
+      SELECT u.user_id, u.role, ui.username, ui.first_name
       FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE u.email = ?
@@ -425,6 +433,17 @@ router.post('/forgot-password', async (req, res) => {
 
     const user = users[0];
 
+    // Prevent staff and admin from using user password reset
+    if (user.role === 'staff' || user.role === 'admin') {
+      console.log('❌ Staff/Admin attempted to use user password reset:', email);
+      return res.render('users/forgot_password', {
+        layout: 'user',
+        title: 'Forgot Password - Vintique',
+        activePage: 'forgot-password',
+        error: 'Password reset for staff accounts must be initiated by an administrator. Please contact your administrator.'
+      });
+    }
+
     // Delete any existing reset tokens for this user
     await connection.execute(`
       DELETE FROM password_reset_tokens WHERE user_id = ?
@@ -440,7 +459,7 @@ router.post('/forgot-password', async (req, res) => {
     `, [user.user_id, email, resetToken, expiresAt]);
 
     // Send password reset email
-    const emailSent = await sendPasswordResetEmail(email, resetToken, user.first_name || user.username);
+    const emailSent = await sendPasswordResetEmail(email, resetToken, user.first_name || user.username || email.split('@')[0]);
     if (!emailSent) {
       throw new Error('Failed to send password reset email');
     }
@@ -486,7 +505,8 @@ router.get('/reset-password/:token', async (req, res) => {
       return res.render('users/reset_password', {
         layout: 'user',
         title: 'Reset Password - Vintique',
-        error: 'Invalid or expired reset link.'
+        error: 'Invalid or expired reset link.',
+        showForm: false
       });
     }
 
@@ -497,7 +517,8 @@ router.get('/reset-password/:token', async (req, res) => {
       return res.render('users/reset_password', {
         layout: 'user',
         title: 'Reset Password - Vintique',
-        error: 'Reset link has expired. Please request a new one.'
+        error: 'Reset link has expired. Please request a new one.',
+        showForm: false
       });
     }
 
@@ -505,7 +526,8 @@ router.get('/reset-password/:token', async (req, res) => {
       return res.render('users/reset_password', {
         layout: 'user',
         title: 'Reset Password - Vintique',
-        error: 'This reset link has already been used.'
+        error: 'This reset link has already been used.',
+        showForm: false
       });
     }
 
@@ -513,7 +535,8 @@ router.get('/reset-password/:token', async (req, res) => {
       layout: 'user',
       title: 'Reset Password - Vintique',
       token,
-      email: resetToken.email
+      email: resetToken.email,
+      showForm: true
     });
 
   } catch (error) {
@@ -541,7 +564,8 @@ router.post('/reset-password', async (req, res) => {
         layout: 'user',
         title: 'Reset Password - Vintique',
         error: 'Both password fields are required.',
-        token
+        token,
+        showForm: true
       });
     }
 
@@ -550,7 +574,8 @@ router.post('/reset-password', async (req, res) => {
         layout: 'user',
         title: 'Reset Password - Vintique',
         error: 'Passwords do not match.',
-        token
+        token,
+        showForm: true
       });
     }
 
@@ -559,17 +584,8 @@ router.post('/reset-password', async (req, res) => {
         layout: 'user',
         title: 'Reset Password - Vintique',
         error: 'Password must be at least 6 characters long.',
-        token
-      });
-    }
-
-    // Check if new password is the same as current password
-    if (password === resetToken.current_password) {
-      return res.render('users/reset_password', {
-        layout: 'user',
-        title: 'Reset Password - Vintique',
-        error: 'New password cannot be the same as your current password.',
-        token
+        token,
+        showForm: true
       });
     }
 
@@ -586,7 +602,8 @@ router.post('/reset-password', async (req, res) => {
         layout: 'user',
         title: 'Reset Password - Vintique',
         error: 'Invalid or expired reset link.',
-        token
+        token,
+        showForm: false
       });
     }
 
@@ -598,7 +615,8 @@ router.post('/reset-password', async (req, res) => {
         layout: 'user',
         title: 'Reset Password - Vintique',
         error: 'Reset link has expired. Please request a new one.',
-        token
+        token,
+        showForm: false
       });
     }
 
@@ -607,7 +625,20 @@ router.post('/reset-password', async (req, res) => {
         layout: 'user',
         title: 'Reset Password - Vintique',
         error: 'This reset link has already been used.',
-        token
+        token,
+        showForm: false
+      });
+    }
+
+    // Check if new password is the same as current password
+    if (password === resetToken.current_password) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'New password cannot be the same as your current password. Please enter a different password.',
+        token,
+        email: resetToken.email,
+        showForm: true
       });
     }
 
@@ -630,7 +661,8 @@ router.post('/reset-password', async (req, res) => {
       layout: 'user',
       title: 'Reset Password - Vintique',
       error: 'Failed to reset password. Please try again.',
-      token
+      token,
+      showForm: false
     });
   } finally {
     if (connection) await connection.end();

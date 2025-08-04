@@ -794,4 +794,63 @@ router.get('/profile/:userId', async (req, res) => {
   }
 });
 
+// Staff Password Reset Route
+router.post('/staff/:staffId/reset-password', requireAdmin, async (req, res) => {
+  let connection;
+  try {
+    const { staffId } = req.params;
+    
+    connection = await createConnection();
+    
+    // Get staff member details
+    const [staffMembers] = await connection.execute(`
+      SELECT u.user_id, u.email, ui.first_name, ui.username
+      FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.user_id = ? AND u.role IN ('staff', 'admin')
+    `, [staffId]);
+    
+    if (staffMembers.length === 0) {
+      return res.status(404).json({ error: 'Staff member not found' });
+    }
+    
+    const staffMember = staffMembers[0];
+    
+    // Clear any existing reset tokens for this user
+    await connection.execute(`
+      DELETE FROM password_reset_tokens WHERE user_id = ?
+    `, [staffMember.user_id]);
+    
+    // Generate new reset token
+    const { generateResetToken, sendPasswordResetEmail } = require('../utils/helpers');
+    const resetToken = generateResetToken();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    
+    // Insert new reset token
+    await connection.execute(`
+      INSERT INTO password_reset_tokens (user_id, email, token, expires_at) VALUES (?, ?, ?, ?)
+    `, [staffMember.user_id, staffMember.email, resetToken, expiresAt]);
+    
+    // Send password reset email
+    const emailSent = await sendPasswordResetEmail(
+      staffMember.email, 
+      resetToken, 
+      staffMember.first_name || staffMember.username || staffMember.email.split('@')[0]
+    );
+    
+    if (!emailSent) {
+      throw new Error('Failed to send password reset email');
+    }
+    
+    console.log('✅ Staff password reset email sent successfully to:', staffMember.email);
+    res.json({ success: true, message: 'Password reset email sent successfully' });
+    
+  } catch (error) {
+    console.error('❌ Staff password reset error:', error);
+    res.status(500).json({ error: 'Failed to send password reset email' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 module.exports = router;

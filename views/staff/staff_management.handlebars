@@ -65,6 +65,9 @@
               {{/if}}
               <button class="btn btn-sm btn-secondary" onclick="editStaff(this)">Edit</button>
               <button class="btn btn-sm btn-danger" onclick="deleteStaff(this)">Delete</button>
+              <button class="btn btn-sm btn-info" onclick="sendStaffResetEmail(this)" title="Send password reset email">
+                <i class="fas fa-envelope"></i> Reset Password
+              </button>
             {{else}}
               <span class="text-muted small">(Admin only)</span>
             {{/if}}
@@ -519,4 +522,41 @@
   staffSearch.addEventListener('input', filterStaffTable);
   statusFilter.addEventListener('change', filterStaffTable);
   roleFilter.addEventListener('change', filterStaffTable);
+
+  function sendStaffResetEmail(btn) {
+    if (!isAdmin) {
+      alert('Only admins can send password reset emails');
+      return;
+    }
+    
+    const row = btn.closest('tr');
+    const staffId = row.cells[0].textContent;
+    const staffEmail = row.cells[1].textContent;
+    
+    if (!confirm(`Send password reset email to ${staffEmail}?`)) return;
+    
+    // Show loading state
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    btn.disabled = true;
+    
+    fetch(`/staff/${staffId}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert('Password reset email sent successfully!');
+      } else {
+        alert(data.error || 'Failed to send password reset email.');
+      }
+    })
+    .catch(() => alert('Failed to send password reset email.'))
+    .finally(() => {
+      // Reset button state
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    });
+  }
 </script>
