@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createConnection } = require('../config/database');
-const { generateOTP, sendVerificationEmail } = require('../utils/helpers');
+const { generateOTP, generateResetToken, sendVerificationEmail, sendPasswordResetEmail } = require('../utils/helpers');
 
 // ======= LOGIN =======
 router.get('/login', (req, res) => {
@@ -381,6 +381,256 @@ router.post('/resend-verification', async (req, res) => {
     return res.json({ 
       success: false, 
       error: 'Failed to send verification code. Please try again.' 
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ======= FORGOT PASSWORD =======
+router.get('/forgot-password', (req, res) => {
+  res.render('users/forgot_password', {
+    layout: 'user',
+    title: 'Forgot Password - Vintique',
+    activePage: 'forgot-password'
+  });
+});
+
+router.post('/forgot-password', async (req, res) => {
+  let connection;
+  const { email } = req.body;
+
+  console.log('🔐 Forgot password request for:', email);
+
+  try {
+    connection = await createConnection();
+
+    // Check if user exists
+    const [users] = await connection.execute(`
+      SELECT u.user_id, ui.username, ui.first_name
+      FROM users u
+      LEFT JOIN user_information ui ON u.user_id = ui.user_id
+      WHERE u.email = ?
+    `, [email]);
+
+    if (users.length === 0) {
+      // Don't reveal if email exists or not for security
+      return res.render('users/forgot_password', {
+        layout: 'user',
+        title: 'Forgot Password - Vintique',
+        activePage: 'forgot-password',
+        success: 'If an account with that email exists, a password reset link has been sent.'
+      });
+    }
+
+    const user = users[0];
+
+    // Delete any existing reset tokens for this user
+    await connection.execute(`
+      DELETE FROM password_reset_tokens WHERE user_id = ?
+    `, [user.user_id]);
+
+    // Generate new reset token
+    const resetToken = generateResetToken();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Insert new reset token
+    await connection.execute(`
+      INSERT INTO password_reset_tokens (user_id, email, token, expires_at) VALUES (?, ?, ?, ?)
+    `, [user.user_id, email, resetToken, expiresAt]);
+
+    // Send password reset email
+    const emailSent = await sendPasswordResetEmail(email, resetToken, user.first_name || user.username);
+    if (!emailSent) {
+      throw new Error('Failed to send password reset email');
+    }
+
+    console.log('✅ Password reset email sent successfully');
+    return res.render('users/forgot_password', {
+      layout: 'user',
+      title: 'Forgot Password - Vintique',
+      activePage: 'forgot-password',
+      success: 'If an account with that email exists, a password reset link has been sent.'
+    });
+
+  } catch (error) {
+    console.error('❌ Forgot password error:', error);
+    return res.render('users/forgot_password', {
+      layout: 'user',
+      title: 'Forgot Password - Vintique',
+      activePage: 'forgot-password',
+      error: 'Failed to process password reset request. Please try again.'
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// ======= RESET PASSWORD =======
+router.get('/reset-password/:token', async (req, res) => {
+  let connection;
+  const { token } = req.params;
+
+  try {
+    connection = await createConnection();
+
+    // Check if token exists and is valid
+    const [tokens] = await connection.execute(`
+      SELECT prt.user_id, prt.email, prt.expires_at, prt.used, ui.first_name
+      FROM password_reset_tokens prt
+      LEFT JOIN user_information ui ON prt.user_id = ui.user_id
+      WHERE prt.token = ?
+    `, [token]);
+
+    if (tokens.length === 0) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'Invalid or expired reset link.'
+      });
+    }
+
+    const resetToken = tokens[0];
+    const now = new Date();
+
+    if (now > new Date(resetToken.expires_at)) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'Reset link has expired. Please request a new one.'
+      });
+    }
+
+    if (resetToken.used) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'This reset link has already been used.'
+      });
+    }
+
+    return res.render('users/reset_password', {
+      layout: 'user',
+      title: 'Reset Password - Vintique',
+      token,
+      email: resetToken.email
+    });
+
+  } catch (error) {
+    console.error('❌ Reset password token validation error:', error);
+    return res.render('users/reset_password', {
+      layout: 'user',
+      title: 'Reset Password - Vintique',
+      error: 'An error occurred while validating the reset link.'
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  let connection;
+  const { token, password, confirmPassword } = req.body;
+
+  try {
+    connection = await createConnection();
+
+    // Validate passwords
+    if (!password || !confirmPassword) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'Both password fields are required.',
+        token
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'Passwords do not match.',
+        token
+      });
+    }
+
+    if (password.length < 6) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'Password must be at least 6 characters long.',
+        token
+      });
+    }
+
+    // Check if new password is the same as current password
+    if (password === resetToken.current_password) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'New password cannot be the same as your current password.',
+        token
+      });
+    }
+
+    // Check if token exists and is valid
+    const [tokens] = await connection.execute(`
+      SELECT prt.user_id, prt.email, prt.expires_at, prt.used, u.password as current_password
+      FROM password_reset_tokens prt
+      LEFT JOIN users u ON prt.user_id = u.user_id
+      WHERE prt.token = ?
+    `, [token]);
+
+    if (tokens.length === 0) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'Invalid or expired reset link.',
+        token
+      });
+    }
+
+    const resetToken = tokens[0];
+    const now = new Date();
+
+    if (now > new Date(resetToken.expires_at)) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'Reset link has expired. Please request a new one.',
+        token
+      });
+    }
+
+    if (resetToken.used) {
+      return res.render('users/reset_password', {
+        layout: 'user',
+        title: 'Reset Password - Vintique',
+        error: 'This reset link has already been used.',
+        token
+      });
+    }
+
+    // Update password
+    await connection.execute(`
+      UPDATE users SET password = ? WHERE user_id = ?
+    `, [password, resetToken.user_id]);
+
+    // Mark token as used
+    await connection.execute(`
+      UPDATE password_reset_tokens SET used = TRUE WHERE token = ?
+    `, [token]);
+
+    console.log('✅ Password reset completed successfully');
+    return res.redirect('/login?message=✅ Password reset successful. You can now log in with your new password.');
+
+  } catch (error) {
+    console.error('❌ Reset password error:', error);
+    return res.render('users/reset_password', {
+      layout: 'user',
+      title: 'Reset Password - Vintique',
+      error: 'Failed to reset password. Please try again.',
+      token
     });
   } finally {
     if (connection) await connection.end();
