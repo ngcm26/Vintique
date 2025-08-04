@@ -31,10 +31,7 @@
       <!-- Address Selection Section -->
       <div class="address-selection-section" id="addressSelectionSection" style="display: none;">
         <div class="address-selection-header">
-          <h3>Shipping Address</h3>
-          <a href="/account-settings" class="btn-manage-addresses">
-            <i class="fas fa-cog"></i> Manage Addresses
-          </a>
+          <h3><i class="fas fa-map-marker-alt"></i> Shipping Address</h3>
         </div>
 
         <!-- Default Address Display -->
@@ -45,7 +42,8 @@
         <!-- Choose Other Address Button -->
         <div class="choose-other-address" id="chooseOtherAddressBtn" style="display: none;">
           <button class="btn-choose-other" onclick="openAddressModal()">
-            <i class="fas fa-map-marker-alt"></i> Choose Other Address
+            <i class="fas fa-map-marker-alt"></i> 
+            <span id="chooseAddressBtnText">Choose Other Address</span>
           </button>
         </div>
 
@@ -78,7 +76,7 @@
               <div class="add-address-section" id="addAddressSection" style="display: none;">
                 <hr class="modal-divider">
                 <div class="text-center">
-                  <p class="text-muted mb-3">Need to add a new address?</p>
+                  <p class="text-muted mb-3">Need to add more addresses or manage your current ones?</p>
                   <a href="/account-settings" class="btn btn-outline-primary">
                     <i class="fas fa-plus"></i> Add New Address
                   </a>
@@ -95,12 +93,13 @@
         </div>
       </div>
 
-      <div class="voucher-select-section card mb-3" id="voucherSelectSection" style="display:none;">
-        <div class="card-header bg-warning">
-          <strong><i class="fas fa-ticket-alt"></i> Apply Voucher</strong>
+      <!-- Voucher Redemption Section -->
+      <div class="voucher-section" id="voucherSelectSection">
+        <div class="voucher-header">
+          <h3><i class="fas fa-ticket-alt"></i> Apply Voucher</h3>
         </div>
-        <div class="card-body">
-          <select id="voucherDropdown" class="form-select mb-2">
+        <div class="voucher-content">
+          <select id="voucherDropdown" class="voucher-select">
             <option value="">-- Select Voucher --</option>
             {{#each userVouchers}}
             <option value="{{code}}" data-discount="{{discount_value}}" data-type="{{discount_type}}"
@@ -111,58 +110,74 @@
             </option>
             {{/each}}
           </select>
-          <button class="btn btn-sm btn-outline-success" onclick="applySelectedVoucher()">Apply</button>
-          <div id="voucherError" class="text-danger mt-2" style="display:none;"></div>
+          <div class="voucher-buttons">
+            <button class="btn-apply-voucher" onclick="applySelectedVoucher()" id="applyVoucherBtn">
+              <i class="fas fa-check"></i> Apply
+            </button>
+            <button class="btn-remove-voucher" onclick="removeVoucher()" id="removeVoucherBtn" style="display: none;">
+              <i class="fas fa-times"></i> Remove
+            </button>
+          </div>
+          <div id="voucherError" class="voucher-error" style="display:none;"></div>
         </div>
       </div>
-
 
       <!-- Cart Summary Section -->
-      <div class="summary-item">
-        <span>Subtotal</span>
-        <span id="subtotal">$0.00</span>
-      </div>
-      <div class="summary-item">
-        <span>Voucher Discount</span>
-        <span class="text-success">- $<span id="discountAmount">0.00</span> <span id="appliedVoucherCode"
-            class="badge bg-warning text-dark"></span></span>
-      </div>
-      <div class="summary-item">
-        <span>Shipping</span>
-        <span id="shipping">$0.00</span>
-      </div>
-      <div class="summary-item">
-        <span>Tax</span>
-        <span id="tax">$0.00</span>
-      </div>
-      <hr class="summary-divider">
-      <div class="summary-item total">
-        <span>Total</span>
-        <span id="total">$0.00</span>
-      </div>
+      <div class="cart-summary-section">
+        <div class="cart-summary">
+          <div class="summary-header">
+            <h3><i class="fas fa-calculator"></i> Order Summary</h3>
+          </div>
+          
+          <div class="summary-content">
+            <div class="summary-item">
+              <span>Subtotal</span>
+              <span id="subtotal">$0.00</span>
+            </div>
+            <div class="summary-item voucher-discount" id="voucherDiscountRow" style="display: none;">
+              <span>Voucher Discount <span id="appliedVoucherCode" class="voucher-badge"></span></span>
+              <span class="discount-amount">- $<span id="discountAmount">0.00</span></span>
+            </div>
+            <div class="summary-item">
+              <span>Shipping</span>
+              <span id="shipping">$0.00</span>
+            </div>
+            <div class="summary-item">
+              <span>Tax</span>
+              <span id="tax">$0.00</span>
+            </div>
+            {{!-- <div class="summary-divider"></div> --}}
+            <div class="summary-item total">
+              <span>Total</span>
+              <span id="total">$0.00</span>
+            </div>
+          </div>
 
+          <!-- Cart Actions -->
+          <div class="cart-actions">
+            <button class="btn-checkout" onclick="proceedToCheckout()" id="checkoutBtn" disabled>
+              <i class="fas fa-credit-card"></i> Proceed to Checkout
+            </button>
+            <a href="/marketplace" class="btn-continue-shopping">
+              <i class="fas fa-arrow-left"></i> Continue Shopping
+            </a>
+          </div>
 
-      <div class="cart-actions">
-        <button class="btn-checkout" onclick="proceedToCheckout()" id="checkoutBtn" disabled>
-          <i class="fas fa-credit-card"></i> Proceed to Checkout
-        </button>
-        <a href="/marketplace" class="btn-continue-shopping">
-          <i class="fas fa-arrow-left"></i> Continue Shopping
-        </a>
-      </div>
-
-      <div class="cart-benefits">
-        <div class="benefit-item">
-          <i class="fas fa-shipping-fast"></i>
-          <span>Free shipping on orders over $50</span>
-        </div>
-        <div class="benefit-item">
-          <i class="fas fa-undo"></i>
-          <span>30-day return policy</span>
-        </div>
-        <div class="benefit-item">
-          <i class="fas fa-shield-alt"></i>
-          <span>Secure checkout</span>
+          <!-- Cart Benefits -->
+          <div class="cart-benefits">
+            <div class="benefit-item">
+              <i class="fas fa-shipping-fast"></i>
+              <span>Free shipping on orders over $50</span>
+            </div>
+            <div class="benefit-item">
+              <i class="fas fa-undo"></i>
+              <span>30-day return policy</span>
+            </div>
+            <div class="benefit-item">
+              <i class="fas fa-shield-alt"></i>
+              <span>Secure checkout</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -245,11 +260,15 @@
     // Display default address
     displayDefaultAddress(defaultAddress, defaultIndex);
 
-    // Show "Choose Other Address" button if there are multiple addresses
-    if (userAddresses.length > 1) {
-      chooseOtherAddressBtn.style.display = 'block';
+    // Always show "Choose Other Address" button, even with only 1 address
+    chooseOtherAddressBtn.style.display = 'block';
+    
+    // Update button text based on number of addresses
+    const chooseAddressBtnText = document.getElementById('chooseAddressBtnText');
+    if (userAddresses.length === 1) {
+      chooseAddressBtnText.textContent = 'Manage Address';
     } else {
-      chooseOtherAddressBtn.style.display = 'none';
+      chooseAddressBtnText.textContent = 'Choose Other Address';
     }
 
     // Set selected address to default
@@ -330,7 +349,9 @@
       `;
     }).join('');
     addressOptionsModal.innerHTML = addressesHTML;
-    addAddressSection.style.display = userAddresses.length < 3 ? 'block' : 'none';
+    
+    // Always show add address section
+    addAddressSection.style.display = 'block';
   }
 
   // Select address in modal
@@ -468,6 +489,8 @@
     const minSpend = parseFloat(selectedOption.getAttribute('data-minspend'));
     const subtotal = cartItems.reduce((total, item) => total + parseFloat(item.price), 0);
 
+    console.log('Applying voucher:', { code, discountValue, discountType, minSpend, subtotal });
+
     // Validate min spend
     if (subtotal < minSpend) {
       document.getElementById('voucherError').innerText = `Min. spend $${minSpend} required for this voucher.`;
@@ -479,6 +502,41 @@
 
     appliedVoucher = { code, discountValue, discountType, minSpend };
     updateCartSummary();
+    
+    // Show success message
+    const voucherError = document.getElementById('voucherError');
+    voucherError.innerText = `Voucher "${code}" applied successfully!`;
+    voucherError.style.display = 'block';
+    voucherError.style.color = '#28a745';
+    voucherError.style.background = '#d4edda';
+    voucherError.style.border = '1px solid #c3e6cb';
+    
+    // Hide Apply button and show Remove button
+    document.getElementById('applyVoucherBtn').style.display = 'none';
+    document.getElementById('removeVoucherBtn').style.display = 'block';
+    
+    console.log('Voucher applied successfully:', appliedVoucher);
+    
+    // Hide success message after 3 seconds
+    setTimeout(() => {
+      voucherError.style.display = 'none';
+    }, 3000);
+  }
+
+  // Remove voucher
+  function removeVoucher() {
+    appliedVoucher = null;
+    updateCartSummary();
+    document.getElementById('voucherError').innerText = 'Voucher removed successfully!';
+    document.getElementById('voucherError').style.display = 'block';
+    document.getElementById('voucherError').style.color = '#dc3545';
+    document.getElementById('voucherError').style.background = '#f8d7da';
+    document.getElementById('voucherError').style.border = '1px solid #f5c6cb';
+    
+    // Show Apply button and hide Remove button
+    document.getElementById('applyVoucherBtn').style.display = 'block';
+    document.getElementById('removeVoucherBtn').style.display = 'none';
+    document.getElementById('voucherDropdown').value = ''; // Clear selected option
   }
 
   // Update cart summary (including voucher discount)
@@ -495,9 +553,26 @@
         discountAmount = appliedVoucher.discountValue;
       }
       if (discountAmount > subtotal) discountAmount = subtotal;
+      
+      console.log('Voucher discount calculation:', {
+        appliedVoucher,
+        subtotal,
+        discountAmount,
+        discountType: appliedVoucher.discountType,
+        discountValue: appliedVoucher.discountValue
+      });
     }
 
     const total = subtotal - discountAmount + shipping + tax;
+
+    console.log('Cart summary:', {
+      subtotal,
+      discountAmount,
+      shipping,
+      tax,
+      total,
+      appliedVoucher: appliedVoucher ? appliedVoucher.code : null
+    });
 
     document.getElementById('subtotal').textContent = `$${subtotal.toFixed(2)}`;
     document.getElementById('discountAmount').textContent = discountAmount.toFixed(2);
@@ -505,6 +580,20 @@
     document.getElementById('shipping').textContent = shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`;
     document.getElementById('tax').textContent = `$${tax.toFixed(2)}`;
     document.getElementById('total').textContent = `$${total.toFixed(2)}`;
+
+    // Toggle voucher discount row visibility
+    const voucherDiscountRow = document.getElementById('voucherDiscountRow');
+    if (appliedVoucher) {
+      voucherDiscountRow.style.display = 'flex';
+      document.getElementById('removeVoucherBtn').style.display = 'block';
+      document.getElementById('applyVoucherBtn').style.display = 'none';
+      console.log('Voucher discount row should be visible');
+    } else {
+      voucherDiscountRow.style.display = 'none';
+      document.getElementById('removeVoucherBtn').style.display = 'none';
+      document.getElementById('applyVoucherBtn').style.display = 'block';
+      console.log('Voucher discount row should be hidden');
+    }
   }
 
   // Proceed to checkout
@@ -587,10 +676,14 @@
   document.addEventListener('DOMContentLoaded', function () {
     loadCartItems();
 
-    // Show voucher section if userVouchers exist (Handlebars populates userVouchers)
+    // Update voucher dropdown message if no vouchers available
     const voucherDropdown = document.getElementById('voucherDropdown');
-    if (voucherDropdown && voucherDropdown.options.length > 1) {
-      document.getElementById('voucherSelectSection').style.display = 'block';
+    
+    if (voucherDropdown && voucherDropdown.options.length <= 1) {
+      const noVoucherOption = voucherDropdown.querySelector('option[value=""]');
+      if (noVoucherOption) {
+        noVoucherOption.textContent = '-- No vouchers available --';
+      }
     }
   });
 

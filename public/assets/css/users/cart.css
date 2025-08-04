@@ -61,61 +61,48 @@ body {
   gap: 2rem;
 }
 
-/* Address Selection Section */
+/* Updated Address Selection Section */
 .address-selection-section {
   background: white;
   border-radius: 20px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.12);
   overflow: hidden;
   order: 1;
+  margin-bottom: 1.5rem;
 }
 
 .address-selection-header {
-  padding: 2rem;
+  padding: 1.5rem;
   border-bottom: 1px solid #e9ecef;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: white;
 }
 
 .address-selection-header h3 {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 600;
   color: #2c3e50;
   margin: 0;
-}
-
-.btn-manage-addresses {
-  background: #6c757d;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  text-decoration: none;
+  gap: 0.75rem;
 }
 
-.btn-manage-addresses:hover {
-  background: #5a6268;
-  transform: translateY(-2px);
-  color: white;
-  text-decoration: none;
+.address-selection-header h3 i {
+  color: #FFD700;
 }
 
-/* Default Address Display */
+/* Updated Default Address Display */
 .default-address-display {
-  padding: 2rem;
+  padding: 1.5rem;
 }
 
 .default-address-card {
   border: 2px solid #28a745;
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1rem;
   background: #f8fff9;
   box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
 }
@@ -134,7 +121,7 @@ body {
 }
 
 .default-address-card .address-header strong {
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: #2c3e50;
 }
 
@@ -149,7 +136,7 @@ body {
 
 .default-address-card .address-details {
   color: #666;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1.4;
 }
 
@@ -157,9 +144,9 @@ body {
   margin-bottom: 0.25rem;
 }
 
-/* Choose Other Address Button */
+/* Updated Choose Other Address Button */
 .choose-other-address {
-  padding: 0 2rem 2rem 2rem;
+  padding: 0 1.5rem 1.5rem 1.5rem;
 }
 
 .btn-choose-other {
@@ -364,8 +351,9 @@ body {
   margin-bottom: 0.25rem;
 }
 
+/* Updated No Addresses Alert */
 .no-addresses {
-  padding: 2rem;
+  padding: 1.5rem;
 }
 
 .no-addresses .alert {
@@ -373,7 +361,7 @@ body {
   border: none;
   background: #fff3cd;
   color: #856404;
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
 .no-addresses .alert i {
@@ -412,7 +400,124 @@ body {
   transform: translateY(-2px);
 }
 
-/* Cart Summary Section */
+/* Voucher Section */
+.voucher-section {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.voucher-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e9ecef;
+  background: white;
+}
+
+.voucher-header h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.voucher-header h3 i {
+  color: #FFD700;
+}
+
+.voucher-content {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.voucher-buttons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.voucher-select {
+  width: 100%;
+  padding: 1rem;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: #f8f9fa;
+  transition: all 0.3s ease;
+  color: #333;
+}
+
+.voucher-select:focus {
+  outline: none;
+  border-color: #FFD700;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.1);
+}
+
+.btn-apply-voucher {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+  flex: 1;
+}
+
+.btn-apply-voucher:hover {
+  background: linear-gradient(135deg, #218838, #1e7e34);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+}
+
+.btn-remove-voucher {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+  flex: 1;
+}
+
+.btn-remove-voucher:hover {
+  background: linear-gradient(135deg, #c82333, #bd2130);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+}
+
+.voucher-error {
+  color: #dc3545;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+  background: #f8d7da;
+  border-radius: 8px;
+  border: 1px solid #f5c6cb;
+}
+
+/* Updated Cart Summary Section */
 .cart-summary-section {
   order: 2;
 }
@@ -421,23 +526,70 @@ body {
   background: white;
   border-radius: 20px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+  overflow: hidden;
+}
+
+.summary-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e9ecef;
+  background: white;
+}
+
+.summary-header h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.summary-header h3 i {
+  color: #FFD700;
+}
+
+.summary-content {
   padding: 2rem;
 }
 
-.cart-summary h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #2c3e50;
-  margin-bottom: 1.5rem;
-}
-
-/* Summary Items */
 .summary-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
   font-size: 1rem;
+  color: #333;
+}
+
+.summary-item.voucher-discount {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  color: #333;
+  font-weight: 400;
+}
+
+.discount-amount {
+  color: #28a745;
+  font-weight: 400;
+}
+
+.voucher-badge {
+  background: #FFD700;
+  color: #333;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.summary-divider {
+  margin: 1.5rem 0;
+  border: none;
+  border-top: 1px solid #e9ecef;
 }
 
 .summary-item.total {
@@ -449,15 +601,9 @@ body {
   border-top: 2px solid #e9ecef;
 }
 
-.summary-divider {
-  margin: 1.5rem 0;
-  border: none;
-  border-top: 1px solid #e9ecef;
-}
-
-/* Cart Actions */
+/* Updated Cart Actions */
 .cart-actions {
-  margin: 2rem 0;
+  padding: 0 2rem 2rem 2rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -513,11 +659,9 @@ body {
   color: #333;
 }
 
-/* Cart Benefits */
+/* Updated Cart Benefits */
 .cart-benefits {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #e9ecef;
+  padding: 0 2rem 2rem 2rem;
 }
 
 .benefit-item {
@@ -777,8 +921,12 @@ body {
     order: 1;
   }
   
-  .cart-summary-section {
+  .voucher-section {
     order: 2;
+  }
+  
+  .cart-summary-section {
+    order: 3;
   }
 }
 
@@ -836,14 +984,6 @@ body {
     align-items: stretch;
   }
   
-  .btn-manage-addresses {
-    align-self: flex-end;
-  }
-  
-  .default-address-display {
-    padding: 1.5rem;
-  }
-  
   .choose-other-address {
     padding: 0 1.5rem 1.5rem 1.5rem;
   }
@@ -854,6 +994,30 @@ body {
   
   .address-label {
     padding: 1rem;
+  }
+  
+  .voucher-header {
+    padding: 1.5rem;
+  }
+  
+  .voucher-content {
+    padding: 1.5rem;
+  }
+  
+  .summary-header {
+    padding: 1.5rem;
+  }
+  
+  .summary-content {
+    padding: 1.5rem;
+  }
+  
+  .cart-actions {
+    padding: 0 1.5rem 1.5rem 1.5rem;
+  }
+  
+  .cart-benefits {
+    padding: 0 1.5rem 1.5rem 1.5rem;
   }
   
   .right-side-section {
@@ -895,6 +1059,22 @@ body {
   .btn-continue-shopping {
     padding: 0.75rem 1rem;
     font-size: 1rem;
+  }
+  
+  .voucher-header h3,
+  .summary-header h3,
+  .address-selection-header h3 {
+    font-size: 1.3rem;
+  }
+  
+  .voucher-select {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+  
+  .btn-apply-voucher {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
   }
 }
 
