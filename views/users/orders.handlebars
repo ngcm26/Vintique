@@ -127,14 +127,14 @@
                   <li>
                     <span class="fw-semibold text-secondary">Status:</span>
                     <span class="status-badge
-                      {{#if (eq status 'pending')}}bg-secondary{{/if}}
-                      {{#if (eq status 'paid')}}bg-info{{/if}}
-                      {{#if (eq status 'shipped')}}bg-primary{{/if}}
-                      {{#if (eq status 'completed')}}bg-success{{/if}}
-                      {{#if (eq status 'cancelled')}}bg-danger{{/if}}">
+                  {{#if (eq status 'confirmed')}}bg-secondary{{/if}}
+                  {{#if (eq status 'packing')}}bg-info{{/if}}
+                  {{#if (eq status 'shipped')}}bg-primary{{/if}}
+                  {{#if (eq status 'out_for_delivery')}}bg-warning{{/if}}
+                  {{#if (eq status 'completed')}}bg-success{{/if}}">
                       {{capitalize status}}
                     </span>
-                    {{#if (eq status 'cancelled')}}
+                    {{#if (eq status 'completed')}}
                     <button class="btn btn-outline-secondary btn-sm archive-order-btn ms-2"
                       data-order-id="{{order_id}}">
                       <i class="bi bi-archive"></i> Archive
@@ -149,14 +149,12 @@
                     <span class="fw-semibold text-secondary">Update Status:</span>
                     <select class="form-select form-select-sm order-status-dropdown d-inline-block w-auto"
                       data-order-id="{{order_id}}">
-                      <option value="pending" {{#if (eq status 'pending' )}}selected{{/if}}>Pending</option>
-                      <option value="paid" {{#if (eq status 'paid' )}}selected{{/if}}>Paid</option>
+                      <option value="confirmed" {{#if (eq status 'confirmed' )}}selected{{/if}}>Confirmed</option>
                       <option value="packing" {{#if (eq status 'packing' )}}selected{{/if}}>Packing</option>
                       <option value="shipped" {{#if (eq status 'shipped' )}}selected{{/if}}>Shipped</option>
                       <option value="out_for_delivery" {{#if (eq status 'out_for_delivery' )}}selected{{/if}}>Out for
                         Delivery</option>
                       <option value="completed" {{#if (eq status 'completed' )}}selected{{/if}}>Completed</option>
-                      <option value="cancelled" {{#if (eq status 'cancelled' )}}selected{{/if}}>Cancelled</option>
                     </select>
                     <button class="btn btn-primary btn-sm ms-2 update-status-btn" data-order-id="{{order_id}}">
                       Save
@@ -184,6 +182,7 @@
       </div>
       {{/if}}
     </div>
+
   </div>
 </div>
 
@@ -422,58 +421,58 @@
 
   // Order review form javascript 
 
-document.querySelectorAll('.leave-review-btn').forEach(button => {
-  button.addEventListener('click', () => {
-    document.getElementById('reviewListingId').value = button.dataset.listingId;
-    document.getElementById('reviewOrderItemId').value = button.dataset.orderItemId;
-    const modal = new bootstrap.Modal(document.getElementById('leaveReviewModal'));
-    modal.show();
-  });
-});
-
-document.getElementById('reviewForm').addEventListener('submit', async function (e) {
-  e.preventDefault(); // Prevent default HTML form submission
-
-  const listing_id = document.getElementById('reviewListingId').value;
-  const order_item_id = document.getElementById('reviewOrderItemId').value;
-  const rating = document.getElementById('rating').value;
-  const reviewText = document.getElementById('reviewText').value;
-
-  const response = await fetch('/reviews/add', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ listing_id, order_item_id, rating, reviewText }),
+  document.querySelectorAll('.leave-review-btn').forEach(button => {
+    button.addEventListener('click', () => {
+      document.getElementById('reviewListingId').value = button.dataset.listingId;
+      document.getElementById('reviewOrderItemId').value = button.dataset.orderItemId;
+      const modal = new bootstrap.Modal(document.getElementById('leaveReviewModal'));
+      modal.show();
+    });
   });
 
-  if (response.ok) {
-    // Close modal
-    const modalEl = document.getElementById('leaveReviewModal');
-    const modal = bootstrap.Modal.getInstance(modalEl);
-    modal.hide();
+  document.getElementById('reviewForm').addEventListener('submit', async function (e) {
+    e.preventDefault(); // Prevent default HTML form submission
 
-    // Show success alert
-    const alertDiv = document.createElement('div');
-    alertDiv.className = 'alert alert-success position-fixed top-0 end-0 p-3 m-3';
-    alertDiv.style.zIndex = 9999;
-    alertDiv.textContent = '✅ Review submitted successfully!';
-    document.body.appendChild(alertDiv);
+    const listing_id = document.getElementById('reviewListingId').value;
+    const order_item_id = document.getElementById('reviewOrderItemId').value;
+    const rating = document.getElementById('rating').value;
+    const reviewText = document.getElementById('reviewText').value;
 
-    // Update the review button to "Reviewed"
-    const reviewButton = document.querySelector(`.leave-review-btn[data-order-item-id="${order_item_id}"]`);
-    if (reviewButton) {
-      const reviewedBadge = document.createElement('span');
-      reviewedBadge.className = 'badge bg-secondary ms-2';
-      reviewedBadge.textContent = 'Reviewed';
-      reviewButton.replaceWith(reviewedBadge);
+    const response = await fetch('/reviews/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listing_id, order_item_id, rating, reviewText }),
+    });
+
+    if (response.ok) {
+      // Close modal
+      const modalEl = document.getElementById('leaveReviewModal');
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      modal.hide();
+
+      // Show success alert
+      const alertDiv = document.createElement('div');
+      alertDiv.className = 'alert alert-success position-fixed top-0 end-0 p-3 m-3';
+      alertDiv.style.zIndex = 9999;
+      alertDiv.textContent = '✅ Review submitted successfully!';
+      document.body.appendChild(alertDiv);
+
+      // Update the review button to "Reviewed"
+      const reviewButton = document.querySelector(`.leave-review-btn[data-order-item-id="${order_item_id}"]`);
+      if (reviewButton) {
+        const reviewedBadge = document.createElement('span');
+        reviewedBadge.className = 'badge bg-secondary ms-2';
+        reviewedBadge.textContent = 'Reviewed';
+        reviewButton.replaceWith(reviewedBadge);
+      }
+
+      // Auto-dismiss alert after 3 seconds
+      setTimeout(() => alertDiv.remove(), 3000);
+    } else {
+      const errorText = await response.text();
+      alert(`❌ Failed to submit review: ${errorText}`);
     }
-
-    // Auto-dismiss alert after 3 seconds
-    setTimeout(() => alertDiv.remove(), 3000);
-  } else {
-    const errorText = await response.text();
-    alert(`❌ Failed to submit review: ${errorText}`);
-  }
-});
+  });
 
   const stars = document.querySelectorAll('.star-rating .star');
   const ratingInput = document.getElementById('rating');
