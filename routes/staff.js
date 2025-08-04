@@ -561,6 +561,32 @@ router.post('/feedback/reply', requireStaff, (req, res) => {
   });
 });
 
+// Staff Manage Vouchers
+router.get('/staff/vouchers/list', requireStaff, async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnection();
+    const [vouchers] = await connection.execute('SELECT * FROM vouchers ORDER BY created_at DESC');
+    res.render('staff/vouchers/list', {
+      layout: 'staff',
+      activePage: 'voucher_management',
+      vouchers,
+      error: req.query.error
+    });
+  } catch (error) {
+    console.error('Vouchers list error:', error);
+    res.render('staff/vouchers/list', {
+      layout: 'staff',
+      activePage: 'voucher_management',
+      vouchers: [],
+      error: 'Failed to load vouchers'
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+
 // ========== USER MANAGEMENT API ROUTES ==========
 
 // Staff User Management API endpoints
