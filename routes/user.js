@@ -3355,21 +3355,35 @@ router.get('/user/id/:id', (req, res) => {
 
 router.post('/staff/reviews/edit/:id', (req, res) => {
   const reviewID = req.params.id;
-  const { reviewText, rating, userID } = req.body;
-  console.log(userID);
-  const sql = `
+  const { reviewText, rating } = req.body;
+
+  const updateSql = `
     UPDATE reviews
     SET reviewText = ?, rating = ?
     WHERE reviewID = ?
   `;
 
-  callbackConnection.query(sql, [reviewText, rating, reviewID], (err, result) => {
+  callbackConnection.query(updateSql, [reviewText, rating, reviewID], (err, result) => {
     if (err) {
       console.error('Error updating review:', err);
       return res.status(500).send('Failed to update review.');
     }
-    // ✅ Redirect to the user's profile
-    res.redirect(`/user/id/${userID}`);
+
+    // ✅ Now fetch sellerID to redirect
+    const getSellerSql = `SELECT sellerID FROM reviews WHERE reviewID = ?`;
+    callbackConnection.query(getSellerSql, [reviewID], (err, rows) => {
+      if (err) {
+        console.error('Error fetching sellerID:', err);
+        return res.status(500).send('Failed to retrieve seller ID.');
+      }
+
+      if (rows.length === 0) {
+        return res.status(404).send('Review not found.');
+      }
+
+      const sellerID = rows[0].sellerID;
+      res.redirect(`/user/id/${sellerID}`);
+    });
   });
 });
 
