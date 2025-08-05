@@ -13,29 +13,98 @@ const dbConfig = {
   port: 3306
 };
 
-// Admin Dashboard
-router.get('/admin/dashboard', requireAdmin, (req, res) => {
-  // Get basic stats for dashboard
-  const statsQuery = `
+router.get('/admin/dashboard', requireAdmin, async (req, res) => {
+  const connection = await createConnection();
+
+  // 1. User Stats
+  const [userStats] = await connection.execute(`
     SELECT 
-      (SELECT COUNT(*) FROM users WHERE role = 'user') as total_users,
-      (SELECT COUNT(*) FROM users WHERE role = 'staff') as total_staff,
-      (SELECT COUNT(*) FROM listings WHERE status = 'active') as active_listings,
-      (SELECT COUNT(*) FROM orders WHERE status = 'paid') as total_orders
-  `;
-  
-  callbackConnection.query(statsQuery, (err, stats) => {
-    if (err) {
-      console.error('Dashboard stats error:', err);
-      return res.status(500).send('Database error');
-    }
-    
-    res.render('staff/dashboard', {
-      layout: 'admin', // Using admin layout
-      activePage: 'dashboard',
-      stats: stats[0] || { total_users: 0, total_staff: 0, active_listings: 0, total_orders: 0 }
-    });
+      COUNT(*) AS total_users,
+      SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) AS suspended_users
+    FROM users
+    WHERE role = 'user'
+  `);
+
+  // 2. Listing Stats
+  const [listingStats] = await connection.execute(`
+    SELECT
+      COUNT(*) AS total_listings,
+      SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_listings,
+      SUM(CASE WHEN status = 'sold' THEN 1 ELSE 0 END) AS sold_listings
+    FROM listings
+  `);
+
+  // 3. Q&A Stats
+  const [qaStats] = await connection.execute(`
+    SELECT
+      COUNT(*) AS total_questions,
+      SUM(CASE WHEN answer_content IS NOT NULL AND answer_content <> '' THEN 1 ELSE 0 END) AS answered_questions
+    FROM qa
+  `);
+
+  // 4. Recent Listings (with seller name)
+  const [recentListings] = await connection.execute(`
+    SELECT l.*, u.email, u.role, u.status, u.user_id, u.phone_number
+    FROM listings l
+    JOIN users u ON l.user_id = u.user_id
+    ORDER BY l.created_at DESC
+    LIMIT 5
+  `);
+
+  // 5. Recent Users
+  const [recentUsers] = await connection.execute(`
+    SELECT user_id, email, role, status, date_joined, phone_number
+    FROM users
+    WHERE role = 'user'
+    ORDER BY date_joined DESC
+    LIMIT 5
+  `);
+
+  // 6. Sales Over Time (chart, group by month)
+  const [salesChart] = await connection.execute(`
+    SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(total_amount) AS sales
+    FROM orders
+    WHERE status = 'paid'
+    GROUP BY month
+    ORDER BY month DESC
+    LIMIT 6
+  `);
+
+  // 7. Top Reported Users
+  const [reportChart] = await connection.execute(`
+    SELECT u.email, COUNT(*) AS reports
+    FROM reports r
+    JOIN users u ON r.reported_user_id = u.user_id
+    WHERE r.reported_user_id IS NOT NULL
+    GROUP BY r.reported_user_id
+    ORDER BY reports DESC
+    LIMIT 5
+  `);
+
+
+  console.log('SALES LABELS:', JSON.stringify(Array.isArray(salesChart) && salesChart.length ? salesChart.map(r => r.month).reverse() : []));
+  console.log('SALES VALUES:', JSON.stringify(Array.isArray(salesChart) && salesChart.length ? salesChart.map(r => Number(r.sales)).reverse() : []));
+  console.log('REPORT LABELS:', JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => r.email) : []));
+  console.log('REPORT VALUES:', JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => Number(r.reports)) : []));
+
+  res.render('admin/dashboard', {
+    layout: 'admin',
+    activePage: 'dashboard',
+    user: req.session.user,
+    stats: {
+      users: userStats[0] || { total_users: 0, suspended_users: 0 },
+      listings: listingStats[0] || { total_listings: 0, active_listings: 0, sold_listings: 0 },
+      qa: qaStats[0] || { total_questions: 0, answered_questions: 0 }
+    },
+    recentListings,
+    recentUsers,
+    salesLabels: JSON.stringify(Array.isArray(salesChart) && salesChart.length ? salesChart.map(r => r.month).reverse() : []),
+    salesValues: JSON.stringify(Array.isArray(salesChart) && salesChart.length ? salesChart.map(r => Number(r.sales)).reverse() : []),
+    reportLabels: JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => r.email) : []),
+    reportValues: JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => Number(r.reports)) : []),
   });
+
+  await connection.end();
 });
 
 // Admin User Management
