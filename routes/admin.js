@@ -64,7 +64,7 @@ router.get('/admin/dashboard', requireAdmin, async (req, res) => {
   const [salesChart] = await connection.execute(`
     SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(total_amount) AS sales
     FROM orders
-    WHERE status = 'paid'
+    WHERE status = 'Completed'
     GROUP BY month
     ORDER BY month DESC
     LIMIT 6
