@@ -4,6 +4,10 @@ body {
     overflow-x: hidden;
 }
 
+/* Ensure cart icon maintains consistent size */
+#cartNavLink .fas.fa-shopping-cart {
+    font-size: 1.1rem !important;
+}
 
 /* --- HERO SECTION: Match home page banner --- */
 .hero-section {
@@ -431,7 +435,8 @@ body {
     color: var(--dark-gray);
 }
 
-.category-option i {
+.category-grid .category-option i.fas,
+.category-grid .category-option i.fa {
     font-size: 2rem;
     margin-bottom: 10px;
     display: block;
@@ -592,4 +597,33 @@ body {
     .category-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+}
+
+/* Alert Styles */
+.alert {
+    border-radius: 10px;
+    border: none;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.alert-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+}
+
+.alert-warning {
+    background: linear-gradient(135deg, #ffc107, #e0a800);
+    color: #212529;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    color: white;
 }

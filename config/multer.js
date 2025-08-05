@@ -20,6 +20,9 @@ if (!fs.existsSync(profilePhotoDir)) {
   fs.mkdirSync(profilePhotoDir, { recursive: true });
 }
 
+// File counter for unique naming
+let fileCounter = 0;
+
 // Configure multer for image uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -39,7 +42,16 @@ const storage = multer.diskStorage({
     }
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    // Reset counter for new upload sessions
+    if (!req.fileCounter) {
+      req.fileCounter = 0;
+    }
+    req.fileCounter++;
+    
+    const timestamp = Date.now();
+    const randomNum = Math.round(Math.random() * 1E9);
+    const counter = req.fileCounter;
+    const uniqueSuffix = `${timestamp}-${randomNum}-${counter}`;
     const extension = path.extname(file.originalname);
     
     const isMessageRoute = req.url.includes('/api/conversations/') && req.url.includes('/messages');
