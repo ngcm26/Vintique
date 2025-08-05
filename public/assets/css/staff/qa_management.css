@@ -117,17 +117,6 @@
   background-color: rgba(13, 202, 240, 0.1) !important;
 }
 
-/* Navigation tabs styling */
-.nav-tabs .nav-link {
-  color: #495057;
-}
-
-.nav-tabs .nav-link.active {
-  color: #495057;
-  background-color: #fff;
-  border-color: #dee2e6 #dee2e6 #fff;
-}
-
 /* Page specific styling for Q&A Management */
 .qa-management-container {
   font-family: 'DM Sans', sans-serif;
@@ -250,6 +239,88 @@
   font-weight: 500;
 }
 
+/* Add styles for delete answer button */
+.delete-answer-btn {
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  border-radius: 3px;
+  min-width: auto;
+  height: auto;
+  line-height: 1;
+}
+
+.delete-answer-btn:hover {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: #fff;
+}
+
+.answer-header {
+  position: relative;
+}
+
+.answer-item {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.answer-item.removing {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+/* Dropdown Filter Styling */
+.dropdown-toggle {
+  min-width: 200px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  border: 1px solid #e1e5e9;
+  color: #495057;
+  font-weight: 500;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.dropdown-toggle:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.dropdown-menu {
+  border-radius: 8px;
+  border: 1px solid #e1e5e9;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  min-width: 200px;
+  padding: 8px 0;
+}
+
+.dropdown-item {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #495057;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dropdown-item:hover {
+  background-color: #f8f9fa;
+  color: #007bff;
+}
+
+.dropdown-item.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.dropdown-item.active:hover {
+  background-color: #0056b3;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   #qaSearch {
@@ -273,4 +344,8 @@
   .qa-management-container .btn-group-vertical .btn {
     margin-bottom: 4px;
   }
-} 
+
+  .dropdown-toggle {
+    width: 100%;
+  }
+}
