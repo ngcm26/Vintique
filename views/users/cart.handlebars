@@ -42,7 +42,7 @@
         <!-- Choose Other Address Button -->
         <div class="choose-other-address" id="chooseOtherAddressBtn" style="display: none;">
           <button class="btn-choose-other" onclick="openAddressModal()">
-            <i class="fas fa-map-marker-alt"></i> 
+            <i class="fas fa-map-marker-alt"></i>
             <span id="chooseAddressBtnText">Choose Other Address</span>
           </button>
         </div>
@@ -102,8 +102,8 @@
           <select id="voucherDropdown" class="voucher-select">
             <option value="">-- Select Voucher --</option>
             {{#each userVouchers}}
-            <option value="{{code}}" data-discount="{{discount_value}}" data-type="{{discount_type}}"
-              data-minspend="{{min_spend}}">
+            <option value="{{voucher_id}}" data-code="{{code}}" data-discount="{{discount_value}}"
+              data-type="{{discount_type}}" data-minspend="{{min_spend}}">
               {{code}}: {{capitalize discount_type}}
               {{#if (eq discount_type "percentage")}}({{discount_value}}%){{else}}(${{discount_value}}){{/if}}, Min:
               ${{min_spend}}
@@ -128,7 +128,7 @@
           <div class="summary-header">
             <h3><i class="fas fa-calculator"></i> Order Summary</h3>
           </div>
-          
+
           <div class="summary-content">
             <div class="summary-item">
               <span>Subtotal</span>
@@ -262,7 +262,7 @@
 
     // Always show "Choose Other Address" button, even with only 1 address
     chooseOtherAddressBtn.style.display = 'block';
-    
+
     // Update button text based on number of addresses
     const chooseAddressBtnText = document.getElementById('chooseAddressBtnText');
     if (userAddresses.length === 1) {
@@ -349,7 +349,7 @@
       `;
     }).join('');
     addressOptionsModal.innerHTML = addressesHTML;
-    
+
     // Always show add address section
     addAddressSection.style.display = 'block';
   }
@@ -482,8 +482,8 @@
   function applySelectedVoucher() {
     const select = document.getElementById('voucherDropdown');
     const selectedOption = select.options[select.selectedIndex];
-    const code = select.value;
-    if (!code) return;
+    const voucherId = select.value; // <-- This is now voucher_id
+    const code = selectedOption.getAttribute('data-code');
     const discountValue = parseFloat(selectedOption.getAttribute('data-discount'));
     const discountType = selectedOption.getAttribute('data-type');
     const minSpend = parseFloat(selectedOption.getAttribute('data-minspend'));
@@ -500,9 +500,9 @@
       document.getElementById('voucherError').style.display = 'none';
     }
 
-    appliedVoucher = { code, discountValue, discountType, minSpend };
+    appliedVoucher = { voucherId, code, discountValue, discountType, minSpend };
     updateCartSummary();
-    
+
     // Show success message
     const voucherError = document.getElementById('voucherError');
     voucherError.innerText = `Voucher "${code}" applied successfully!`;
@@ -510,13 +510,13 @@
     voucherError.style.color = '#28a745';
     voucherError.style.background = '#d4edda';
     voucherError.style.border = '1px solid #c3e6cb';
-    
+
     // Hide Apply button and show Remove button
     document.getElementById('applyVoucherBtn').style.display = 'none';
     document.getElementById('removeVoucherBtn').style.display = 'block';
-    
+
     console.log('Voucher applied successfully:', appliedVoucher);
-    
+
     // Hide success message after 3 seconds
     setTimeout(() => {
       voucherError.style.display = 'none';
@@ -532,7 +532,7 @@
     document.getElementById('voucherError').style.color = '#dc3545';
     document.getElementById('voucherError').style.background = '#f8d7da';
     document.getElementById('voucherError').style.border = '1px solid #f5c6cb';
-    
+
     // Show Apply button and hide Remove button
     document.getElementById('applyVoucherBtn').style.display = 'block';
     document.getElementById('removeVoucherBtn').style.display = 'none';
@@ -553,7 +553,7 @@
         discountAmount = appliedVoucher.discountValue;
       }
       if (discountAmount > subtotal) discountAmount = subtotal;
-      
+
       console.log('Voucher discount calculation:', {
         appliedVoucher,
         subtotal,
@@ -617,11 +617,17 @@
     checkoutBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
     try {
-      // Create order in database with address information
+      // Prepare payload
+      const payload = { shipping_address: selectedAddress };
+      if (appliedVoucher && appliedVoucher.voucherId) {
+        payload.voucher_id = appliedVoucher.voucherId; // must match backend
+      }
+
+      // Make the API call
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shipping_address: selectedAddress })
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
@@ -670,6 +676,7 @@
       checkoutBtn.disabled = false;
       checkoutBtn.innerHTML = originalText;
     }
+
   }
 
   // Init cart on page load, and show voucher section if needed
@@ -678,7 +685,7 @@
 
     // Update voucher dropdown message if no vouchers available
     const voucherDropdown = document.getElementById('voucherDropdown');
-    
+
     if (voucherDropdown && voucherDropdown.options.length <= 1) {
       const noVoucherOption = voucherDropdown.querySelector('option[value=""]');
       if (noVoucherOption) {

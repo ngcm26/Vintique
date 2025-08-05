@@ -84,10 +84,13 @@ router.get('/my-vouchers', requireAuth, async (req, res) => {
     connection = await createConnection();
     const [userVouchers] = await connection.execute(
       `SELECT v.*, uv.used, uv.claimed_at 
-         FROM user_vouchers uv
-         JOIN vouchers v ON uv.voucher_id = v.voucher_id
-        WHERE uv.user_id = ?
-        ORDER BY uv.claimed_at DESC`, [userId]);
+   FROM user_vouchers uv
+   JOIN vouchers v ON uv.voucher_id = v.voucher_id
+   WHERE uv.user_id = ? AND uv.used = 0
+   ORDER BY uv.claimed_at DESC`,
+      [userId]
+    );
+
     res.render('users/vouchers/my_vouchers', {
       layout: 'user',
       title: 'My Vouchers',
@@ -100,7 +103,7 @@ router.get('/my-vouchers', requireAuth, async (req, res) => {
     res.status(500).render('users/vouchers/my_vouchers', {
       layout: 'user',
       title: 'My Vouchers',
-      activePage: 'myVouchers', 
+      activePage: 'myVouchers',
       vouchers: [],
       error: 'Failed to load your vouchers.'
     });

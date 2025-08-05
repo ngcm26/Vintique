@@ -2982,6 +2982,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
     const shipping_address_country = shippingAddress.country;
     const shipping_address_postal_code = shippingAddress.postal_code;
     const shipping_address_phone = shippingAddress.phone;
+    const voucherId = req.body.voucher_id;
 
     // Debug: Log extracted values
     console.log('Extracted shipping fields:');
@@ -3097,8 +3098,18 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
         DELETE FROM cart WHERE user_id = ?
       `, [userId]);
 
+                    // Mark voucher as used if provided
+      if (voucherId) {
+        await connection.execute(
+          'UPDATE user_vouchers SET used = 1 WHERE user_id = ? AND voucher_id = ?',
+          [userId, voucherId]
+        );
+      }
+      
       // Commit transaction
       await connection.commit();
+
+
 
       // Send email notifications (non-blocking)
       const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../utils/helpers');
@@ -3329,6 +3340,7 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
 
       // Commit transaction
       await connection.commit();
+
 
       // Send email notifications (non-blocking)
       const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../utils/helpers');
