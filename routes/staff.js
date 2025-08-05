@@ -491,26 +491,17 @@ router.delete('/api/qa/:qaId', requireStaff, (req, res) => {
 
 // Staff Feedback Management
 router.get('/staff/feedback_management', requireStaff, (req, res) => {
-  const feedbackQuery = `
-    SELECT 
-      feedbackID,
-      fullName,
-      email,
-      subject,
-      message,
-      replied,
-      createdAt as CreatedAt
-    FROM feedback
+  callbackConnection.query(`
+    SELECT feedbackID, fullName, email, subject, message, createdAt, replied, archived
+    FROM feedback 
     ORDER BY createdAt DESC
-  `;
-
-  callbackConnection.query(feedbackQuery, (err, feedbackList) => {
-    if (err) {
-      console.error('Feedback management error:', err);
+  `, (error, feedbacks) => {
+    if (error) {
+      console.error('Error fetching feedback:', error);
       return res.render('staff/feedback_management', {
         layout: 'staff',
         activePage: 'feedback_management',
-        error: 'Failed to load feedback',
+        error: 'Failed to load feedback.',
         feedbackList: []
       });
     }
@@ -537,7 +528,7 @@ router.get('/staff/feedback_management', requireStaff, (req, res) => {
     res.render('staff/feedback_management', {
       layout: 'staff',
       activePage: 'feedback_management',
-      feedbackList: feedbackList || []
+      feedbackList: formattedFeedback
     });
   });
 });
@@ -547,7 +538,7 @@ router.delete('/feedback/:id', requireStaff, (req, res) => {
   const feedbackId = req.params.id;
 
   callbackConnection.query(
-    'DELETE FROM feedback WHERE id = ?',
+    'DELETE FROM feedback WHERE feedbackID = ?',
     [feedbackId],
     (err, result) => {
       if (err) {
@@ -636,7 +627,6 @@ router.post('/feedback/reply', requireStaff, (req, res) => {
         console.error('Error updating replied column:', updateErr);
         return res.status(500).json({ error: 'Failed to update feedback replied status.' });
       }
-
       res.status(200).json({
         success: true,
         replyID: result.insertId,
