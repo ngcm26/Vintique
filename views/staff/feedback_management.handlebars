@@ -21,6 +21,7 @@
             <option value="all" selected>All Feedback</option>
             <option value="replied">Replied</option>
             <option value="not_replied">Not Replied</option>
+            <option value="archived">Archived</option>
           </select>
         </div>
       </div>
@@ -43,7 +44,7 @@
 
       <!-- Feedback Messages -->
       {{#each feedbackList}}
-      <div class="feedback-card">
+      <div class="feedback-card" data-archived="{{archived}}">
         <div class="feedback-header">
           <div class="sender-info">
             <div class="sender-details">
@@ -68,9 +69,25 @@
           {{/if}}
           <button class="btn-action btn-update" data-id="{{id}}">🛠️ Update</button>
           <button class="btn-action btn-delete" data-id="{{id}}">🗑 Delete</button>
+          <button class="btn-action btn-archive" data-id="{{id}}" data-replied="{{#if replied}}1{{else}}0{{/if}}"
+            data-archived="{{archived}}">
+            {{#if archived}}📤 Unarchive{{else}}📦 Archive{{/if}}
+          </button>
         </div>
       </div>
       {{/each}}
+      <nav id="paginationControls" class="mt-4">
+        <ul class="pagination justify-content-center">
+          <li class="page-item">
+            <button class="page-link" id="prevPage">Previous</button>
+          </li>
+          <!-- Page numbers will be dynamically inserted here -->
+          <li class="page-item disabled"><span class="page-link">...</span></li>
+          <li class="page-item">
+            <button class="page-link" id="nextPage">Next</button>
+          </li>
+        </ul>
+      </nav>
       <!-- If No Feedback -->
       {{#unless feedbackList.length}}
       <div class="empty-state">
@@ -349,19 +366,41 @@ function filterFeedbacks() {
   const filter = document.getElementById('feedbackFilter').value;
   const feedbackCards = document.querySelectorAll('.feedback-card');
 
-  feedbackCards.forEach(card => {
-    const repliedLabel = card.querySelector('.replied-label');
-    const isReplied = repliedLabel !== null;
+  let total = 0;
+  let repliedCount = 0;
 
-    if (filter === 'all') {
-      card.style.display = '';
-    } else if (filter === 'replied') {
-      card.style.display = isReplied ? '' : 'none';
+  feedbackCards.forEach(card => {
+    const isReplied = card.querySelector('.replied-label') !== null;
+    const isArchived = card.getAttribute('data-archived') === '1';
+
+    let shouldShow = true;
+
+    if (filter === 'replied') {
+      shouldShow = isReplied && !isArchived;
     } else if (filter === 'not_replied') {
-      card.style.display = !isReplied ? '' : 'none';
+      shouldShow = !isReplied && !isArchived;
+    } else if (filter === 'archived') {
+      shouldShow = isArchived;
+    } else {
+      shouldShow = !isArchived;
+    }
+
+    card.style.display = shouldShow ? '' : 'none';
+
+    if (shouldShow) {
+      total++;
+      if (isReplied) repliedCount++;
     }
   });
+
+  const unrepliedCount = total - repliedCount;
+
+  // Update the dashboard counters
+  document.getElementById('totalFeedback').textContent = total;
+  document.getElementById('repliedFeedback').textContent = repliedCount;
+  document.getElementById('unrepliedFeedback').textContent = unrepliedCount;
 }
+
 
 window.addEventListener('DOMContentLoaded', () => {
   setupUpdateButtons();
@@ -395,6 +434,119 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('repliedFeedback').textContent = repliedCount;
     document.getElementById('unrepliedFeedback').textContent = unrepliedCount;
   });
+
+const FEEDBACKS_PER_PAGE = 10;
+let currentPage = 1;
+let feedbackCards = [];
+
+function renderPaginationControls(totalPages) {
+  const pagination = document.querySelector('#paginationControls .pagination');
+  pagination.innerHTML = `
+    <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+      <button class="page-link" id="prevPage">Previous</button>
+    </li>
+  `;
+
+  for (let i = 1; i <= totalPages; i++) {
+    pagination.innerHTML += `
+      <li class="page-item ${i === currentPage ? 'active' : ''}">
+        <button class="page-link page-number" data-page="${i}">${i}</button>
+      </li>
+    `;
+  }
+
+  pagination.innerHTML += `
+    <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+      <button class="page-link" id="nextPage">Next</button>
+    </li>
+  `;
+
+  // Add event listeners
+  document.querySelectorAll('.page-number').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentPage = parseInt(btn.dataset.page);
+      renderPage();
+    });
+  });
+
+  document.getElementById('prevPage').addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      renderPage();
+    }
+  });
+
+  document.getElementById('nextPage').addEventListener('click', () => {
+    const totalPages = Math.ceil(feedbackCards.length / FEEDBACKS_PER_PAGE);
+    if (currentPage < totalPages) {
+      currentPage++;
+      renderPage();
+    }
+  });
+}
+
+function renderPage() {
+  const start = (currentPage - 1) * FEEDBACKS_PER_PAGE;
+  const end = start + FEEDBACKS_PER_PAGE;
+
+  feedbackCards.forEach((card, index) => {
+    card.style.display = (index >= start && index < end) ? '' : 'none';
+  });
+
+  renderPaginationControls(Math.ceil(feedbackCards.length / FEEDBACKS_PER_PAGE));
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  feedbackCards = Array.from(document.querySelectorAll('.feedback-card'))
+    .filter(card => card.style.display !== 'none'); // Initial filter match
+
+  renderPage(); // Render first page
+});
+
+document.querySelectorAll('.btn-archive').forEach(button => {
+  button.addEventListener('click', () => {
+    const feedbackId = button.getAttribute('data-id');
+    const replied = button.getAttribute('data-replied') === '1';
+    const isArchived = button.getAttribute('data-archived') === '1';
+
+    let confirmMessage;
+    let newArchivedStatus;
+
+    if (isArchived) {
+      // Unarchive — simple confirm, no special message
+      confirmMessage = 'Are you sure you want to unarchive this feedback? It will be visible in the main list again.';
+      newArchivedStatus = 0;
+    } else {
+      // Archive — special warning only if NOT replied
+      if (!replied) {
+        confirmMessage = 'This feedback has not been replied to yet. Are you sure you want to archive it?';
+      } else {
+        confirmMessage = 'Are you sure you want to archive this feedback? It will be hidden from the main list.';
+      }
+      newArchivedStatus = 1;
+    }
+
+    if (confirm(confirmMessage)) {
+      fetch(`/feedback/archive/${feedbackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: newArchivedStatus })
+      })
+      .then(res => {
+        if (res.ok) {
+          alert(isArchived ? 'Feedback unarchived successfully.' : 'Feedback archived successfully.');
+          location.reload();
+        } else {
+          alert('Failed to update archive status.');
+        }
+      })
+      .catch(() => alert('Server error while updating archive status.'));
+    }
+  });
+});
+
+
+
 </script>
 
 </html>

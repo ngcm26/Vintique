@@ -4,6 +4,9 @@ const router = express.Router();
 const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 const mysql = require('mysql2/promise');
+const app = express();
+app.use(express.json()); // ← Add this to parse JSON requests
+app.use(express.urlencoded({ extended: true }));
 
 
 router.get('/staff/dashboard', requireStaff, async (req, res) => {
@@ -489,7 +492,7 @@ router.delete('/api/qa/:qaId', requireStaff, (req, res) => {
 // Staff Feedback Management
 router.get('/staff/feedback_management', requireStaff, (req, res) => {
   callbackConnection.query(`
-    SELECT feedbackID, fullName, email, subject, message, createdAt, replied
+    SELECT feedbackID, fullName, email, subject, message, createdAt, replied, archived
     FROM feedback 
     ORDER BY createdAt DESC
   `, (error, feedbacks) => {
@@ -515,10 +518,12 @@ router.get('/staff/feedback_management', requireStaff, (req, res) => {
         email: item.email,
         subject: item.subject,
         message: item.message,
-        replied: item.replied,
+        replied: Boolean(item.replied),
+        archived: item.archived,
         CreatedAt: daysAgo === 0 ? 'Today' : `${daysAgo} day(s) ago`
       };
     });
+
 
     res.render('staff/feedback_management', {
       layout: 'staff',
@@ -527,6 +532,7 @@ router.get('/staff/feedback_management', requireStaff, (req, res) => {
     });
   });
 });
+
 
 router.delete('/feedback/:id', requireStaff, (req, res) => {
   const feedbackId = req.params.id;
@@ -630,6 +636,32 @@ router.post('/feedback/reply', requireStaff, (req, res) => {
     });
   });
 });
+
+
+router.patch('/feedback/archive/:id', requireStaff, (req, res) => {
+  const feedbackId = req.params.id;
+  const { archived } = req.body;
+
+  if (typeof archived !== 'number' && typeof archived !== 'string') {
+    return res.status(400).json({ error: 'Invalid archived value' });
+  }
+
+  callbackConnection.query(
+    'UPDATE feedback SET archived = ? WHERE feedbackID = ?',
+    [archived, feedbackId],
+    (err, result) => {
+      if (err) {
+        console.error('Error archiving feedback:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Feedback not found' });
+      }
+      res.json({ success: true });
+    }
+  );
+});
+
 
 // Staff Manage Vouchers
 router.get('/staff/vouchers/list', requireStaff, async (req, res) => {
