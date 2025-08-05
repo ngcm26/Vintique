@@ -6,7 +6,7 @@ const { upload } = require('../config/multer');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 const mysql = require('mysql2/promise');
 const fs = require('fs');
-const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../utils/helpers');
+const { sendOrderConfirmationEmail, sendOrderNotificationEmail, sendFeedbackConfirmationEmail } = require('../utils/helpers');
 const path = require('path');
 const app = express();
 app.use(express.json()); // ← Add this to parse JSON requests
@@ -2221,7 +2221,7 @@ router.post('/feedback', (req, res) => {
   callbackConnection.query(
     'INSERT INTO feedback (fullName, email, subject, message) VALUES (?, ?, ?, ?)',
     [fullName, email, subject, message],
-    (err, result) => {
+    async (err, result) => {
       if (err) {
         console.error(err);
         return res.render('users/feedback', {
@@ -2232,6 +2232,10 @@ router.post('/feedback', (req, res) => {
         });
       }
 
+      // Send confirmation email asynchronously (don't await blocking response)
+      sendFeedbackConfirmationEmail(email, fullName, message)
+        .catch(e => console.error('Email send failed:', e));
+
       res.render('users/feedback', {
         title: 'Feedback - Vintique',
         layout: 'user',
@@ -2241,6 +2245,7 @@ router.post('/feedback', (req, res) => {
     }
   );
 });
+
 
 // ========== CART API ROUTES ==========
 
@@ -3830,3 +3835,25 @@ router.get('/test-email', async (req, res) => {
     });
   }
 });
+
+require('dotenv').config();
+const nodemailer = require('nodemailer');
+
+async function testMailer() {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+
+  try {
+    await transporter.verify();
+    console.log('SMTP connection successful!');
+  } catch (error) {
+    console.error('SMTP connection failed:', error);
+  }
+}
+
+testMailer();
