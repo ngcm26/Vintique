@@ -138,6 +138,9 @@ app.use((req, res, next) => {
 // Serve uploads statically
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
+// Serve placeholder images
+app.use('/placeholder', express.static(path.join(__dirname, 'placeholder')));
+
 // ========== AUTHENTICATION MIDDLEWARE ==========
 // Authentication middleware is imported from middlewares/authMiddleware.js
 

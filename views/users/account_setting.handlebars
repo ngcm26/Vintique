@@ -46,6 +46,10 @@
               </div>
             </div>
             <div class="form-group">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-control" name="username" id="userUsername" readonly>
+            </div>
+            <div class="form-group">
               <label class="form-label">Email Address</label>
               <input type="email" class="form-control" name="email" id="userEmail" readonly>
             </div>
@@ -185,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function () {
       
       setVal('firstName', data.first_name);
       setVal('lastName', data.last_name);
+      setVal('userUsername', data.username);
       setVal('userEmail', data.email);
       setVal('userPhone', data.phone_number);
 
@@ -329,6 +334,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const cancelPersonalInfoBtn = document.getElementById('cancelPersonalInfoBtn');
   const firstNameInput = document.getElementById('firstName');
   const lastNameInput = document.getElementById('lastName');
+  const userUsernameInput = document.getElementById('userUsername');
   const userEmailInput = document.getElementById('userEmail');
   const userPhoneInput = document.getElementById('userPhone');
 
@@ -339,6 +345,7 @@ document.addEventListener('DOMContentLoaded', function () {
     isEditingPersonalInfo = !isEditingPersonalInfo;
     firstNameInput.readOnly = !isEditingPersonalInfo;
     lastNameInput.readOnly = !isEditingPersonalInfo;
+    userUsernameInput.readOnly = !isEditingPersonalInfo;
     userEmailInput.readOnly = !isEditingPersonalInfo;
     userPhoneInput.readOnly = !isEditingPersonalInfo;
 
@@ -347,6 +354,7 @@ document.addEventListener('DOMContentLoaded', function () {
       originalPersonalInfo = {
         firstName: firstNameInput.value,
         lastName: lastNameInput.value,
+        username: userUsernameInput.value,
         email: userEmailInput.value,
         phone: userPhoneInput.value
       };
@@ -357,6 +365,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // Reset to original values when canceling
       firstNameInput.value = originalPersonalInfo.firstName || '';
       lastNameInput.value = originalPersonalInfo.lastName || '';
+      userUsernameInput.value = originalPersonalInfo.username || '';
       userEmailInput.value = originalPersonalInfo.email || '';
       userPhoneInput.value = originalPersonalInfo.phone || '';
       editPersonalInfoBtn.style.display = '';
@@ -375,6 +384,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const currentValues = {
       firstName: firstNameInput.value.trim(),
       lastName: lastNameInput.value.trim(),
+      username: userUsernameInput.value.trim(),
       email: userEmailInput.value.trim(),
       phone: userPhoneInput.value.trim()
     };
@@ -382,6 +392,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const hasChanges = 
       currentValues.firstName !== (originalPersonalInfo.firstName || '') ||
       currentValues.lastName !== (originalPersonalInfo.lastName || '') ||
+      currentValues.username !== (originalPersonalInfo.username || '') ||
       currentValues.email !== (originalPersonalInfo.email || '') ||
       currentValues.phone !== (originalPersonalInfo.phone || '');
 
@@ -398,6 +409,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Only add non-empty values to prevent NULL errors
     if (currentValues.firstName) formData.append('first_name', currentValues.firstName);
     if (currentValues.lastName) formData.append('last_name', currentValues.lastName);
+    if (currentValues.username) formData.append('username', currentValues.username);
     if (currentValues.email) formData.append('email', currentValues.email);
     if (currentValues.phone) formData.append('phone_number', currentValues.phone);
     
@@ -611,11 +623,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // Add personal info
     const firstName = document.getElementById('firstName').value.trim();
     const lastName = document.getElementById('lastName').value.trim();
+    const userUsername = document.getElementById('userUsername').value.trim();
     const userEmail = document.getElementById('userEmail').value.trim();
     const userPhone = document.getElementById('userPhone').value.trim();
     
     if (firstName) data.append('first_name', firstName);
     if (lastName) data.append('last_name', lastName);
+    if (userUsername) data.append('username', userUsername);
     if (userEmail) data.append('email', userEmail);
     if (userPhone) data.append('phone_number', userPhone);
     

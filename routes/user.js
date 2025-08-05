@@ -107,6 +107,14 @@ router.get('/home', (req, res) => {
   res.render('users/home', { layout: 'user', activePage: 'home' });
 });
 
+// About route
+router.get('/about', (req, res) => {
+  res.render('users/about', {
+    layout: 'user',
+    activePage: 'about'
+  });
+});
+
 // Marketplace route - FIXED VERSION
 /* 
 changed marketplace sql query from:
@@ -1039,7 +1047,7 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
     }
 
     let {
-      first_name, last_name, email, phone_number,
+      first_name, last_name, username, email, phone_number,
       address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
       address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
       address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
@@ -1047,9 +1055,9 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
     } = req.body;
 
     // If this is just a profile image upload (no other fields), get current user data
-    if (!first_name && !last_name && !email && !phone_number && req.file) {
+    if (!first_name && !last_name && !username && !email && !phone_number && req.file) {
       const [currentUser] = await connection.execute(
-        'SELECT first_name, last_name, email, phone_number, profile_image_url FROM user_information WHERE user_id = ?',
+        'SELECT first_name, last_name, username, email, phone_number, profile_image_url FROM user_information WHERE user_id = ?',
         [userId]
       );
 
@@ -1057,6 +1065,7 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
         const user = currentUser[0];
         first_name = user.first_name;
         last_name = user.last_name;
+        username = user.username;
         email = user.email;
         phone_number = user.phone_number;
         // Keep existing address fields as null since we're not updating them
@@ -1080,6 +1089,7 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
     // Also handle undefined values for main fields
     if (first_name === undefined || first_name === 'undefined') first_name = null;
     if (last_name === undefined || last_name === 'undefined') last_name = null;
+    if (username === undefined || username === 'undefined') username = null;
     if (email === undefined || email === 'undefined') email = null;
     if (phone_number === undefined || phone_number === 'undefined') phone_number = null;
 
@@ -1103,7 +1113,7 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
       req.body.address_name_3 || req.body.address_street_3 || req.body.address_city_3 ||
       default_address_index;
 
-    const hasPersonalData = first_name || last_name || email || phone_number;
+    const hasPersonalData = first_name || last_name || username || email || phone_number;
 
     // If this is just a profile image upload (no other fields), use a simpler query
     let sql, params;
@@ -1114,7 +1124,7 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
       params = [profile_image_url, userId];
     } else {
       // Full update with all fields - ensure all parameters are properly handled
-      sql = `UPDATE user_information SET first_name=?, last_name=?, email=?, phone_number=?, profile_image_url=?,
+      sql = `UPDATE user_information SET first_name=?, last_name=?, username=?, email=?, phone_number=?, profile_image_url=?,
         address_name=?, address_street=?, address_city=?, address_state=?, address_country=?, address_postal_code=?, address_phone=?,
         address_name_2=?, address_street_2=?, address_city_2=?, address_state_2=?, address_country_2=?, address_postal_code_2=?, address_phone_2=?,
         address_name_3=?, address_street_3=?, address_city_3=?, address_state_3=?, address_country_3=?, address_postal_code_3=?, address_phone_3=?,
@@ -1125,6 +1135,7 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
       params = [
         first_name || null,
         last_name || null,
+        username || null,
         email || null,
         phone_number || null,
         profile_image_url || null,
@@ -1159,6 +1170,7 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
       userId,
       first_name,
       last_name,
+      username,
       email,
       phone_number,
       profile_image_url,
