@@ -1,8 +1,5 @@
 {{!-- Use the user layout and reference the separated CSS --}}
 {{!< user}}
-<link rel="stylesheet" href="/assets/css/users/post_product.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <!-- Hero Section -->
 <section class="hero-section">
@@ -400,14 +397,30 @@ function handleFiles(files) {
 
     for (let i = 0; i < filesToProcess; i++) {
         const file = files[i];
+        
+        // Check if file is already uploaded (prevent duplicates)
+        const isDuplicate = uploadedImages.some(existingFile => 
+            existingFile.name === file.name && 
+            existingFile.size === file.size && 
+            existingFile.lastModified === file.lastModified
+        );
+        
+        if (isDuplicate) {
+            showFormAlert('warning', `File "${file.name}" is already uploaded.`);
+            continue;
+        }
+        
         if (file.type.startsWith('image/')) {
             // Validate file size (max 5MB per image)
             if (file.size > 5 * 1024 * 1024) {
                 showFormAlert('danger', `File "${file.name}" is too large. Maximum size is 5MB.`);
                 continue;
             }
+            
+            // Add file to array and create preview
+            const currentIndex = uploadedImages.length;
             uploadedImages.push(file);
-            createImagePreview(file, uploadedImages.length - 1);
+            createImagePreview(file, currentIndex);
         } else {
             showFormAlert('danger', `File "${file.name}" is not a valid image.`);
         }
@@ -489,9 +502,16 @@ function showFormAlert(type, message) {
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
     alertDiv.setAttribute('role', 'alert');
+    
+    // Set appropriate icon based on alert type
+    let iconClass = 'fa-exclamation-triangle';
+    if (type === 'success') iconClass = 'fa-check-circle';
+    else if (type === 'warning') iconClass = 'fa-exclamation-triangle';
+    else if (type === 'danger') iconClass = 'fa-exclamation-triangle';
+    
     alertDiv.innerHTML = `
         <div class="d-flex align-items-center">
-            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+            <i class="fas ${iconClass} me-2"></i>
             <span>${message}</span>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -499,8 +519,8 @@ function showFormAlert(type, message) {
     
     container.appendChild(alertDiv);
     
-    // Auto-dismiss success alerts after 5 seconds
-    if (type === 'success') {
+    // Auto-dismiss success and warning alerts after 5 seconds
+    if (type === 'success' || type === 'warning') {
         setTimeout(() => {
             if (alertDiv.parentNode) {
                 alertDiv.classList.remove('show');
@@ -577,9 +597,119 @@ if (productForm) {
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Posting Product...';
         submitBtn.disabled = true;
 
-        // If everything is valid, submit the form
-        productForm.submit();
+        // Create a new FormData object with the uploaded files
+        const formData = new FormData(productForm);
+        
+        // Clear the existing files from the form data
+        formData.delete('images');
+        
+        // Add all uploaded images to the form data
+        uploadedImages.forEach((file, index) => {
+            formData.append('images', file);
+        });
+        
+        // Submit the form data using fetch
+        fetch('/post_product', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) {
+                // Success - show success message and reset form
+                showFormAlert('success', '🎉 Product posted successfully! Your listing is now live on Vintique.');
+                
+                // Reset form after short delay
+                setTimeout(() => {
+                    resetFormToInitialState();
+                }, 1500);
+                
+                // Reset submit button
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                
+            } else if (response.redirected) {
+                window.location.href = response.url;
+            } else {
+                throw new Error('Network response was not ok');
+            }
+        })
+        .catch(error => {
+            console.error('Error submitting form:', error);
+            showFormAlert('danger', 'An error occurred while posting your product. Please try again.');
+            
+            // Reset submit button
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
     });
+}
+
+// Add this function to properly reset all visual states
+function resetFormToInitialState() {
+    // Reset form fields
+    const form = document.getElementById('productForm');
+    if (form) {
+        form.reset();
+    }
+    
+    // Reset global variables
+    selectedCategory = '';
+    selectedCondition = '';
+    uploadedImages = [];
+    
+    // Clear hidden inputs
+    const categoryInput = document.getElementById('selectedCategory');
+    const conditionInput = document.getElementById('selectedCondition');
+    if (categoryInput) categoryInput.value = '';
+    if (conditionInput) conditionInput.value = '';
+    
+    // Remove all selected states from category options
+    document.querySelectorAll('.category-option').forEach(opt => {
+        opt.classList.remove('selected', 'error');
+        // Reset any enlarged icons by removing any scale transforms
+        const icon = opt.querySelector('i');
+        if (icon) {
+            icon.style.transform = '';
+            icon.style.fontSize = '';
+        }
+    });
+    
+    // Remove all selected states from condition options
+    document.querySelectorAll('.condition-option').forEach(opt => {
+        opt.classList.remove('selected', 'error');
+    });
+    
+    // Clear image previews
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    if (imagePreviewContainer) {
+        imagePreviewContainer.innerHTML = '';
+    }
+    
+    // Reset image upload area
+    const imageUploadArea = document.getElementById('imageUploadArea');
+    if (imageUploadArea) {
+        imageUploadArea.classList.remove('error', 'dragover');
+    }
+    
+    // Clear all validation errors
+    document.querySelectorAll('.field-error').forEach(error => {
+        error.classList.remove('show');
+        error.textContent = '';
+    });
+    
+    // Remove error states from form controls
+    document.querySelectorAll('.form-control, .form-select').forEach(field => {
+        field.classList.remove('error');
+    });
+    
+    // Reset preview to initial state
+    updatePreview();
+    
+    // Scroll to top of form
+    const heroSection = document.querySelector('.hero-section');
+    if (heroSection) {
+        heroSection.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
 // --- SUCCESS ALERT HANDLING ---
@@ -590,46 +720,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show enhanced success message
         showFormAlert('success', '🎉 Product posted successfully! Your listing is now live on Vintique. You can view it in your My Listings page.');
         
-        // Clear form after successful submission
+        // Clear form after successful submission with a slight delay
         setTimeout(() => {
-            // Reset form fields
-            productForm.reset();
-            selectedCategory = '';
-            selectedCondition = '';
-            uploadedImages = [];
-            
-            // Clear preview
-            updatePreview();
-            
-            // Clear any selected states
-            document.querySelectorAll('.category-option, .condition-option').forEach(opt => {
-                opt.classList.remove('selected');
-            });
-            
-            // Clear image preview
-            if (imagePreviewContainer) {
-                imagePreviewContainer.innerHTML = '';
-            }
-            
-            // Clear validation errors
-            document.querySelectorAll('.field-error').forEach(error => {
-                error.classList.remove('show');
-                error.textContent = '';
-            });
-            
-            document.querySelectorAll('.form-control').forEach(field => {
-                field.classList.remove('error');
-            });
-            
-            document.querySelectorAll('.category-option, .condition-option').forEach(opt => {
-                opt.classList.remove('error');
-            });
-            
-            if (imageUploadArea) {
-                imageUploadArea.classList.remove('error');
-            }
-            
-        }, 2000);
+            resetFormToInitialState();
+        }, 1500); // Reduced delay for better UX
     }
 });
 

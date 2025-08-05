@@ -77,23 +77,20 @@
                     <input type="number" class="form-control" name="price" id="productPrice" value="{{listing.price}}" required min="0" step="0.01">
                     <div class="field-error" id="priceError"></div>
                 </div>
+                <!-- Images Section -->
                 <div class="form-section">
                     <h3 class="section-title">
-                        <i class="fas fa-images"></i>
-                        Images
+                        <i class="fas fa-camera"></i>
+                        Product Images *
                     </h3>
-                    <input type="file" class="form-control" name="images" id="imageInput" multiple accept="image/*">
-                    <div class="field-error" id="imageError"></div>
-                    <div class="mt-2" id="currentImages">
-                        {{#if listing.images}}
-                            {{#each listing.images}}
-                                <div class="position-relative d-inline-block mb-2 me-2 preview-img-wrapper">
-                                    <img src="{{this}}" alt="Listing Image" class="preview-img" style="width: 80px; height: 80px; object-fit: cover; border-radius: 10px;">
-                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 delete-img-btn" data-img-url="{{this}}" style="border-radius: 50%; padding: 0.2rem 0.5rem;">&times;</button>
-                                </div>
-                            {{/each}}
-                        {{/if}}
+                    <div class="image-upload-area" id="imageUploadArea">
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <div class="upload-text">Drag & drop images here or click to browse</div>
+                        <div class="upload-subtext">Upload up to 5 images. First image will be the main photo.</div>
+                        <input type="file" id="imageInput" name="images" multiple accept="image/*" style="display: none;">
                     </div>
+                    <div class="image-preview-container" id="imagePreviewContainer"></div>
+                    <div class="field-error" id="imageError">Please upload at least one image</div>
                 </div>
                 <button type="submit" class="btn btn-primary mt-3">Save Changes</button>
                 <a href="/my_listing" class="btn btn-secondary mt-3 ms-2">Cancel</a>
@@ -125,6 +122,7 @@
         </div>
     </div>
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 <script>
 // Live preview logic
 const titleInput = document.getElementById('productTitle');
@@ -175,6 +173,206 @@ currentImagesDiv && currentImagesDiv.addEventListener('click', function(e) {
   }
 });
 
+// --- Image Upload/Preview Logic (copied and adapted from post_product.handlebars) ---
+let uploadedImages = [];
+let existingImages = [
+    {{#each listing.images}}
+        "{{this}}",
+    {{/each}}
+];
+
+// Populate preview with existing images
+const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+function renderImagePreviews() {
+    imagePreviewContainer.innerHTML = '';
+    // Show existing images first
+    existingImages.forEach((imgUrl, idx) => {
+        const previewDiv = document.createElement('div');
+        previewDiv.className = 'image-preview';
+        previewDiv.innerHTML = `
+            <img src="${imgUrl}" alt="Preview">
+            <button type="button" class="remove-image" onclick="removeExistingImage(${idx})">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        imagePreviewContainer.appendChild(previewDiv);
+    });
+    // Then show newly uploaded images
+    uploadedImages.forEach((file, idx) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const previewDiv = document.createElement('div');
+            previewDiv.className = 'image-preview';
+            previewDiv.innerHTML = `
+                <img src="${e.target.result}" alt="Preview">
+                <button type="button" class="remove-image" onclick="removeUploadedImage(${idx})">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            imagePreviewContainer.appendChild(previewDiv);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+window.removeExistingImage = function(idx) {
+    existingImages.splice(idx, 1);
+    renderImagePreviews();
+    updatePreview();
+}
+window.removeUploadedImage = function(idx) {
+    uploadedImages.splice(idx, 1);
+    renderImagePreviews();
+    updatePreview();
+}
+const imageUploadArea = document.getElementById('imageUploadArea');
+const imageInput = document.getElementById('imageInput');
+if (imageUploadArea && imageInput && imagePreviewContainer) {
+    imageUploadArea.addEventListener('click', () => imageInput.click());
+    imageUploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        imageUploadArea.classList.add('dragover');
+    });
+    imageUploadArea.addEventListener('dragleave', () => {
+        imageUploadArea.classList.remove('dragover');
+    });
+    imageUploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        imageUploadArea.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+    imageInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+    });
+}
+function handleFiles(files) {
+    const maxFiles = 5;
+    const totalImages = existingImages.length + uploadedImages.length;
+    const remainingSlots = maxFiles - totalImages;
+    const filesToProcess = Math.min(files.length, remainingSlots);
+    for (let i = 0; i < filesToProcess; i++) {
+        const file = files[i];
+        // Check if file is already uploaded (prevent duplicates)
+        const isDuplicate = uploadedImages.some(existingFile =>
+            existingFile.name === file.name &&
+            existingFile.size === file.size &&
+            existingFile.lastModified === file.lastModified
+        );
+        if (isDuplicate) {
+            showFormAlert('warning', `File "${file.name}" is already uploaded.`);
+            continue;
+        }
+        if (file.type.startsWith('image/')) {
+            // Validate file size (max 5MB per image)
+            if (file.size > 5 * 1024 * 1024) {
+                showFormAlert('danger', `File "${file.name}" is too large. Maximum size is 5MB.`);
+                continue;
+            }
+            uploadedImages.push(file);
+        } else {
+            showFormAlert('danger', `File "${file.name}" is not a valid image.`);
+        }
+    }
+    renderImagePreviews();
+    validateImages();
+    updatePreview();
+}
+// --- Preview logic ---
+function updatePreview() {
+    const previewImage = document.getElementById('previewImage');
+    if (existingImages.length > 0 && previewImage) {
+        previewImage.innerHTML = `<img src="${existingImages[0]}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
+    } else if (uploadedImages.length > 0 && previewImage) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImage.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">`;
+        };
+        reader.readAsDataURL(uploadedImages[0]);
+    } else if (previewImage) {
+        previewImage.innerHTML = '<i class="fas fa-image"></i>';
+    }
+}
+// --- Form submission ---
+const editProductForm = document.getElementById('editProductForm');
+if (editProductForm) {
+    editProductForm.addEventListener('submit', function (e) {
+        // Validate images
+        if (existingImages.length + uploadedImages.length === 0) {
+            showFormAlert('danger', 'Please upload at least one image.');
+            e.preventDefault();
+            return;
+        }
+        // Create a new FormData object
+        const formData = new FormData(editProductForm);
+        // Remove any images from the formData (if present)
+        formData.delete('images');
+        
+        // Create the final image order: existing images first, then new images
+        const finalImageOrder = [...existingImages];
+        
+        // Add all uploaded images to the form data
+        uploadedImages.forEach((file) => {
+            formData.append('images', file);
+        });
+        
+        // Add a field for the final image order (existing images that should be kept)
+        formData.set('existing_images', JSON.stringify(finalImageOrder));
+        // Submit via fetch
+        fetch(editProductForm.action, {
+            method: 'POST',
+            body: formData
+        }).then(response => {
+            if (response.redirected) {
+                window.location.href = response.url;
+            } else {
+                return response.text();
+            }
+        }).then(html => {
+            if (html) {
+                document.documentElement.innerHTML = html;
+            }
+        }).catch(error => {
+            showFormAlert('danger', 'An error occurred while saving your changes. Please try again.');
+        });
+        e.preventDefault();
+    });
+}
+// --- Alert logic (copied from post_product) ---
+function showFormAlert(type, message) {
+    let container = document.getElementById('formAlertContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'formAlertContainer';
+        document.body.prepend(container);
+    }
+    container.innerHTML = '';
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.setAttribute('role', 'alert');
+    let iconClass = 'fa-exclamation-triangle';
+    if (type === 'success') iconClass = 'fa-check-circle';
+    else if (type === 'warning') iconClass = 'fa-exclamation-triangle';
+    else if (type === 'danger') iconClass = 'fa-exclamation-triangle';
+    alertDiv.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas ${iconClass} me-2"></i>
+            <span>${message}</span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    container.appendChild(alertDiv);
+    if (type === 'success' || type === 'warning') {
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.classList.remove('show');
+                setTimeout(() => { 
+                    if (alertDiv.parentNode) {
+                        alertDiv.remove(); 
+                    }
+                }, 500);
+            }
+        }, 5000);
+    }
+}
 // --- VALIDATION HELPERS ---
 function validateField(fieldId, errorId, customValidator = null) {
   const field = document.getElementById(fieldId);
@@ -236,4 +434,7 @@ form && form.addEventListener('submit', function(e) {
     e.preventDefault();
   }
 });
+// Initialize preview on load
+renderImagePreviews();
+updatePreview();
 </script>

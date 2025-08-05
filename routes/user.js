@@ -76,16 +76,17 @@ const getListingWithImages = (listingId, callback) => {
       l.status,
       l.created_at,
       l.user_id,
-      u.email as username,
+      ui.username as username,
       (
         SELECT image_url 
         FROM listing_images li 
         WHERE li.listing_id = l.listing_id 
-        ORDER BY li.image_id ASC 
+        ORDER BY li.is_main DESC, li.image_id ASC 
         LIMIT 1
       ) as image_url
     FROM listings l
     LEFT JOIN users u ON l.user_id = u.user_id
+    LEFT JOIN user_information ui ON u.user_id = ui.user_id
     WHERE l.listing_id = ? AND l.status = 'active'
   `;
   
@@ -139,7 +140,7 @@ router.get('/marketplace', (req, res) => {
         SELECT image_url 
         FROM listing_images img2
         WHERE img2.listing_id = l.listing_id
-        ORDER BY img2.image_id ASC
+        ORDER BY img2.is_main DESC, img2.image_id ASC
         LIMIT 1
       ) as image_url,
       ui.username as username
@@ -190,6 +191,14 @@ router.post('/post_product', upload.array('images', 5), (req, res) => {
   const userId = req.session.user.id || req.session.user.user_id;
   const { title, description, brand, size, category, condition, price } = req.body;
   const images = req.files;
+  
+  // Debug logging
+  console.log('Uploaded files:', images ? images.length : 0);
+  if (images && images.length > 0) {
+    images.forEach((img, idx) => {
+      console.log(`Image ${idx + 1}:`, img.filename);
+    });
+  }
 
   // Enhanced validation
   const errors = [];
@@ -221,6 +230,14 @@ router.post('/post_product', upload.array('images', 5), (req, res) => {
     });
   }
 
+  // Sort images by upload order to maintain sequence
+  const sortedImages = images.sort((a, b) => {
+    // Extract counter from filename to maintain order
+    const aCounter = parseInt(a.filename.split('-')[2]) || 0;
+    const bCounter = parseInt(b.filename.split('-')[2]) || 0;
+    return aCounter - bCounter;
+  });
+
   const insertListingSql = `INSERT INTO listings (user_id, title, description, brand, size, category, item_condition, price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
   callbackConnection.query(insertListingSql, [userId, title, description, brand, size, category, condition, price], (err, result) => {
     if (err) {
@@ -233,11 +250,17 @@ router.post('/post_product', upload.array('images', 5), (req, res) => {
     }
     const listingId = result.insertId;
     const imageSql = `INSERT INTO listing_images (listing_id, image_url, is_main) VALUES ?`;
-    const imageValues = images.map((img, idx) => [
+    const imageValues = sortedImages.map((img, idx) => [
       listingId,
       '/uploads/' + img.filename,
       idx === 0 // First image is cover
     ]);
+    
+    // Debug logging for image insertion
+    console.log('Inserting images:', imageValues.length);
+    imageValues.forEach((img, idx) => {
+      console.log(`Inserting image ${idx + 1}:`, img[1], 'is_main:', img[2]);
+    });
     callbackConnection.query(imageSql, [imageValues], (err2) => {
       if (err2) {
         console.error('Insert images error:', err2);
@@ -319,30 +342,43 @@ router.get('/listing/:id', (req, res) => {
     // Fix image URL using helper
     listing.image_url = fixImageUrl(listing.image_url);
     
-    // Get all additional images for this listing
-    const imagesQuery = `
-      SELECT image_url 
+    // Get the main image ID first to exclude it from additional images
+    const mainImageQuery = `
+      SELECT image_id 
       FROM listing_images 
-      WHERE listing_id = ? AND is_main = 0
-      ORDER BY image_id ASC
+      WHERE listing_id = ? AND is_main = 1
+      ORDER BY image_id ASC 
+      LIMIT 1
     `;
     
-    callbackConnection.query(imagesQuery, [listingId], (imgErr, images) => {
-      if (imgErr) {
-        console.error('Images error:', imgErr);
-        images = [];
-      }
+    callbackConnection.query(mainImageQuery, [listingId], (mainImgErr, mainImgResult) => {
+      const mainImageId = mainImgResult.length > 0 ? mainImgResult[0].image_id : null;
       
-      // Fix additional image URLs using helper
-      const additionalImages = images.map(img => fixImageUrl(img.image_url));
+      // Get all additional images for this listing (excluding the main image)
+      const imagesQuery = `
+        SELECT image_url 
+        FROM listing_images 
+        WHERE listing_id = ? AND image_id != ?
+        ORDER BY image_id ASC
+      `;
       
-      listing.additional_images = additionalImages;
-      
-      res.render('users/product_detail', {
-        layout: 'user',
-        listing: listing,
-        user: req.session.user,
-        userJson: JSON.stringify(req.session.user || null)
+      callbackConnection.query(imagesQuery, [listingId, mainImageId], (imgErr, images) => {
+        if (imgErr) {
+          console.error('Images error:', imgErr);
+          images = [];
+        }
+        
+        // Fix additional image URLs using helper
+        const additionalImages = images.map(img => fixImageUrl(img.image_url));
+        
+        listing.additional_images = additionalImages;
+        
+        res.render('users/product_detail', {
+          layout: 'user',
+          listing: listing,
+          user: req.session.user,
+          userJson: JSON.stringify(req.session.user || null)
+        });
       });
     });
   });
@@ -425,16 +461,16 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.redirect('/login');
   }
-  
+
   const listingId = req.params.id;
   const userId = req.session.user.id || req.session.user.user_id;
-  const { title, description, brand, size, category, item_condition, price } = req.body;
+  const { title, description, brand, size, category, item_condition, price, existing_images } = req.body;
   const newImages = req.files;
-  
+
   if (!title || !description || !category || !item_condition || !price) {
     return res.status(400).send('All required fields must be provided.');
   }
-  
+
   // First verify the listing belongs to the user
   const verifyQuery = 'SELECT listing_id FROM listings WHERE listing_id = ? AND user_id = ?';
   callbackConnection.query(verifyQuery, [listingId, userId], (err, result) => {
@@ -442,41 +478,120 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
       console.error('Verify listing error:', err);
       return res.status(500).send('Database error');
     }
-    
+
     if (result.length === 0) {
       return res.status(403).send('You do not have permission to edit this listing');
     }
-    
+
     // Update the listing
     const updateListingQuery = `
       UPDATE listings 
       SET title = ?, description = ?, brand = ?, size = ?, category = ?, item_condition = ?, price = ?, updated_at = NOW()
       WHERE listing_id = ? AND user_id = ?
     `;
-    
+
     callbackConnection.query(updateListingQuery, [title, description, brand, size, category, item_condition, price, listingId, userId], (err) => {
       if (err) {
         console.error('Update listing error:', err);
         return res.status(500).send('Database error');
       }
-      
-      // Add new images if any
-      if (newImages && newImages.length > 0) {
-        const imageValues = newImages.map(img => [
-          listingId,
-          '/uploads/' + img.filename,
-          0 // Not main image by default
-        ]);
-        
-        const insertImagesQuery = 'INSERT INTO listing_images (listing_id, image_url, is_main) VALUES ?';
-        callbackConnection.query(insertImagesQuery, [imageValues], (imgErr) => {
-          if (imgErr) {
-            console.error('Insert images error:', imgErr);
+
+      // Handle image updates
+      handleImageUpdates();
+
+      // Helper to handle image updates
+      function handleImageUpdates() {
+        // Parse existing images from frontend
+        let existingImagesArray = [];
+        if (existing_images) {
+          try {
+            existingImagesArray = JSON.parse(existing_images);
+          } catch (e) {
+            console.error('Error parsing existing_images:', e);
+          }
+        }
+
+        // First, remove images that are no longer in the existing images array
+        const getCurrentImagesQuery = 'SELECT image_id, image_url FROM listing_images WHERE listing_id = ?';
+        callbackConnection.query(getCurrentImagesQuery, [listingId], (err, currentImages) => {
+          if (err) {
+            console.error('Error getting current images:', err);
+            return res.redirect('/my_listing');
+          }
+
+          // Find images to delete (images that exist in database but not in existingImagesArray)
+          const imagesToDelete = currentImages.filter(img => 
+            !existingImagesArray.includes(img.image_url)
+          );
+
+          // Delete removed images
+          if (imagesToDelete.length > 0) {
+            const deleteImageIds = imagesToDelete.map(img => img.image_id);
+            const deleteQuery = 'DELETE FROM listing_images WHERE image_id IN (?)';
+            callbackConnection.query(deleteQuery, [deleteImageIds], (deleteErr) => {
+              if (deleteErr) {
+                console.error('Error deleting images:', deleteErr);
+              }
+              // Continue with adding new images
+              addNewImages();
+            });
+          } else {
+            // No images to delete, continue with adding new images
+            addNewImages();
           }
         });
+
+        // Helper to add new images
+        function addNewImages() {
+          if (newImages && newImages.length > 0) {
+            // Sort images by upload order to maintain sequence
+            const sortedNewImages = newImages.sort((a, b) => {
+              // Extract counter from filename to maintain order
+              const aCounter = parseInt(a.filename.split('-')[2]) || 0;
+              const bCounter = parseInt(b.filename.split('-')[2]) || 0;
+              return aCounter - bCounter;
+            });
+
+            const imageValues = sortedNewImages.map((img, idx) => [
+              listingId,
+              '/uploads/' + img.filename,
+              0 // Not main image by default
+            ]);
+
+            const insertImagesQuery = 'INSERT INTO listing_images (listing_id, image_url, is_main) VALUES ?';
+            callbackConnection.query(insertImagesQuery, [imageValues], (imgErr) => {
+              if (imgErr) {
+                console.error('Insert images error:', imgErr);
+              }
+              // After all image changes, set the main image
+              setMainImageFlag();
+            });
+          } else {
+            // No new images, just set the main image
+            setMainImageFlag();
+          }
+        }
+
+        // Helper to set is_main flag
+        function setMainImageFlag() {
+          // Get all images for this listing, order by is_main DESC (main first), then image_id ASC
+          const getImagesQuery = 'SELECT image_id FROM listing_images WHERE listing_id = ? ORDER BY is_main DESC, image_id ASC';
+          callbackConnection.query(getImagesQuery, [listingId], (err, images) => {
+            if (err || !images || images.length === 0) {
+              return res.redirect('/my_listing');
+            }
+            
+            // The first image in the result should be the main image
+            const mainImageId = images[0].image_id;
+            
+            // Set is_main = 1 for the first image, 0 for others
+            const updateMainQuery = `UPDATE listing_images SET is_main = CASE WHEN image_id = ? THEN 1 ELSE 0 END WHERE listing_id = ?`;
+            callbackConnection.query(updateMainQuery, [mainImageId, listingId], () => {
+              return res.redirect('/my_listing');
+            });
+          });
+        }
       }
-      
-      res.redirect('/my_listing');
     });
   });
 });
@@ -3733,6 +3848,36 @@ router.post('/reviews/add', (req, res) => {
   });
 });
 
+// Route to access user profile by username
+router.get('/user/username/:username', (req, res) => {
+  const username = req.params.username;
+  
+  // First, find the user_id for this username
+  const findUserSql = `
+    SELECT u.user_id
+    FROM users u
+    JOIN user_information ui ON u.user_id = ui.user_id
+    WHERE ui.username = ?
+  `;
+  
+  callbackConnection.query(findUserSql, [username], (err, users) => {
+    if (err) {
+      console.error('Error finding user by username:', err);
+      return res.status(500).send('Internal Server Error');
+    }
+    
+    if (users.length === 0) {
+      return res.status(404).render('users/user_not_found', {
+        layout: 'user',
+        message: `User '@${username}' not found. This user may have been deleted or the username may be invalid.`
+      });
+    }
+    
+    // Redirect to the existing profile route using user_id
+    const userId = users[0].user_id;
+    res.redirect(`/user/id/${userId}`);
+  });
+});
 
 // Test database connection
 router.get('/test-db', (req, res) => {
