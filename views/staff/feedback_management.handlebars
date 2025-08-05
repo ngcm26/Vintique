@@ -1,19 +1,30 @@
-{{!-- Feedback Management Content --}}
-<div class="main-content">
-  <div class="content-area">
-    <!-- Page Header -->
-    <div class="header-bar" style="margin-top: 65px; margin-left: -25px;">
-      <h3 class="mb-0" style="margin-left: -25px;">Manage customer feedback and inquiries</h3>
+<!DOCTYPE html>
+<html lang="en">
 
-      <div class="filter-section" style="width: 200px;">
-        <label for="feedbackFilter" class="form-label visually-hidden">Filter Feedback:</label>
-        <select id="feedbackFilter" class="form-select">
-          <option value="all" selected>All Feedback</option>
-          <option value="replied">Replied</option>
-          <option value="not_replied">Not Replied</option>
-        </select>
+<head>
+  <title>Feedback Management</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/assets/css/staff/feedback_management.css">
+</head>
+
+<body>
+  <div class="main-content">
+    <div class="content-area">
+      <!-- Page Header -->
+      <div class="header-bar" style="margin-top: 65px; margin-left: -25px;">
+        <h3 class="mb-0" style="margin-left: -25px;">Manage customer feedback and inquiries</h3>
+  
+        <div class="filter-section" style="width: 200px;">
+          <label for="feedbackFilter" class="form-label visually-hidden">Filter Feedback:</label>
+          <select id="feedbackFilter" class="form-select">
+            <option value="all" selected>All Feedback</option>
+            <option value="replied">Replied</option>
+            <option value="not_replied">Not Replied</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
       </div>
-    </div>
 
     <div class="dashboard">
       <div class="dashboard-box">
@@ -30,43 +41,59 @@
       </div>
     </div>
 
-    <!-- Feedback Messages -->
-    {{#each feedbackList}}
-    <div class="feedback-card">
-      <div class="feedback-header">
-        <div class="sender-info">
-          <div class="sender-details">
-            <h6>{{fullName}}</h6>
-            <p>{{email}}</p>
+      <!-- Feedback Messages -->
+      {{#each feedbackList}}
+      <div class="feedback-card" data-archived="{{archived}}">
+        <div class="feedback-header">
+          <div class="sender-info">
+            <div class="sender-details">
+              <h6>{{name}}</h6>
+              <p>{{email}}</p>
+            </div>
+          </div>
+          <div class="feedback-date">
+            {{CreatedAt}}
           </div>
         </div>
-        <div class="feedback-date">
-          {{CreatedAt}}
+        <div class="feedback-message">
+          <strong>Subject: {{subject}}</strong><br>
+          {{message}}
+        </div>
+        <div class="feedback-actions">
+          {{#if replied}}
+          <span class="replied-label">✔️ Replied</span>
+          {{else}}
+          <button class="btn-action btn-reply" data-email="{{email}}" data-subject="Re: {{subject}}" data-id="{{id}}"
+            data-bs-target="#replyModal" data-bs-toggle="modal">📩 Reply</button>
+          {{/if}}
+          <button class="btn-action btn-update" data-id="{{id}}">🛠️ Update</button>
+          <button class="btn-action btn-delete" data-id="{{id}}">🗑 Delete</button>
+          <button class="btn-action btn-archive" data-id="{{id}}" data-replied="{{#if replied}}1{{else}}0{{/if}}"
+            data-archived="{{archived}}">
+            {{#if archived}}📤 Unarchive{{else}}📦 Archive{{/if}}
+          </button>
         </div>
       </div>
-      <div class="feedback-message">
-        <strong>Subject: {{subject}}</strong><br>
-        {{message}}
+      {{/each}}
+      <nav id="paginationControls" class="mt-4">
+        <ul class="pagination justify-content-center">
+          <li class="page-item">
+            <button class="page-link" id="prevPage">Previous</button>
+          </li>
+          <!-- Page numbers will be dynamically inserted here -->
+          <li class="page-item disabled"><span class="page-link">...</span></li>
+          <li class="page-item">
+            <button class="page-link" id="nextPage">Next</button>
+          </li>
+        </ul>
+      </nav>
+      <!-- If No Feedback -->
+      {{#unless feedbackList.length}}
+      <div class="empty-state">
+        <i class="fas fa-inbox"></i>
+        <p>No feedback messages yet.</p>
       </div>
-      <div class="feedback-actions">
-        {{#if replied}}
-        <span class="replied-label">✔️ Replied</span>
-        {{else}}
-        <button class="btn-action btn-reply" data-email="{{email}}" data-subject="Re: {{subject}}" data-id="{{feedbackID}}"
-          data-bs-target="#replyModal" data-bs-toggle="modal">📩 Reply</button>
-        {{/if}}
-        <button class="btn-action btn-update" data-id="{{feedbackID}}">🛠️ Update</button>
-        <button class="btn-action btn-delete" data-id="{{feedbackID}}">🗑 Delete</button>
-      </div>
-    </div>
-    {{/each}}
-    <!-- If No Feedback -->
-    {{#unless feedbackList.length}}
-    <div class="empty-state">
-      <i class="fas fa-inbox"></i>
-      <p>No feedback messages yet.</p>
-    </div>
-    {{/unless}}
+      {{/unless}}
 
   </div>
 </div>
@@ -279,60 +306,240 @@
       const subject = document.getElementById('replySubject').value;
       const message = document.getElementById('replyMessage').value;
 
-      fetch('/staff/feedback_management/reply', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          feedbackId: feedbackId,
-          email: email,
-          subject: subject,
-          message: message
-        })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          location.reload();
-        } else {
-          alert('Error sending reply: ' + data.error);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Error sending reply');
-      });
+  try {
+    const res = await fetch('/feedback/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedbackID, message })
     });
 
-    // Delete feedback functionality
-    document.querySelectorAll('.btn-delete').forEach(button => {
-      button.addEventListener('click', function() {
-        const feedbackId = this.getAttribute('data-id');
-        document.getElementById('deleteFeedbackId').value = feedbackId;
-        new bootstrap.Modal(document.getElementById('deleteFeedbackModal')).show();
-      });
-    });
+    const data = await res.json();
 
-    // Confirm delete
-    document.getElementById('confirmDeleteFeedback').addEventListener('click', function() {
-      const feedbackId = document.getElementById('deleteFeedbackId').value;
+    if (res.ok && data.success) {
+      alert("Reply saved successfully.");
+      const replyModal = bootstrap.Modal.getInstance(document.getElementById("replyModal"));
+      replyModal.hide();
+      location.reload();
+    } else {
+      alert("Failed to save reply: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    console.error("Error submitting reply:", err);
+    alert("Server error while saving reply.");
+  }
+});
 
-      fetch(`/staff/feedback_management/${feedbackId}`, {
-        method: 'DELETE'
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          location.reload();
-        } else {
-          alert('Error deleting feedback: ' + data.error);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Error deleting feedback');
-      });
+
+document.getElementById('replyModal').addEventListener('hidden.bs.modal', () => {
+  document.getElementById('confirmSentSection').style.display = 'none';
+  document.querySelector('#replyForm button[type="submit"]').disabled = false;
+});
+
+function setupReplyButtons() {
+  document.querySelectorAll('.btn-reply').forEach(button => {
+    button.addEventListener('click', () => {
+      const email = button.getAttribute('data-email');
+      const subject = button.getAttribute('data-subject');
+      const feedbackID = button.getAttribute('data-id');
+
+      // Fill modal input fields
+      document.getElementById('replyEmail').value = email;
+      document.getElementById('replySubject').value = subject;
+      document.getElementById('replyFeedbackID').value = feedbackID;
+      document.getElementById('replyMessage').value = '';
     });
   });
+}
+
+// Initialize buttons on DOM load
+window.addEventListener('DOMContentLoaded', () => {
+  setupUpdateButtons();
+  setupReplyButtons();
+});
+
+function filterFeedbacks() {
+  const filter = document.getElementById('feedbackFilter').value;
+  const feedbackCards = document.querySelectorAll('.feedback-card');
+
+  let total = 0;
+  let repliedCount = 0;
+
+  feedbackCards.forEach(card => {
+    const isReplied = card.querySelector('.replied-label') !== null;
+    const isArchived = card.getAttribute('data-archived') === '1';
+
+    let shouldShow = true;
+
+    if (filter === 'replied') {
+      shouldShow = isReplied && !isArchived;
+    } else if (filter === 'not_replied') {
+      shouldShow = !isReplied && !isArchived;
+    } else if (filter === 'archived') {
+      shouldShow = isArchived;
+    } else {
+      shouldShow = !isArchived;
+    }
+
+    card.style.display = shouldShow ? '' : 'none';
+
+    if (shouldShow) {
+      total++;
+      if (isReplied) repliedCount++;
+    }
+  });
+
+  const unrepliedCount = total - repliedCount;
+
+  // Update the dashboard counters
+  document.getElementById('totalFeedback').textContent = total;
+  document.getElementById('repliedFeedback').textContent = repliedCount;
+  document.getElementById('unrepliedFeedback').textContent = unrepliedCount;
+}
+
+
+window.addEventListener('DOMContentLoaded', () => {
+  setupUpdateButtons();
+  setupReplyButtons();
+
+  // Add event listener for filtering
+  const filterSelect = document.getElementById('feedbackFilter');
+  filterSelect.addEventListener('change', () => {
+    filterFeedbacks();
+  });
+
+  // Run filter on page load to default to 'all'
+  filterFeedbacks();
+});
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const allFeedbackCards = document.querySelectorAll('.feedback-card');
+    let repliedCount = 0;
+
+    allFeedbackCards.forEach(card => {
+      const repliedLabel = card.querySelector('.replied-label');
+      if (repliedLabel) {
+        repliedCount++;
+      }
+    });
+
+    const totalCount = allFeedbackCards.length;
+    const unrepliedCount = totalCount - repliedCount;
+
+    document.getElementById('totalFeedback').textContent = totalCount;
+    document.getElementById('repliedFeedback').textContent = repliedCount;
+    document.getElementById('unrepliedFeedback').textContent = unrepliedCount;
+  });
+
+const FEEDBACKS_PER_PAGE = 10;
+let currentPage = 1;
+let feedbackCards = [];
+
+function renderPaginationControls(totalPages) {
+  const pagination = document.querySelector('#paginationControls .pagination');
+  pagination.innerHTML = `
+    <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+      <button class="page-link" id="prevPage">Previous</button>
+    </li>
+  `;
+
+  for (let i = 1; i <= totalPages; i++) {
+    pagination.innerHTML += `
+      <li class="page-item ${i === currentPage ? 'active' : ''}">
+        <button class="page-link page-number" data-page="${i}">${i}</button>
+      </li>
+    `;
+  }
+
+  pagination.innerHTML += `
+    <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+      <button class="page-link" id="nextPage">Next</button>
+    </li>
+  `;
+
+  // Add event listeners
+  document.querySelectorAll('.page-number').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentPage = parseInt(btn.dataset.page);
+      renderPage();
+    });
+  });
+
+  document.getElementById('prevPage').addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      renderPage();
+    }
+  });
+
+  document.getElementById('nextPage').addEventListener('click', () => {
+    const totalPages = Math.ceil(feedbackCards.length / FEEDBACKS_PER_PAGE);
+    if (currentPage < totalPages) {
+      currentPage++;
+      renderPage();
+    }
+  });
+}
+
+function renderPage() {
+  const start = (currentPage - 1) * FEEDBACKS_PER_PAGE;
+  const end = start + FEEDBACKS_PER_PAGE;
+
+  feedbackCards.forEach((card, index) => {
+    card.style.display = (index >= start && index < end) ? '' : 'none';
+  });
+
+  renderPaginationControls(Math.ceil(feedbackCards.length / FEEDBACKS_PER_PAGE));
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  feedbackCards = Array.from(document.querySelectorAll('.feedback-card'))
+    .filter(card => card.style.display !== 'none'); // Initial filter match
+
+  renderPage(); // Render first page
+});
+
+document.querySelectorAll('.btn-archive').forEach(button => {
+  button.addEventListener('click', () => {
+    const feedbackId = button.getAttribute('data-id');
+    const replied = button.getAttribute('data-replied') === '1';
+    const isArchived = button.getAttribute('data-archived') === '1';
+
+    let confirmMessage;
+    let newArchivedStatus;
+
+    if (isArchived) {
+      // Unarchive — simple confirm, no special message
+      confirmMessage = 'Are you sure you want to unarchive this feedback? It will be visible in the main list again.';
+      newArchivedStatus = 0;
+    } else {
+      // Archive — special warning only if NOT replied
+      if (!replied) {
+        confirmMessage = 'This feedback has not been replied to yet. Are you sure you want to archive it?';
+      } else {
+        confirmMessage = 'Are you sure you want to archive this feedback? It will be hidden from the main list.';
+      }
+      newArchivedStatus = 1;
+    }
+
+    if (confirm(confirmMessage)) {
+      fetch(`/feedback/archive/${feedbackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: newArchivedStatus })
+      })
+      .then(res => {
+        if (res.ok) {
+          alert(isArchived ? 'Feedback unarchived successfully.' : 'Feedback archived successfully.');
+          location.reload();
+        } else {
+          alert('Failed to update archive status.');
+        }
+      })
+      .catch(() => alert('Server error while updating archive status.'));
+    }
+  });
+});
+
+
+
 </script>
