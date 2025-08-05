@@ -87,7 +87,7 @@ router.get('/admin/dashboard', requireAdmin, async (req, res) => {
   console.log('REPORT LABELS:', JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => r.email) : []));
   console.log('REPORT VALUES:', JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => Number(r.reports)) : []));
 
-  res.render('admin/dashboard', {
+  res.render('staff/dashboard', {
     layout: 'admin',
     activePage: 'dashboard',
     user: req.session.user,

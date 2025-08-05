@@ -11,22 +11,16 @@ router.get('/', requireStaff, async (req, res) => {
     const [vouchers] = await connection.execute('SELECT * FROM vouchers ORDER BY created_at DESC');
     const today = new Date().toISOString().split('T')[0];
 
-    // Active: status = active and not expired
-    const activeCount = vouchers.filter(v => {
-      if (v.status !== 'active') return false;
-      if (!v.expiry_date) return false;
-      // Make sure expiry is at the end of the day
-      const expiry = new Date(v.expiry_date + 'T23:59:59');
-      return expiry >= new Date();
-    }).length;
-
-
-
+    // Active: status = active and not expired (counted in SQL, not JS)
+    const [activeVouchers] = await connection.execute(
+      `SELECT COUNT(*) as count FROM vouchers WHERE status = 'active' AND expiry_date >= ?`,
+      [today]
+    );
+    const activeCount = activeVouchers[0].count;
 
     // Total Claims: count from user_vouchers table
     const [claims] = await connection.execute('SELECT COUNT(*) as total FROM user_vouchers');
     const totalClaims = claims[0].total;
-
 
     res.render('staff/vouchers/list', {
       layout: 'staff',
@@ -155,7 +149,13 @@ router.post('/:id/delete', requireStaff, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
+
+    // 1. Delete all claims referencing this voucher
+    await connection.execute('DELETE FROM user_vouchers WHERE voucher_id = ?', [voucherId]);
+
+    // 2. Now it's safe to delete the voucher itself
     await connection.execute('DELETE FROM vouchers WHERE voucher_id = ?', [voucherId]);
+
     res.redirect('/staff/vouchers');
   } catch (err) {
     console.error('Delete voucher error:', err);
