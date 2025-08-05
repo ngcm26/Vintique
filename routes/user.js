@@ -10,7 +10,7 @@ const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../u
 const path = require('path');
 const app = express();
 app.use(express.json()); // ← Add this to parse JSON requests
-app.use(express.urlencoded({ extended: true })); 
+app.use(express.urlencoded({ extended: true }));
 
 
 // Database configuration is handled by config/database.js
@@ -88,13 +88,13 @@ const getListingWithImages = (listingId, callback) => {
     LEFT JOIN users u ON l.user_id = u.user_id
     WHERE l.listing_id = ? AND l.status = 'active'
   `;
-  
+
   callbackConnection.query(listingQuery, [listingId], callback);
 };
 
 // Home route
 router.get('/', (req, res) => {
-  res.render('users/home', { 
+  res.render('users/home', {
     title: 'Vintique - Sustainable Fashion Marketplace',
     layout: 'user',
     activePage: 'home'
@@ -155,13 +155,13 @@ router.get('/marketplace', (req, res) => {
     params.push(getUserId(req));
   }
   sql += '\n    ORDER BY l.created_at DESC';
-  
+
   callbackConnection.query(sql, params, (err, listings) => {
     if (err) return handleDbError(err, res, 'Failed to load marketplace');
-    
+
     // Use helper function to process images
     const processedListings = processListingImages(listings);
-    
+
     res.render('users/marketplace', {
       layout: 'user',
       activePage: 'shop',
@@ -193,7 +193,7 @@ router.post('/post_product', upload.array('images', 5), (req, res) => {
 
   // Enhanced validation
   const errors = [];
-  
+
   if (!title || title.trim().length < 5) {
     errors.push('Title must be at least 5 characters long');
   }
@@ -297,7 +297,7 @@ router.get('/my_listing', (req, res) => {
 // Product Detail Route
 router.get('/listing/:id', (req, res) => {
   const listingId = req.params.id;
-  
+
   getListingWithImages(listingId, (err, listings) => {
     if (err) {
       console.error('Database error:', err);
@@ -306,19 +306,19 @@ router.get('/listing/:id', (req, res) => {
         error: 'Database error occurred'
       });
     }
-    
+
     if (listings.length === 0) {
       return res.render('users/product_detail', {
         layout: 'user',
         error: 'Product not found or no longer available'
       });
     }
-    
+
     const listing = listings[0];
-    
+
     // Fix image URL using helper
     listing.image_url = fixImageUrl(listing.image_url);
-    
+
     // Get all additional images for this listing
     const imagesQuery = `
       SELECT image_url 
@@ -326,18 +326,18 @@ router.get('/listing/:id', (req, res) => {
       WHERE listing_id = ? AND is_main = 0
       ORDER BY image_id ASC
     `;
-    
+
     callbackConnection.query(imagesQuery, [listingId], (imgErr, images) => {
       if (imgErr) {
         console.error('Images error:', imgErr);
         images = [];
       }
-      
+
       // Fix additional image URLs using helper
       const additionalImages = images.map(img => fixImageUrl(img.image_url));
-      
+
       listing.additional_images = additionalImages;
-      
+
       res.render('users/product_detail', {
         layout: 'user',
         listing: listing,
@@ -353,10 +353,10 @@ router.get('/edit_listing/:id', (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.redirect('/login');
   }
-  
+
   const listingId = req.params.id;
   const userId = req.session.user.id || req.session.user.user_id;
-  
+
   // Get listing details with images
   const listingQuery = `
     SELECT 
@@ -372,19 +372,19 @@ router.get('/edit_listing/:id', (req, res) => {
     FROM listings l
     WHERE l.listing_id = ? AND l.user_id = ?
   `;
-  
+
   callbackConnection.query(listingQuery, [listingId, userId], (err, listings) => {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).send('Database error');
     }
-    
+
     if (listings.length === 0) {
       return res.status(404).send('Listing not found or you do not have permission to edit it');
     }
-    
+
     const listing = listings[0];
-    
+
     // Get all images for this listing
     const imagesQuery = `
       SELECT image_url 
@@ -392,13 +392,13 @@ router.get('/edit_listing/:id', (req, res) => {
       WHERE listing_id = ?
       ORDER BY is_main DESC, image_id ASC
     `;
-    
+
     callbackConnection.query(imagesQuery, [listingId], (imgErr, images) => {
       if (imgErr) {
         console.error('Images error:', imgErr);
         images = [];
       }
-      
+
       // Fix image URLs
       const listingImages = images.map(img => {
         if (!img.image_url || img.image_url === 'null') {
@@ -408,9 +408,9 @@ router.get('/edit_listing/:id', (req, res) => {
         }
         return img.image_url;
       });
-      
+
       listing.images = listingImages;
-      
+
       res.render('users/edit_listing', {
         layout: 'user',
         activePage: 'mylistings',
@@ -425,16 +425,16 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.redirect('/login');
   }
-  
+
   const listingId = req.params.id;
   const userId = req.session.user.id || req.session.user.user_id;
   const { title, description, brand, size, category, item_condition, price } = req.body;
   const newImages = req.files;
-  
+
   if (!title || !description || !category || !item_condition || !price) {
     return res.status(400).send('All required fields must be provided.');
   }
-  
+
   // First verify the listing belongs to the user
   const verifyQuery = 'SELECT listing_id FROM listings WHERE listing_id = ? AND user_id = ?';
   callbackConnection.query(verifyQuery, [listingId, userId], (err, result) => {
@@ -442,24 +442,24 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
       console.error('Verify listing error:', err);
       return res.status(500).send('Database error');
     }
-    
+
     if (result.length === 0) {
       return res.status(403).send('You do not have permission to edit this listing');
     }
-    
+
     // Update the listing
     const updateListingQuery = `
       UPDATE listings 
       SET title = ?, description = ?, brand = ?, size = ?, category = ?, item_condition = ?, price = ?, updated_at = NOW()
       WHERE listing_id = ? AND user_id = ?
     `;
-    
+
     callbackConnection.query(updateListingQuery, [title, description, brand, size, category, item_condition, price, listingId, userId], (err) => {
       if (err) {
         console.error('Update listing error:', err);
         return res.status(500).send('Database error');
       }
-      
+
       // Add new images if any
       if (newImages && newImages.length > 0) {
         const imageValues = newImages.map(img => [
@@ -467,7 +467,7 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
           '/uploads/' + img.filename,
           0 // Not main image by default
         ]);
-        
+
         const insertImagesQuery = 'INSERT INTO listing_images (listing_id, image_url, is_main) VALUES ?';
         callbackConnection.query(insertImagesQuery, [imageValues], (imgErr) => {
           if (imgErr) {
@@ -475,7 +475,7 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
           }
         });
       }
-      
+
       res.redirect('/my_listing');
     });
   });
@@ -484,26 +484,26 @@ router.post('/edit_listing/:id', upload.array('images', 5), (req, res) => {
 // Mark as Sold Route
 router.post('/listings/:id/mark_sold', (req, res) => {
   if (!requireUserAuth(req, res)) return;
-  
+
   const listingId = req.params.id;
   const userId = getUserId(req);
-  
+
   const updateQuery = `
     UPDATE listings 
     SET status = 'sold', updated_at = NOW() 
     WHERE listing_id = ? AND user_id = ?
   `;
-  
+
   callbackConnection.query(updateQuery, [listingId, userId], (err, result) => {
     if (err) {
       console.error('Mark as sold error:', err);
       return res.status(500).json({ error: 'Database error' });
     }
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Listing not found or you do not have permission' });
     }
-    
+
     res.json({ success: true, message: 'Listing marked as sold' });
   });
 });
@@ -513,31 +513,31 @@ router.delete('/listings/:id', (req, res) => {
   console.log('=== DELETE LISTING REQUEST ===');
   console.log('User session:', req.session.user);
   console.log('Listing ID:', req.params.id);
-  
+
   if (!requireUserAuth(req, res)) return;
-  
+
   const listingId = req.params.id;
   const userId = getUserId(req);
-  
+
   console.log('Processing delete for listing:', listingId, 'by user:', userId);
-  
+
   // First verify the listing belongs to the user
   const verifyQuery = 'SELECT listing_id, status FROM listings WHERE listing_id = ? AND user_id = ?';
-  
+
   callbackConnection.query(verifyQuery, [listingId, userId], (err, result) => {
     if (err) {
       console.error('❌ Database error during verification:', err);
       return res.status(500).json({ error: 'Database error during verification' });
     }
-    
+
     if (result.length === 0) {
       console.log('❌ Listing not found or user does not have permission');
       return res.status(404).json({ error: 'Listing not found or you do not have permission' });
     }
-    
+
     const listing = result[0];
     console.log('✅ Listing verified:', listing);
-    
+
     // Check if listing has active orders
     const checkOrdersQuery = `
       SELECT oi.order_item_id, o.status as order_status, o.order_id
@@ -545,36 +545,36 @@ router.delete('/listings/:id', (req, res) => {
       JOIN orders o ON oi.order_id = o.order_id
       WHERE oi.listing_id = ?
     `;
-    
+
     callbackConnection.query(checkOrdersQuery, [listingId], (err, orders) => {
       if (err) {
         console.error('❌ Error checking orders:', err);
         return res.status(500).json({ error: 'Error checking orders' });
       }
-      
+
       console.log('📦 Found orders for listing:', orders.length);
-      
+
       // If there are completed or shipped orders, prevent deletion
-      const activeOrders = orders.filter(order => 
-        order.order_status === 'completed' || 
-        order.order_status === 'shipped' || 
+      const activeOrders = orders.filter(order =>
+        order.order_status === 'completed' ||
+        order.order_status === 'shipped' ||
         order.order_status === 'paid'
       );
-      
+
       if (activeOrders.length > 0) {
         console.log('❌ Cannot delete listing with active orders:', activeOrders.length);
-        return res.status(400).json({ 
-          error: 'Cannot delete listing with active orders. Please contact support if you need to remove this listing.' 
+        return res.status(400).json({
+          error: 'Cannot delete listing with active orders. Please contact support if you need to remove this listing.'
         });
       }
-      
+
       // Start transaction
       callbackConnection.beginTransaction((err) => {
         if (err) {
           console.error('❌ Transaction error:', err);
           return res.status(500).json({ error: 'Database transaction error' });
         }
-        
+
         console.log('🔄 Transaction started');
 
         // Delete order items for this listing (cancelled/confirmed orders only)
@@ -583,7 +583,7 @@ router.delete('/listings/:id', (req, res) => {
           JOIN orders o ON oi.order_id = o.order_id
           WHERE oi.listing_id = ? AND o.status IN ('confirmed', 'cancelled')
         `;
-        
+
         callbackConnection.query(deleteOrderItemsQuery, [listingId], (err, result) => {
           if (err) {
             console.error('❌ Error deleting order items:', err);
@@ -591,9 +591,9 @@ router.delete('/listings/:id', (req, res) => {
               res.status(500).json({ error: 'Error deleting related orders' });
             });
           }
-          
+
           console.log('✅ Deleted order items:', result.affectedRows);
-          
+
           // Delete cart items for this listing
           const deleteCartItemsQuery = 'DELETE FROM cart WHERE listing_id = ?';
           callbackConnection.query(deleteCartItemsQuery, [listingId], (err, result) => {
@@ -603,9 +603,9 @@ router.delete('/listings/:id', (req, res) => {
                 res.status(500).json({ error: 'Error deleting cart items' });
               });
             }
-            
+
             console.log('✅ Deleted cart items:', result.affectedRows);
-            
+
             // Delete images
             const deleteImagesQuery = 'DELETE FROM listing_images WHERE listing_id = ?';
             callbackConnection.query(deleteImagesQuery, [listingId], (err, result) => {
@@ -615,9 +615,9 @@ router.delete('/listings/:id', (req, res) => {
                   res.status(500).json({ error: 'Error deleting listing images' });
                 });
               }
-              
-                          console.log('✅ Deleted images:', result.affectedRows);
-              
+
+              console.log('✅ Deleted images:', result.affectedRows);
+
               // Delete conversations for this listing
               const deleteConversationsQuery = 'DELETE FROM conversations WHERE listing_id = ?';
               callbackConnection.query(deleteConversationsQuery, [listingId], (err, result) => {
@@ -627,9 +627,9 @@ router.delete('/listings/:id', (req, res) => {
                     res.status(500).json({ error: 'Error deleting conversations' });
                   });
                 }
-                
+
                 console.log('✅ Deleted conversations:', result.affectedRows);
-                
+
                 // Finally delete the listing
                 const deleteListingQuery = 'DELETE FROM listings WHERE listing_id = ? AND user_id = ?';
                 callbackConnection.query(deleteListingQuery, [listingId, userId], (err, result) => {
@@ -639,16 +639,16 @@ router.delete('/listings/:id', (req, res) => {
                       res.status(500).json({ error: 'Error deleting listing' });
                     });
                   }
-                  
+
                   if (result.affectedRows === 0) {
                     console.log('❌ No listing was deleted');
                     return callbackConnection.rollback(() => {
                       res.status(404).json({ error: 'Listing not found or you do not have permission' });
                     });
                   }
-                  
+
                   console.log('✅ Listing deleted successfully');
-                  
+
                   callbackConnection.commit((err) => {
                     if (err) {
                       console.error('❌ Commit error:', err);
@@ -656,7 +656,7 @@ router.delete('/listings/:id', (req, res) => {
                         res.status(500).json({ error: 'Error committing transaction' });
                       });
                     }
-                    
+
                     console.log('✅ Transaction committed successfully');
                     res.json({ success: true, message: 'Listing deleted successfully' });
                   });
@@ -673,14 +673,14 @@ router.delete('/listings/:id', (req, res) => {
 // Delete Image Route
 router.post('/delete_image', (req, res) => {
   if (!requireUserAuth(req, res)) return;
-  
+
   const { imgUrl, listingId } = req.body;
   const userId = getUserId(req);
-  
+
   if (!imgUrl || !listingId) {
     return res.status(400).json({ error: 'Image URL and listing ID are required' });
   }
-  
+
   // Verify the listing belongs to the user
   const verifyQuery = 'SELECT listing_id FROM listings WHERE listing_id = ? AND user_id = ?';
   callbackConnection.query(verifyQuery, [listingId, userId], (err, result) => {
@@ -688,11 +688,11 @@ router.post('/delete_image', (req, res) => {
       console.error('Verify listing error:', err);
       return res.status(500).json({ error: 'Database error' });
     }
-    
+
     if (result.length === 0) {
       return res.status(403).json({ error: 'You do not have permission to delete this image' });
     }
-    
+
     // Delete the image from database
     const deleteQuery = 'DELETE FROM listing_images WHERE listing_id = ? AND image_url = ?';
     callbackConnection.query(deleteQuery, [listingId, imgUrl], (err, result) => {
@@ -700,11 +700,11 @@ router.post('/delete_image', (req, res) => {
         console.error('Delete image error:', err);
         return res.status(500).json({ error: 'Database error' });
       }
-      
+
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Image not found' });
       }
-      
+
       res.json({ success: true, message: 'Image deleted successfully' });
     });
   });
@@ -799,7 +799,7 @@ router.get('/cart', async (req, res) => {
   if (!req.session.user) {
     return res.redirect('/login');
   }
-  
+
   let connection;
   try {
     connection = await createConnection();
@@ -823,7 +823,7 @@ router.get('/cart', async (req, res) => {
     });
   } catch (error) {
     console.error('Cart page error:', error);
-    res.status(500).render('error', { 
+    res.status(500).render('error', {
       error: 'Failed to load cart page',
       layout: 'user'
     });
@@ -838,12 +838,12 @@ router.get('/checkout', async (req, res) => {
   if (!req.session.user) {
     return res.redirect('/login');
   }
-  
+
   let connection;
   try {
     connection = await createConnection();
     const userId = req.session.user.user_id || req.session.user.id;
-    
+
     // Get cart items
     const [cartItems] = await connection.execute(`
       SELECT c.cart_id, c.quantity,
@@ -861,20 +861,20 @@ router.get('/checkout', async (req, res) => {
       JOIN users u ON l.user_id = u.user_id
       WHERE c.user_id = ? AND l.status = 'active'
     `, [userId]);
-    
+
     if (cartItems.length === 0) {
       return res.redirect('/cart?error=empty');
     }
-    
+
     // Calculate total
     const subtotal = cartItems.reduce((total, item) => {
       return total + (parseFloat(item.price) * item.quantity);
     }, 0);
-    
+
     const shipping = subtotal >= 50 ? 0 : 5.99;
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shipping + tax;
-    
+
     // Process images
     const processedCartItems = cartItems.map(item => ({
       ...item,
@@ -891,7 +891,7 @@ router.get('/checkout', async (req, res) => {
         WHERE uv.user_id = ? AND v.status = 'active' AND v.expiry_date >= ?
         ORDER BY v.expiry_date ASC`, [userId, now]);
 
-    
+
     res.render('users/checkout', {
       layout: 'user',
       activePage: 'checkout',
@@ -902,10 +902,10 @@ router.get('/checkout', async (req, res) => {
       tax: tax.toFixed(2),
       userVouchers
     });
-    
+
   } catch (error) {
     console.error('Checkout page error:', error);
-    res.status(500).render('error', { 
+    res.status(500).render('error', {
       error: 'Failed to load checkout page',
       layout: 'user'
     });
@@ -955,7 +955,7 @@ router.get('/account-settings/api', async (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  
+
   let connection;
   try {
     connection = await createConnection();
@@ -966,7 +966,7 @@ router.get('/account-settings/api', async (req, res) => {
       address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
       default_address_index
       FROM user_information WHERE user_id = ?`;
-    
+
     const [results] = await connection.execute(sql, [userId]);
     if (results.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -985,23 +985,23 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  
+
   let connection;
   try {
     connection = await createConnection();
     const userId = req.session.user.id;
-    
+
     // First check if user exists in user_information table
     const checkUserSql = `SELECT user_id FROM user_information WHERE user_id = ?`;
     const [userCheck] = await connection.execute(checkUserSql, [userId]);
-    
+
     if (userCheck.length === 0) {
       // Create user_information entry if it doesn't exist
       const createUserInfoSql = `INSERT INTO user_information (user_id, username, email, phone_number) 
                                 SELECT user_id, email, email, phone_number FROM users WHERE user_id = ?`;
       await connection.execute(createUserInfoSql, [userId]);
     }
-    
+
     let {
       first_name, last_name, email, phone_number,
       address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
@@ -1009,14 +1009,14 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
       address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
       default_address_index
     } = req.body;
-    
+
     // If this is just a profile image upload (no other fields), get current user data
     if (!first_name && !last_name && !email && !phone_number && req.file) {
       const [currentUser] = await connection.execute(
         'SELECT first_name, last_name, email, phone_number, profile_image_url FROM user_information WHERE user_id = ?',
         [userId]
       );
-      
+
       if (currentUser.length > 0) {
         const user = currentUser[0];
         first_name = user.first_name;
@@ -1033,14 +1033,14 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
       'address_name_2', 'address_street_2', 'address_city_2', 'address_state_2', 'address_country_2', 'address_postal_code_2', 'address_phone_2',
       'address_name_3', 'address_street_3', 'address_city_3', 'address_state_3', 'address_country_3', 'address_postal_code_3', 'address_phone_3'
     ];
-    
+
     // Clean up address fields - convert empty/undefined to null
     addressFields.forEach(field => {
       if (req.body[field] === '' || req.body[field] === undefined || req.body[field] === 'undefined' || req.body[field] === null) {
         req.body[field] = null;
       }
     });
-    
+
     // Also handle undefined values for main fields
     if (first_name === undefined || first_name === 'undefined') first_name = null;
     if (last_name === undefined || last_name === 'undefined') last_name = null;
@@ -1060,18 +1060,18 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
     if (req.file) {
       profile_image_url = '/uploads/profilephoto/' + req.file.filename;
     }
-    
+
     // Check if we have address data or other fields to update
-    const hasAddressData = req.body.address_name || req.body.address_street || req.body.address_city || 
-                          req.body.address_name_2 || req.body.address_street_2 || req.body.address_city_2 ||
-                          req.body.address_name_3 || req.body.address_street_3 || req.body.address_city_3 ||
-                          default_address_index;
-    
+    const hasAddressData = req.body.address_name || req.body.address_street || req.body.address_city ||
+      req.body.address_name_2 || req.body.address_street_2 || req.body.address_city_2 ||
+      req.body.address_name_3 || req.body.address_street_3 || req.body.address_city_3 ||
+      default_address_index;
+
     const hasPersonalData = first_name || last_name || email || phone_number;
-    
+
     // If this is just a profile image upload (no other fields), use a simpler query
     let sql, params;
-    
+
     if (req.file && !hasPersonalData && !hasAddressData) {
       // Only updating profile image
       sql = `UPDATE user_information SET profile_image_url = ? WHERE user_id = ?`;
@@ -1084,40 +1084,40 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
         address_name_3=?, address_street_3=?, address_city_3=?, address_state_3=?, address_country_3=?, address_postal_code_3=?, address_phone_3=?,
         default_address_index=?
         WHERE user_id=?`;
-      
+
       // Ensure all parameters are properly defined (not undefined)
       params = [
-        first_name || null, 
-        last_name || null, 
-        email || null, 
-        phone_number || null, 
+        first_name || null,
+        last_name || null,
+        email || null,
+        phone_number || null,
         profile_image_url || null,
-        req.body.address_name || null, 
-        req.body.address_street || null, 
-        req.body.address_city || null, 
-        req.body.address_state || null, 
-        req.body.address_country || null, 
-        req.body.address_postal_code || null, 
+        req.body.address_name || null,
+        req.body.address_street || null,
+        req.body.address_city || null,
+        req.body.address_state || null,
+        req.body.address_country || null,
+        req.body.address_postal_code || null,
         req.body.address_phone || null,
-        req.body.address_name_2 || null, 
-        req.body.address_street_2 || null, 
-        req.body.address_city_2 || null, 
-        req.body.address_state_2 || null, 
-        req.body.address_country_2 || null, 
-        req.body.address_postal_code_2 || null, 
+        req.body.address_name_2 || null,
+        req.body.address_street_2 || null,
+        req.body.address_city_2 || null,
+        req.body.address_state_2 || null,
+        req.body.address_country_2 || null,
+        req.body.address_postal_code_2 || null,
         req.body.address_phone_2 || null,
-        req.body.address_name_3 || null, 
-        req.body.address_street_3 || null, 
-        req.body.address_city_3 || null, 
-        req.body.address_state_3 || null, 
-        req.body.address_country_3 || null, 
-        req.body.address_postal_code_3 || null, 
+        req.body.address_name_3 || null,
+        req.body.address_street_3 || null,
+        req.body.address_city_3 || null,
+        req.body.address_state_3 || null,
+        req.body.address_country_3 || null,
+        req.body.address_postal_code_3 || null,
         req.body.address_phone_3 || null,
-        defaultIndex, 
+        defaultIndex,
         userId
       ];
     }
-    
+
     // Debug: Log the parameters to see what's being sent
     console.log('Profile update parameters:', {
       userId,
@@ -1141,14 +1141,14 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
         address_city_3: req.body.address_city_3
       }
     });
-    
+
     // Log the SQL and params for debugging
     console.log('SQL Query:', sql);
     console.log('Parameters:', params);
     console.log('Parameter types:', params.map(p => typeof p));
-    
+
     await connection.execute(sql, params);
-    
+
     res.json({ success: true, profile_image_url });
   } catch (error) {
     console.error('Account settings update error:', error);
@@ -1163,20 +1163,20 @@ router.post('/account-settings/password', async (req, res) => {
   if (!req.session.user || req.session.user.role !== 'user') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  
+
   let connection;
   try {
     connection = await createConnection();
     const userId = req.session.user.id;
     const { current_password, new_password, confirm_password } = req.body;
-    
+
     if (!current_password || !new_password || !confirm_password) {
       return res.status(400).json({ error: 'All fields are required.' });
     }
     if (new_password !== confirm_password) {
       return res.status(400).json({ error: 'New passwords do not match.' });
     }
-    
+
     // Check current password
     const [users] = await connection.execute('SELECT password FROM users WHERE user_id = ?', [userId]);
     if (users.length === 0) {
@@ -1185,7 +1185,7 @@ router.post('/account-settings/password', async (req, res) => {
     if (users[0].password !== current_password) {
       return res.status(400).json({ error: 'Current password is incorrect.' });
     }
-    
+
     // Update password
     await connection.execute('UPDATE users SET password = ? WHERE user_id = ?', [new_password, userId]);
     res.json({ success: true });
@@ -1203,34 +1203,34 @@ router.get('/api/user/addresses', requireAuth, async (req, res) => {
   try {
     connection = await createConnection();
     const userId = req.session.user.id;
-    
+
     // First check if user exists in user_information table
     const checkUserSql = `SELECT user_id FROM user_information WHERE user_id = ?`;
     const [userCheck] = await connection.execute(checkUserSql, [userId]);
-    
+
     if (userCheck.length === 0) {
       // Create user_information entry if it doesn't exist
       const createUserInfoSql = `INSERT INTO user_information (user_id, username, email, phone_number) 
                                 SELECT user_id, email, email, phone_number FROM users WHERE user_id = ?`;
       await connection.execute(createUserInfoSql, [userId]);
     }
-    
+
     const sql = `SELECT 
       address_name, address_street, address_city, address_state, address_country, address_postal_code, address_phone,
       address_name_2, address_street_2, address_city_2, address_state_2, address_country_2, address_postal_code_2, address_phone_2,
       address_name_3, address_street_3, address_city_3, address_state_3, address_country_3, address_postal_code_3, address_phone_3,
       default_address_index
       FROM user_information WHERE user_id = ?`;
-    
+
     const [results] = await connection.execute(sql, [userId]);
-    
+
     if (results.length === 0) {
       return res.json({ addresses: [] });
     }
-    
+
     const userData = results[0];
     const addresses = [];
-    
+
     // Process address 1
     if (userData.address_street || userData.address_city || userData.address_country) {
       addresses.push({
@@ -1244,7 +1244,7 @@ router.get('/api/user/addresses', requireAuth, async (req, res) => {
         isDefault: userData.default_address_index === 1
       });
     }
-    
+
     // Process address 2
     if (userData.address_street_2 || userData.address_city_2 || userData.address_country_2) {
       addresses.push({
@@ -1258,7 +1258,7 @@ router.get('/api/user/addresses', requireAuth, async (req, res) => {
         isDefault: userData.default_address_index === 2
       });
     }
-    
+
     // Process address 3
     if (userData.address_street_3 || userData.address_city_3 || userData.address_country_3) {
       addresses.push({
@@ -1272,7 +1272,7 @@ router.get('/api/user/addresses', requireAuth, async (req, res) => {
         isDefault: userData.default_address_index === 3
       });
     }
-    
+
     res.json({ addresses });
   } catch (error) {
     console.error('Error fetching user addresses:', error);
@@ -1290,7 +1290,7 @@ router.get('/messages', (req, res) => {
 
   const userId = req.session.user.id || req.session.user.user_id;
   console.log('Loading messages for user:', userId);
-  
+
   const conversationsQuery = `
     SELECT 
       c.conversation_id,
@@ -1374,7 +1374,7 @@ router.post('/start-conversation', (req, res) => {
   console.log('=== START CONVERSATION REQUEST ===');
   console.log('Request body:', req.body);
   console.log('User session:', req.session.user);
-  
+
   if (!req.session.user) {
     console.log('❌ User not authenticated');
     return res.status(401).json({ error: 'Authentication required' });
@@ -1478,7 +1478,7 @@ router.post('/start-conversation', (req, res) => {
           // Conversation exists, send message to existing conversation
           const conversationId = existing[0].conversation_id;
           console.log('✅ Using existing conversation:', conversationId);
-          
+
           const insertMessageQuery = `
             INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
             VALUES (?, ?, ?, ?, NOW(), 0, 'text', 'buyer')
@@ -1494,8 +1494,8 @@ router.post('/start-conversation', (req, res) => {
 
             console.log('✅ Message sent to existing conversation');
 
-            res.json({ 
-              success: true, 
+            res.json({
+              success: true,
               conversation_id: conversationId,
               message: 'Message sent successfully',
               existing: true
@@ -1504,7 +1504,7 @@ router.post('/start-conversation', (req, res) => {
         } else {
           // Create new conversation with all required fields
           console.log('🆕 Creating new conversation');
-          
+
           const createConvQuery = `
             INSERT INTO conversations (buyer_id, seller_id, listing_id, buyer_username, seller_username, created_at, updated_at, status)
             VALUES (?, ?, ?, ?, ?, NOW(), NOW(), 'active')
@@ -1533,21 +1533,21 @@ router.post('/start-conversation', (req, res) => {
             callbackConnection.query(insertMessageQuery, [conversationId, buyerId, buyerUsername, message], (err, messageResult) => {
               if (err) {
                 console.error('❌ Error sending initial message:', err);
-                
+
                 // Clean up the conversation if message fails
                 callbackConnection.query('DELETE FROM conversations WHERE conversation_id = ?', [conversationId], (cleanupErr) => {
                   if (cleanupErr) {
                     console.error('Error cleaning up conversation:', cleanupErr);
                   }
                 });
-                
+
                 return res.status(500).json({ error: 'Failed to send initial message: ' + err.message });
               }
 
               console.log('✅ Initial message sent successfully');
 
-              res.json({ 
-                success: true, 
+              res.json({
+                success: true,
                 conversation_id: conversationId,
                 message: 'Conversation started successfully',
                 existing: false
@@ -1731,12 +1731,12 @@ router.post('/api/conversations/:conversationId/messages', upload.single('image'
 
       const messageType = imageFile ? 'image' : 'text';
       const values = [
-        conversationId, 
-        userId, 
-        username, 
-        finalMessageContent, 
-        imageUrl, 
-        messageType, 
+        conversationId,
+        userId,
+        username,
+        finalMessageContent,
+        imageUrl,
+        messageType,
         senderType
       ];
 
@@ -1763,8 +1763,8 @@ router.post('/api/conversations/:conversationId/messages', upload.single('image'
 
         console.log('✅ Message sent successfully');
 
-        res.json({ 
-          success: true, 
+        res.json({
+          success: true,
           message_id: result.insertId,
           message: 'Message sent successfully'
         });
@@ -1811,7 +1811,7 @@ router.post('/api/conversations', (req, res) => {
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE u.email = ?
     `;
-    
+
     callbackConnection.query(findSellerQuery, [seller_email], (err, sellers) => {
       if (err) {
         console.error('Error finding seller:', err);
@@ -1848,7 +1848,7 @@ router.post('/api/conversations', (req, res) => {
         if (existing.length > 0) {
           // Conversation exists, just send the message
           const conversationId = existing[0].conversation_id;
-          
+
           const insertMessageQuery = `
             INSERT INTO messages (conversation_id, sender_id, sender_username, message_content, sent_at, is_read, message_type, sender_type)
             VALUES (?, ?, ?, ?, NOW(), 0, 'text', 'buyer')
@@ -1860,8 +1860,8 @@ router.post('/api/conversations', (req, res) => {
               return res.status(500).json({ error: 'Failed to send message' });
             }
 
-            res.json({ 
-              success: true, 
+            res.json({
+              success: true,
               conversation_id: conversationId,
               message: 'Message sent to existing conversation'
             });
@@ -1895,8 +1895,8 @@ router.post('/api/conversations', (req, res) => {
                 return res.status(500).json({ error: 'Failed to send initial message' });
               }
 
-              res.json({ 
-                success: true, 
+              res.json({
+                success: true,
                 conversation_id: conversationId,
                 message: 'Conversation started successfully'
               });
@@ -1984,8 +1984,8 @@ router.delete('/api/conversations/:conversationId/messages/:messageId', (req, re
           }
 
           console.log('Message deleted for everyone successfully');
-          res.json({ 
-            success: true, 
+          res.json({
+            success: true,
             message: 'Message deleted for everyone'
           });
         });
@@ -2021,8 +2021,8 @@ router.delete('/api/conversations/:conversationId/messages/:messageId', (req, re
           }
 
           console.log('Message deleted for user successfully');
-          res.json({ 
-            success: true, 
+          res.json({
+            success: true,
             message: 'Message deleted for you'
           });
         });
@@ -2065,8 +2065,8 @@ router.post('/api/qa', (req, res) => {
       return res.status(500).json({ error: 'Failed to submit question' });
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Question submitted for review',
       qa_id: result.insertId
     });
@@ -2105,8 +2105,8 @@ router.post('/api/qa/:qaId/answer', (req, res) => {
       return res.status(500).json({ error: 'Failed to submit answer' });
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Answer submitted successfully',
       answer_id: result.insertId
     });
@@ -2122,7 +2122,7 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
 
   // Check if user already voted
   const checkVoteQuery = 'SELECT * FROM qa_votes WHERE qa_id = ? AND user_id = ?';
-  
+
   callbackConnection.query(checkVoteQuery, [qaId, userId], (err, existingVotes) => {
     if (err) {
       console.error('Error checking vote:', err);
@@ -2146,9 +2146,9 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
             return res.status(500).json({ error: 'Failed to get updated count' });
           }
 
-          res.json({ 
-            voted: false, 
-            vote_count: result[0].helpful_count 
+          res.json({
+            voted: false,
+            vote_count: result[0].helpful_count
           });
         });
       });
@@ -2169,9 +2169,9 @@ router.post('/api/qa/:qaId/vote', (req, res) => {
             return res.status(500).json({ error: 'Failed to get updated count' });
           }
 
-          res.json({ 
-            voted: true, 
-            vote_count: result[0].helpful_count 
+          res.json({
+            voted: true,
+            vote_count: result[0].helpful_count
           });
         });
       });
@@ -2185,7 +2185,7 @@ router.get('/api/qa/votes/status', (req, res) => {
 
   const userId = getUserId(req);
   const query = 'SELECT qa_id FROM qa_votes WHERE user_id = ?';
-  
+
   callbackConnection.query(query, [userId], (err, votes) => {
     if (err) {
       console.error('Error getting vote status:', err);
@@ -2199,7 +2199,7 @@ router.get('/api/qa/votes/status', (req, res) => {
 
 // --------------- User Feedback -------------------------
 router.get('/feedback', (req, res) => {
-  res.render('users/feedback', { 
+  res.render('users/feedback', {
     title: 'Feedback - Vintique',
     layout: 'user',
     activePage: 'feedback'
@@ -2249,7 +2249,7 @@ router.get('/api/cart', (req, res) => {
   if (!req.session.user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  
+
   const userId = req.session.user.id || req.session.user.user_id;
   const cartQuery = `
     SELECT 
@@ -2269,15 +2269,15 @@ router.get('/api/cart', (req, res) => {
     WHERE c.user_id = ?
     ORDER BY c.added_at DESC
   `;
-  
+
   callbackConnection.query(cartQuery, [userId], (err, items) => {
     if (err) {
       return handleDbError(err, res, 'Cart query error');
     }
-    
+
     // Fix image URLs using helper
     const processedItems = processListingImages(items);
-    
+
     res.json({ items: processedItems });
   });
 });
@@ -2285,36 +2285,36 @@ router.get('/api/cart', (req, res) => {
 // Add item to cart
 router.post('/api/cart', (req, res) => {
   if (!requireUserAuth(req, res)) return;
-  
+
   const userId = getUserId(req);
   const { listing_id, quantity = 1 } = req.body;
-  
+
   if (!listing_id) {
     return res.status(400).json({ error: 'Listing ID is required' });
   }
-  
+
   // Check if listing exists and is available
   const checkListingQuery = `
     SELECT listing_id, title, user_id, status 
     FROM listings 
     WHERE listing_id = ? AND status = 'active'
   `;
-  
+
   callbackConnection.query(checkListingQuery, [listing_id], (err, listings) => {
     if (err) {
     }
-    
+
     if (listings.length === 0) {
       return res.status(404).json({ error: 'Listing not found or no longer available' });
     }
-    
+
     const listing = listings[0];
-    
+
     // Check if user is trying to add their own item
     if (listing.user_id === userId) {
       return res.status(400).json({ error: 'You cannot add your own items to cart' });
     }
-    
+
     // Check if item is already in cart
     const checkCartQuery = 'SELECT cart_id FROM cart WHERE user_id = ? AND listing_id = ?';
     callbackConnection.query(checkCartQuery, [userId, listing_id], (err, cartItems) => {
@@ -2322,25 +2322,25 @@ router.post('/api/cart', (req, res) => {
         console.error('Check cart error:', err);
         return res.status(500).json({ error: 'Database error' });
       }
-      
+
       if (cartItems.length > 0) {
         return res.status(409).json({ error: 'Item is already in your cart' });
       }
-      
+
       // Add to cart
       const insertCartQuery = `
         INSERT INTO cart (user_id, listing_id, quantity, added_at)
         VALUES (?, ?, ?, NOW())
       `;
-      
+
       callbackConnection.query(insertCartQuery, [userId, listing_id, quantity], (err, result) => {
         if (err) {
           console.error('Add to cart error:', err);
           return res.status(500).json({ error: 'Failed to add item to cart' });
         }
-        
-        res.json({ 
-          success: true, 
+
+        res.json({
+          success: true,
           message: `"${listing.title}" added to cart!`,
           cart_id: result.insertId
         });
@@ -2352,26 +2352,26 @@ router.post('/api/cart', (req, res) => {
 // Update cart item quantity
 router.put('/api/cart/:cartId', (req, res) => {
   if (!requireUserAuth(req, res)) return;
-  
+
   const userId = getUserId(req);
   const cartId = req.params.cartId;
   const { quantity } = req.body;
-  
+
   if (!quantity || quantity < 1) {
     return res.status(400).json({ error: 'Valid quantity is required' });
   }
-  
+
   const updateQuery = 'UPDATE cart SET quantity = ? WHERE cart_id = ? AND user_id = ?';
   callbackConnection.query(updateQuery, [quantity, cartId, userId], (err, result) => {
     if (err) {
       console.error('Update cart quantity error:', err);
       return res.status(500).json({ error: 'Database error' });
     }
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Item not found in cart' });
     }
-    
+
     res.json({ success: true, message: 'Cart quantity updated' });
   });
 });
@@ -2379,21 +2379,21 @@ router.put('/api/cart/:cartId', (req, res) => {
 // Remove item from cart
 router.delete('/api/cart/:cartId', (req, res) => {
   if (!requireUserAuth(req, res)) return;
-  
+
   const userId = getUserId(req);
   const cartId = req.params.cartId;
-  
+
   const deleteQuery = 'DELETE FROM cart WHERE cart_id = ? AND user_id = ?';
   callbackConnection.query(deleteQuery, [cartId, userId], (err, result) => {
     if (err) {
       console.error('Remove from cart error:', err);
       return res.status(500).json({ error: 'Database error' });
     }
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Item not found in cart' });
     }
-    
+
     res.json({ success: true, message: 'Item removed from cart' });
   });
 });
@@ -2401,16 +2401,16 @@ router.delete('/api/cart/:cartId', (req, res) => {
 // Clear entire cart
 router.delete('/api/cart', (req, res) => {
   if (!requireUserAuth(req, res)) return;
-  
+
   const userId = getUserId(req);
   const deleteQuery = 'DELETE FROM cart WHERE user_id = ?';
-  
+
   callbackConnection.query(deleteQuery, [userId], (err, result) => {
     if (err) {
       console.error('Clear cart error:', err);
       return res.status(500).json({ error: 'Database error' });
     }
-    
+
     res.json({ success: true, message: 'Cart cleared successfully' });
   });
 });
@@ -2444,7 +2444,7 @@ router.get('/api/listings/:listingId', (req, res) => {
     }
 
     const listing = listings[0];
-    
+
     // Fix image URL using helper
     listing.image_url = fixImageUrl(listing.image_url);
 
@@ -2536,36 +2536,38 @@ router.get('/orders', async (req, res) => {
   if (!req.session.user) {
     return res.redirect('/login');
   }
-  
+
   const userId = req.session.user.user_id || req.session.user.id;
 
   const conn = await createConnection();
 
   try {
     // Fetch purchases (orders where user is buyer)
+    // Fetch purchases (orders where user is buyer and not archived)
     const [purchases] = await conn.execute(
       `SELECT o.*, l.title AS listing_title, u.email AS seller_email, li.image_url AS listing_image, l.listing_id as listing_id,
-              oi.quantity, oi.price, oi.order_item_id as orderItemId, r.reviewID IS NOT NULL AS hasReviewed
-       FROM orders o
-       JOIN order_items oi ON o.order_id = oi.order_id
-       JOIN listings l ON oi.listing_id = l.listing_id
-       JOIN users u ON l.user_id = u.user_id
-       LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
-       LEFT JOIN reviews r ON r.userID = o.user_id AND r.orderItemID = oi.order_item_id
-       WHERE o.user_id = ?`, [userId]
+          oi.quantity, oi.price, oi.order_item_id as orderItemId, r.reviewID IS NOT NULL AS hasReviewed
+   FROM orders o
+   JOIN order_items oi ON o.order_id = oi.order_id
+   JOIN listings l ON oi.listing_id = l.listing_id
+   JOIN users u ON l.user_id = u.user_id
+   LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+   LEFT JOIN reviews r ON r.userID = o.user_id AND r.orderItemID = oi.order_item_id
+   WHERE o.user_id = ? AND o.archived = 0`, [userId]
     );
 
-    // Fetch sales (orders where user is the seller)
+    // Fetch sales (orders where user is the seller and not archived)
     const [sales] = await conn.execute(
       `SELECT o.*, l.title AS listing_title, o.user_id AS buyer_id, u.email AS buyer_email, li.image_url AS listing_image,
-              oi.quantity, oi.price
-       FROM orders o
-       JOIN order_items oi ON o.order_id = oi.order_id
-       JOIN listings l ON oi.listing_id = l.listing_id
-       JOIN users u ON o.user_id = u.user_id
-       LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
-       WHERE l.user_id = ?`, [userId]
+          oi.quantity, oi.price
+   FROM orders o
+   JOIN order_items oi ON o.order_id = oi.order_id
+   JOIN listings l ON oi.listing_id = l.listing_id
+   JOIN users u ON o.user_id = u.user_id
+   LEFT JOIN listing_images li ON l.listing_id = li.listing_id AND li.is_main = 1
+   WHERE l.user_id = ? AND o.archived = 0`, [userId]
     );
+
 
     await conn.end();
 
@@ -2587,7 +2589,7 @@ router.get('/orders/details/:orderId', async (req, res) => {
   if (!req.session.user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  
+
   const userId = req.session.user.user_id || req.session.user.id;
   const orderId = req.params.orderId;
 
@@ -2600,12 +2602,12 @@ router.get('/orders/details/:orderId', async (req, res) => {
         (SELECT order_id FROM order_items oi JOIN listings l ON oi.listing_id = l.listing_id WHERE l.user_id = ?))`,
       [orderId, userId, userId]
     );
-    
+
     if (orders.length === 0) {
       await conn.end();
       return res.status(404).json({ error: "Order not found or not authorized" });
     }
-    
+
     const order = orders[0];
 
     // Get items
@@ -2809,11 +2811,11 @@ router.get('/orders/archived', async (req, res) => {
 router.get('/api/stripe/get-publishable-key', (req, res) => {
   try {
     if (!process.env.STRIPE_PUBLISHABLE_KEY) {
-      return res.status(503).json({ 
-        error: 'Stripe publishable key not configured.' 
+      return res.status(503).json({
+        error: 'Stripe publishable key not configured.'
       });
     }
-    
+
     res.json({
       publishableKey: process.env.STRIPE_PUBLISHABLE_KEY
     });
@@ -2829,14 +2831,14 @@ router.post('/api/stripe/create-payment-intent', requireAuth, async (req, res) =
   try {
     // Check if Stripe is configured
     if (!global.stripe) {
-      return res.status(503).json({ 
-        error: 'Payment processing is currently unavailable. Please contact support.' 
+      return res.status(503).json({
+        error: 'Payment processing is currently unavailable. Please contact support.'
       });
     }
-    
+
     connection = await createConnection();
     const { order_id, amount } = req.body;
-    
+
     // Create Stripe checkout session
     const session = await global.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -2858,12 +2860,12 @@ router.post('/api/stripe/create-payment-intent', requireAuth, async (req, res) =
         order_id: order_id
       }
     });
-    
+
     res.json({
       sessionId: session.id,
       publishableKey: process.env.STRIPE_PUBLISHABLE_KEY
     });
-    
+
   } catch (error) {
     console.error('Stripe payment intent error:', error);
     res.status(500).json({ error: 'Payment setup failed.' });
@@ -2878,50 +2880,50 @@ router.post('/api/stripe/verify-payment', requireAuth, async (req, res) => {
   try {
     // Check if Stripe is configured
     if (!global.stripe) {
-      return res.status(503).json({ 
-        error: 'Payment processing is currently unavailable.' 
+      return res.status(503).json({
+        error: 'Payment processing is currently unavailable.'
       });
     }
-    
+
     const { sessionId, orderId } = req.body;
-    
+
     if (!sessionId || !orderId) {
       return res.status(400).json({ error: 'Session ID and Order ID are required.' });
     }
-    
+
     // Retrieve the session from Stripe
     const session = await global.stripe.checkout.sessions.retrieve(sessionId);
     console.log('Payment status:', session.payment_status);
-    
+
     connection = await createConnection();
-    
+
     if (session.payment_status === 'paid') {
       // Start transaction
       await connection.beginTransaction();
-      
+
       try {
         // Update order status to paid
         await connection.execute(`
           UPDATE orders SET status = 'paid' WHERE order_id = ?
         `, [orderId]);
-        
+
         // Get order items to mark listings as sold
         const [orderItems] = await connection.execute(`
           SELECT listing_id FROM order_items WHERE order_id = ?
         `, [orderId]);
-        
+
         // Mark all listings in the order as sold
         for (const item of orderItems) {
           await connection.execute(`
             UPDATE listings SET status = 'sold' WHERE listing_id = ?
           `, [item.listing_id]);
         }
-        
+
         // Commit transaction
         await connection.commit();
-        
-        res.json({ 
-          success: true, 
+
+        res.json({
+          success: true,
           payment_status: 'paid',
           message: 'Payment verified successfully. Items marked as sold.',
           items_sold: orderItems.length
@@ -2936,14 +2938,14 @@ router.post('/api/stripe/verify-payment', requireAuth, async (req, res) => {
       await connection.execute(`
         UPDATE orders SET status = 'failed' WHERE order_id = ?
       `, [orderId]);
-      
-      res.json({ 
-        success: false, 
+
+      res.json({
+        success: false,
         payment_status: session.payment_status,
-        message: 'Payment was not completed.' 
+        message: 'Payment was not completed.'
       });
     }
-    
+
   } catch (error) {
     console.error('Payment verification error:', error);
     res.status(500).json({ error: 'Payment verification failed.' });
@@ -2960,12 +2962,12 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
   try {
     connection = await createConnection();
     const userId = req.session.user.user_id || req.session.user.id;
-    
+
     // Debug: Log the entire request body
     console.log('=== CHECKOUT DEBUG ===');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
     console.log('Content-Type:', req.get('Content-Type'));
-    
+
     // Extract shipping fields from nested object
     const shippingAddress = req.body.shipping_address || {};
     const shipping_address_name = shippingAddress.name;
@@ -2975,7 +2977,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
     const shipping_address_country = shippingAddress.country;
     const shipping_address_postal_code = shippingAddress.postal_code;
     const shipping_address_phone = shippingAddress.phone;
-    
+
     // Debug: Log extracted values
     console.log('Extracted shipping fields:');
     console.log('- shipping_address_name:', shipping_address_name);
@@ -2986,7 +2988,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
     console.log('- shipping_address_postal_code:', shipping_address_postal_code);
     console.log('- shipping_address_phone:', shipping_address_phone);
     console.log('=====================');
-    
+
     // Validate shipping address fields
     const requiredFields = ['shipping_address_name', 'shipping_address_street', 'shipping_address_city', 'shipping_address_state', 'shipping_address_postal_code', 'shipping_address_phone'];
     const missingFields = requiredFields.filter(field => {
@@ -3005,7 +3007,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
       console.log('Missing fields:', missingFields);
       return res.status(400).json({ error: `Missing required shipping fields: ${missingFields.join(', ')}` });
     }
-    
+
     // Get cart items with seller information
     const [cartItems] = await connection.execute(`
       SELECT c.cart_id, c.quantity,
@@ -3017,37 +3019,37 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE c.user_id = ? AND l.status = 'active'
     `, [userId]);
-    
+
     if (cartItems.length === 0) {
       return res.status(400).json({ error: 'Cart is empty.' });
     }
-    
+
     // Get customer information
     const [customerInfo] = await connection.execute(`
       SELECT ui.username, u.email FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE u.user_id = ?
     `, [userId]);
-    
+
     if (customerInfo.length === 0) {
       return res.status(400).json({ error: 'Customer information not found.' });
     }
-    
+
     const customerName = customerInfo[0].username;
     const customerEmail = customerInfo[0].email;
-    
+
     // Calculate total
     const subtotal = cartItems.reduce((total, item) => {
       return total + (parseFloat(item.price) * item.quantity);
     }, 0);
-    
+
     const shipping = subtotal >= 50 ? 0 : 5.99;
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shipping + tax;
-    
+
     // Start transaction
     await connection.beginTransaction();
-    
+
     try {
       // Create order with shipping address information
       const [orderResult] = await connection.execute(`
@@ -3064,7 +3066,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
           shipping_address_phone
         ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?)
       `, [
-        userId, 
+        userId,
         total,
         shipping_address_name,
         shipping_address_street,
@@ -3074,9 +3076,9 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
         shipping_address_postal_code,
         shipping_address_phone
       ]);
-      
+
       const orderId = orderResult.insertId;
-      
+
       // Create order items
       for (const item of cartItems) {
         await connection.execute(`
@@ -3084,18 +3086,18 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
           VALUES (?, ?, ?, ?)
         `, [orderId, item.listing_id, item.quantity, item.price]);
       }
-      
+
       // Clear cart
       await connection.execute(`
         DELETE FROM cart WHERE user_id = ?
       `, [userId]);
-      
+
       // Commit transaction
       await connection.commit();
-      
+
       // Send email notifications (non-blocking)
       const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../utils/helpers');
-      
+
       // Prepare order data for customer email
       const customerOrderData = {
         orderId: orderId,
@@ -3117,7 +3119,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
           seller: item.seller_username
         }))
       };
-      
+
       // Send customer confirmation email
       sendOrderConfirmationEmail(customerEmail, customerName, customerOrderData)
         .then(success => {
@@ -3130,7 +3132,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
         .catch(error => {
           console.error('❌ Error sending customer confirmation email:', error);
         });
-      
+
       // Send seller notification emails
       const sellerGroups = {};
       cartItems.forEach(item => {
@@ -3143,7 +3145,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
         }
         sellerGroups[item.seller_id].items.push(item);
       });
-      
+
       // Send notification to each seller
       for (const sellerId in sellerGroups) {
         const seller = sellerGroups[sellerId];
@@ -3167,7 +3169,7 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
             price: seller.items[0].price
           }
         };
-        
+
         sendOrderNotificationEmail(seller.sellerEmail, seller.sellerName, sellerOrderData)
           .then(success => {
             if (success) {
@@ -3180,20 +3182,20 @@ router.post('/api/checkout', requireAuth, async (req, res) => {
             console.error('❌ Error sending seller notification email:', error);
           });
       }
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         order_id: orderId,
         total: total,
         message: 'Order created successfully.'
       });
-      
+
     } catch (error) {
       // Rollback on error
       await connection.rollback();
       throw error;
     }
-    
+
   } catch (error) {
     console.error('Checkout error:', error);
     res.status(500).json({ error: 'Server error during checkout.' });
@@ -3217,13 +3219,13 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
     const shipping_address_country = shippingAddress.country;
     const shipping_address_postal_code = shippingAddress.postal_code;
     const shipping_address_phone = shippingAddress.phone;
-    
+
     const { listing_id } = req.body;
-    
+
     if (!listing_id) {
       return res.status(400).json({ error: 'Listing ID is required.' });
     }
-    
+
     // Validate shipping address fields
     const requiredFields = ['shipping_address_name', 'shipping_address_street', 'shipping_address_city', 'shipping_address_state', 'shipping_address_postal_code', 'shipping_address_phone'];
     const missingFields = requiredFields.filter(field => {
@@ -3237,11 +3239,11 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
       }[field];
       return !fieldValue;
     });
-    
+
     if (missingFields.length > 0) {
       return res.status(400).json({ error: `Missing required shipping fields: ${missingFields.join(', ')}` });
     }
-    
+
     // Get listing details with seller information
     const [listings] = await connection.execute(`
       SELECT l.listing_id, l.title, l.price, l.item_condition, l.user_id,
@@ -3250,41 +3252,41 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
       JOIN users u ON l.user_id = u.user_id
       WHERE l.listing_id = ? AND l.status = 'active'
     `, [listing_id]);
-    
+
     if (listings.length === 0) {
       return res.status(404).json({ error: 'Listing not found or not available.' });
     }
-    
+
     const listing = listings[0];
-    
+
     // Check if user is trying to buy their own listing
     if (listing.user_id === userId) {
       return res.status(400).json({ error: 'You cannot purchase your own listing.' });
     }
-    
+
     // Get customer information
     const [customerInfo] = await connection.execute(`
       SELECT ui.username, u.email FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE u.user_id = ?
     `, [userId]);
-    
+
     if (customerInfo.length === 0) {
       return res.status(400).json({ error: 'Customer information not found.' });
     }
-    
+
     const customerName = customerInfo[0].username;
     const customerEmail = customerInfo[0].email;
-    
+
     // Calculate total
     const subtotal = parseFloat(listing.price);
     const shipping = subtotal >= 50 ? 0 : 5.99;
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shipping + tax;
-    
+
     // Start transaction
     await connection.beginTransaction();
-    
+
     try {
       // Create order with shipping address information
       const [orderResult] = await connection.execute(`
@@ -3301,7 +3303,7 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
           shipping_address_phone
         ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?)
       `, [
-        userId, 
+        userId,
         total,
         shipping_address_name,
         shipping_address_street,
@@ -3311,21 +3313,21 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
         shipping_address_postal_code,
         shipping_address_phone
       ]);
-      
+
       const orderId = orderResult.insertId;
-      
+
       // Create order item
       await connection.execute(`
         INSERT INTO order_items (order_id, listing_id, quantity, price) 
         VALUES (?, ?, 1, ?)
       `, [orderId, listing.listing_id, listing.price]);
-      
+
       // Commit transaction
       await connection.commit();
-      
+
       // Send email notifications (non-blocking)
       const { sendOrderConfirmationEmail, sendOrderNotificationEmail } = require('../utils/helpers');
-      
+
       // Prepare order data for customer email
       const customerOrderData = {
         orderId: orderId,
@@ -3347,7 +3349,7 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
           seller: listing.seller_username
         }]
       };
-      
+
       // Send customer confirmation email
       sendOrderConfirmationEmail(customerEmail, customerName, customerOrderData)
         .then(success => {
@@ -3360,7 +3362,7 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
         .catch(error => {
           console.error('❌ Error sending customer confirmation email:', error);
         });
-      
+
       // Prepare order data for seller email
       const sellerOrderData = {
         orderId: orderId,
@@ -3382,7 +3384,7 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
           price: listing.price
         }
       };
-      
+
       // Send seller notification email
       sendOrderNotificationEmail(listing.seller_email, listing.seller_username, sellerOrderData)
         .then(success => {
@@ -3395,20 +3397,20 @@ router.post('/api/checkout/single', requireAuth, async (req, res) => {
         .catch(error => {
           console.error('❌ Error sending seller notification email:', error);
         });
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         order_id: orderId,
         total: total,
         message: 'Order created successfully.'
       });
-      
+
     } catch (error) {
       // Rollback on error
       await connection.rollback();
       throw error;
     }
-    
+
   } catch (error) {
     console.error('Single item checkout error:', error);
     res.status(500).json({ error: 'Server error during checkout.' });
@@ -3523,7 +3525,7 @@ router.get('/user/id/:id', (req, res) => {
   const user_now = req.session.user;
   const role = user_now ? user_now.role : null;
   const is_staff = role === "admin" || role === "staff";
-  
+
 
   const sql = `
     SELECT u.user_id, u.email, ui.username, ui.first_name, ui.last_name,
@@ -3737,22 +3739,22 @@ router.post('/reviews/add', (req, res) => {
 // Test database connection
 router.get('/test-db', (req, res) => {
   console.log('Testing database connection...');
-  
+
   const testQuery = 'SELECT 1 as test';
   callbackConnection.query(testQuery, (err, result) => {
     if (err) {
       console.error('❌ Database test failed:', err);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Database connection failed',
-        details: err.message 
+        details: err.message
       });
     }
-    
+
     console.log('✅ Database test successful:', result);
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Database connection is working',
-      result: result 
+      result: result
     });
   });
 });
@@ -3763,7 +3765,7 @@ router.get('/test-email', async (req, res) => {
     // Sample order data for testing
     const customerEmail = req.query.email || 'test@example.com';
     const customerName = 'Test Customer';
-    
+
     const orderData = {
       orderId: 'TEST-12345',
       orderDate: new Date(),
@@ -3795,7 +3797,7 @@ router.get('/test-email', async (req, res) => {
 
     // Send customer confirmation email
     const customerResult = await sendOrderConfirmationEmail(customerEmail, customerName, orderData);
-    
+
     // Send seller notification email (using same email for testing)
     const sellerOrderData = {
       orderId: 'TEST-12345',
@@ -3809,7 +3811,7 @@ router.get('/test-email', async (req, res) => {
       },
       shippingAddress: orderData.shippingAddress
     };
-    
+
     const sellerResult = await sendOrderNotificationEmail(customerEmail, 'Test Seller', sellerOrderData);
 
     res.json({
@@ -3819,7 +3821,7 @@ router.get('/test-email', async (req, res) => {
       sellerEmail: sellerResult,
       sentTo: customerEmail
     });
-    
+
   } catch (error) {
     console.error('❌ Test email error:', error);
     res.status(500).json({
