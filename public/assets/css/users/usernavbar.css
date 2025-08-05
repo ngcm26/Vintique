@@ -90,6 +90,19 @@ body {
 .nav-link.active {
     color: #000 !important;
     text-decoration: underline;
+    font-weight: normal;
+}
+
+/* Profile picture in dropdown */
+.nav-link img.rounded-circle {
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.nav-link.dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .logo-img {

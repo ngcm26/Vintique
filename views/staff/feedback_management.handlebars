@@ -1,400 +1,338 @@
-<!DOCTYPE html>
-<html lang="en">
+{{!-- Feedback Management Content --}}
+<div class="main-content">
+  <div class="content-area">
+    <!-- Page Header -->
+    <div class="header-bar" style="margin-top: 65px; margin-left: -25px;">
+      <h3 class="mb-0" style="margin-left: -25px;">Manage customer feedback and inquiries</h3>
 
-<head>
-  <title>Feedback Management</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="/assets/css/staff/feedback_management.css">
-</head>
-
-<body>
-  <div class="main-content">
-    <div class="content-area">
-      <!-- Page Header -->
-      <div class="header-bar" style="margin-top: 65px; margin-left: -25px;">
-        <h3 class="mb-0" style="margin-left: -25px;">Manage customer feedback and inquiries</h3>
-  
-        <div class="filter-section" style="width: 200px;">
-          <label for="feedbackFilter" class="form-label visually-hidden">Filter Feedback:</label>
-          <select id="feedbackFilter" class="form-select">
-            <option value="all" selected>All Feedback</option>
-            <option value="replied">Replied</option>
-            <option value="not_replied">Not Replied</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="dashboard">
-        <div class="dashboard-box">
-          <h2 id="totalFeedback">0</h2>
-          <p>Total Messages</p>
-        </div>
-        <div class="dashboard-box">
-          <h2 id="unrepliedFeedback">0</h2>
-          <p>Unread</p>
-        </div>
-        <div class="dashboard-box">
-          <h2 id="repliedFeedback">0</h2>
-          <p>Replied</p>
-        </div>
-      </div>
-
-
-      <!-- Feedback Messages -->
-      {{#each feedbackList}}
-      <div class="feedback-card">
-        <div class="feedback-header">
-          <div class="sender-info">
-            <div class="sender-details">
-              <h6>{{name}}</h6>
-              <p>{{email}}</p>
-            </div>
-          </div>
-          <div class="feedback-date">
-            {{CreatedAt}}
-          </div>
-        </div>
-        <div class="feedback-message">
-          <strong>Subject: {{subject}}</strong><br>
-          {{message}}
-        </div>
-        <div class="feedback-actions">
-          {{#if replied}}
-          <span class="replied-label">✔️ Replied</span>
-          {{else}}
-          <button class="btn-action btn-reply" data-email="{{email}}" data-subject="Re: {{subject}}" data-id="{{id}}"
-            data-bs-target="#replyModal" data-bs-toggle="modal">📩 Reply</button>
-          {{/if}}
-          <button class="btn-action btn-update" data-id="{{id}}">🛠️ Update</button>
-          <button class="btn-action btn-delete" data-id="{{id}}">🗑 Delete</button>
-        </div>
-      </div>
-      {{/each}}
-      <!-- If No Feedback -->
-      {{#unless feedbackList.length}}
-      <div class="empty-state">
-        <i class="fas fa-inbox"></i>
-        <p>No feedback messages yet.</p>
-      </div>
-      {{/unless}}
-
-    </div>
-  </div>
-  <!-- Update feedback modal -->
-  <div class="modal fade" id="editFeedbackModal" tabindex="-1" aria-labelledby="editFeedbackModalLabel"
-    aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="editFeedbackModalLabel">Edit Feedback</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-
-        <div class="modal-body">
-          <form id="editFeedbackForm">
-            <input type="hidden" id="editFeedbackId">
-
-            <div class="mb-3">
-              <label for="editSubject" class="form-label">Subject</label>
-              <input type="text" class="form-control" id="editSubject" required>
-            </div>
-
-            <div class="mb-3">
-              <label for="editMessage" class="form-label">Message</label>
-              <textarea class="form-control" id="editMessage" rows="3" required></textarea>
-            </div>
-
-            <div class="mb-3">
-              <label for="editReply" class="form-label">Reply</label>
-              <textarea class="form-control" id="editReply" rows="2"></textarea>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" form="editFeedbackForm" class="btn btn-primary">Save Changes</button>
-        </div>
-
-
+      <div class="filter-section" style="width: 200px;">
+        <label for="feedbackFilter" class="form-label visually-hidden">Filter Feedback:</label>
+        <select id="feedbackFilter" class="form-select">
+          <option value="all" selected>All Feedback</option>
+          <option value="replied">Replied</option>
+          <option value="not_replied">Not Replied</option>
+        </select>
       </div>
     </div>
+
+    <div class="dashboard">
+      <div class="dashboard-box">
+        <h2 id="totalFeedback">0</h2>
+        <p>Total Messages</p>
+      </div>
+      <div class="dashboard-box">
+        <h2 id="unrepliedFeedback">0</h2>
+        <p>Unread</p>
+      </div>
+      <div class="dashboard-box">
+        <h2 id="repliedFeedback">0</h2>
+        <p>Replied</p>
+      </div>
+    </div>
+
+    <!-- Feedback Messages -->
+    {{#each feedbackList}}
+    <div class="feedback-card">
+      <div class="feedback-header">
+        <div class="sender-info">
+          <div class="sender-details">
+            <h6>{{fullName}}</h6>
+            <p>{{email}}</p>
+          </div>
+        </div>
+        <div class="feedback-date">
+          {{CreatedAt}}
+        </div>
+      </div>
+      <div class="feedback-message">
+        <strong>Subject: {{subject}}</strong><br>
+        {{message}}
+      </div>
+      <div class="feedback-actions">
+        {{#if replied}}
+        <span class="replied-label">✔️ Replied</span>
+        {{else}}
+        <button class="btn-action btn-reply" data-email="{{email}}" data-subject="Re: {{subject}}" data-id="{{feedbackID}}"
+          data-bs-target="#replyModal" data-bs-toggle="modal">📩 Reply</button>
+        {{/if}}
+        <button class="btn-action btn-update" data-id="{{feedbackID}}">🛠️ Update</button>
+        <button class="btn-action btn-delete" data-id="{{feedbackID}}">🗑 Delete</button>
+      </div>
+    </div>
+    {{/each}}
+    <!-- If No Feedback -->
+    {{#unless feedbackList.length}}
+    <div class="empty-state">
+      <i class="fas fa-inbox"></i>
+      <p>No feedback messages yet.</p>
+    </div>
+    {{/unless}}
+
   </div>
-  
-<!-- Reply Feedback Modal -->
-  <div class="modal fade" id="replyModal" tabindex="-1" aria-labelledby="replyModalLabel" aria-hidden="true">
+</div>
+
+<!-- Update feedback modal -->
+<div class="modal fade" id="editFeedbackModal" tabindex="-1" aria-labelledby="editFeedbackModalLabel"
+  aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
-
       <div class="modal-header">
-        <h5 class="modal-title" id="replyModalLabel">Send Reply</h5>
+        <h5 class="modal-title" id="editFeedbackModalLabel">Edit Feedback</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <form id="editFeedbackForm">
+          <input type="hidden" id="editFeedbackId">
+
+          <div class="mb-3">
+            <label for="editSubject" class="form-label">Subject</label>
+            <input type="text" class="form-control" id="editSubject" required>
+          </div>
+
+          <div class="mb-3">
+            <label for="editMessage" class="form-label">Message</label>
+            <textarea class="form-control" id="editMessage" rows="4" required></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label for="editReplied" class="form-label">Status</label>
+            <select class="form-select" id="editReplied">
+              <option value="0">Not Replied</option>
+              <option value="1">Replied</option>
+            </select>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveEditFeedback">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reply Modal -->
+<div class="modal fade" id="replyModal" tabindex="-1" aria-labelledby="replyModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="replyModalLabel">Reply to Feedback</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
       <div class="modal-body">
         <form id="replyForm">
-          <input type="hidden" id="replyFeedbackID" name="feedbackID">
-
-          <div class="mb-3">
-            <label for="replyEmail" class="form-label">Recipient Email</label>
-            <input type="email" class="form-control" id="replyEmail" name="email" readonly>
-          </div>
+          <input type="hidden" id="replyFeedbackId">
+          <input type="hidden" id="replyEmail">
 
           <div class="mb-3">
             <label for="replySubject" class="form-label">Subject</label>
-            <input type="text" class="form-control" id="replySubject" name="subject" readonly>
+            <input type="text" class="form-control" id="replySubject" required>
           </div>
 
           <div class="mb-3">
             <label for="replyMessage" class="form-label">Reply Message</label>
-            <textarea class="form-control" id="replyMessage" name="message" rows="3" required></textarea>
+            <textarea class="form-control" id="replyMessage" rows="6" required></textarea>
           </div>
         </form>
-
-        <!-- ✅ Confirm Section: Moved inside modal-body -->
-        <div id="confirmSentSection" style="display: none;" class="border-top pt-3 mt-3">
-          <p class="text-warning fw-bold mb-2">After sending the email, click below to confirm:</p>
-          <button type="button" class="btn btn-success" id="confirmSentBtn">✔ I’ve sent the reply</button>
-        </div>
       </div>
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" form="replyForm" class="btn btn-primary">Send Reply</button>
+        <button type="button" class="btn btn-primary" id="sendReply">Send Reply</button>
       </div>
-
     </div>
   </div>
 </div>
-</body>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteFeedbackModal" tabindex="-1" aria-labelledby="deleteFeedbackModalLabel"
+  aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteFeedbackModalLabel">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <p>Are you sure you want to delete this feedback? This action cannot be undone.</p>
+        <input type="hidden" id="deleteFeedbackId">
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteFeedback">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-  document.querySelectorAll('.btn-delete').forEach(button => {
-    button.addEventListener('click', () => {
-      const id = button.getAttribute('data-id');
-      if (confirm('Are you sure you want to delete this feedback?')) {
-        fetch(`/feedback/${id}`, {
-          method: 'DELETE'
-        })
-          .then(res => {
-            if (res.ok) {
-              // Optionally remove the deleted row from the UI or reload the page
-              location.reload();
-            } else {
-              alert('Failed to delete feedback.');
-            }
-          });
-      }
-    });
-  });
+  // Feedback Management JavaScript
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initialize feedback counts
+    updateFeedbackCounts();
 
-  function setupUpdateButtons() {
+    // Filter functionality
+    document.getElementById('feedbackFilter').addEventListener('change', function() {
+      const filter = this.value;
+      const feedbackCards = document.querySelectorAll('.feedback-card');
+      
+      feedbackCards.forEach(card => {
+        const replied = card.querySelector('.replied-label') !== null;
+        
+        if (filter === 'all') {
+          card.style.display = 'block';
+        } else if (filter === 'replied' && replied) {
+          card.style.display = 'block';
+        } else if (filter === 'not_replied' && !replied) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    });
+
+    // Update feedback counts
+    function updateFeedbackCounts() {
+      const totalFeedback = document.querySelectorAll('.feedback-card').length;
+      const repliedFeedback = document.querySelectorAll('.replied-label').length;
+      const unrepliedFeedback = totalFeedback - repliedFeedback;
+
+      document.getElementById('totalFeedback').textContent = totalFeedback;
+      document.getElementById('repliedFeedback').textContent = repliedFeedback;
+      document.getElementById('unrepliedFeedback').textContent = unrepliedFeedback;
+    }
+
+    // Edit feedback functionality
     document.querySelectorAll('.btn-update').forEach(button => {
-      button.addEventListener('click', () => {
-        const feedbackId = button.getAttribute('data-id');
-        fetch(`/staff/feedback_management/${feedbackId}`, {
-          method: 'GET',
-          cache: 'no-store'
+      button.addEventListener('click', function() {
+        const feedbackId = this.getAttribute('data-id');
+        const feedbackCard = this.closest('.feedback-card');
+        const subject = feedbackCard.querySelector('.feedback-message strong').textContent.replace('Subject: ', '');
+        const message = feedbackCard.querySelector('.feedback-message').textContent.replace(/^Subject: .*\n/, '');
+        const replied = feedbackCard.querySelector('.replied-label') !== null;
+
+        document.getElementById('editFeedbackId').value = feedbackId;
+        document.getElementById('editSubject').value = subject;
+        document.getElementById('editMessage').value = message;
+        document.getElementById('editReplied').value = replied ? '1' : '0';
+
+        new bootstrap.Modal(document.getElementById('editFeedbackModal')).show();
+      });
+    });
+
+    // Save edit feedback
+    document.getElementById('saveEditFeedback').addEventListener('click', function() {
+      const feedbackId = document.getElementById('editFeedbackId').value;
+      const subject = document.getElementById('editSubject').value;
+      const message = document.getElementById('editMessage').value;
+      const replied = document.getElementById('editReplied').value;
+
+      fetch(`/staff/feedback_management/${feedbackId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subject: subject,
+          message: message,
+          replied: replied
         })
-          .then(response => {
-            console.log('Response status:', response.status);
-            return response.json();
-          })
-          .then(data => {
-            console.log('Data received:', data);
-
-            // Check if data has expected fields
-            if (!data || !data.feedbackID) {
-              throw new Error('Invalid feedback data');
-            }
-            document.getElementById('editFeedbackId').value = data.feedbackID;
-            document.getElementById('editSubject').value = data.subject || '';
-            document.getElementById('editMessage').value = data.message || '';
-            document.getElementById('editReply').value = data.replied || '';
-            // Show the modal using Bootstrap
-            const editModal = new bootstrap.Modal(document.getElementById('editFeedbackModal'));
-            editModal.show();
-          })
-          .catch(error => {
-            console.error('Error fetching feedback:', error);
-            alert('Failed to load feedback.');
-          });
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert('Error updating feedback: ' + data.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating feedback');
       });
     });
-  }
 
-  document.getElementById('editFeedbackForm').addEventListener('submit', async function (e) {
-    e.preventDefault(); // Prevent form default submit
+    // Reply functionality
+    document.querySelectorAll('.btn-reply').forEach(button => {
+      button.addEventListener('click', function() {
+        const feedbackId = this.getAttribute('data-id');
+        const email = this.getAttribute('data-email');
+        const subject = this.getAttribute('data-subject');
 
-    const feedbackId = document.getElementById('editFeedbackId').value;
-    const subject = document.getElementById('editSubject').value.trim();
-    const message = document.getElementById('editMessage').value.trim();
-    const replied = document.getElementById('editReply').value.trim();
+        document.getElementById('replyFeedbackId').value = feedbackId;
+        document.getElementById('replyEmail').value = email;
+        document.getElementById('replySubject').value = subject;
 
-    // Basic validation
-    if (!subject || !message) {
-      alert('Subject and message are required.');
-      return;
-    }
-
-    try {
-      const response = await fetch(`/feedback/${feedbackId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, message, replied })
+        new bootstrap.Modal(document.getElementById('replyModal')).show();
       });
-
-      if (response.ok) {
-        alert('Feedback updated successfully!');
-        // Optionally close modal
-        const editModal = bootstrap.Modal.getInstance(document.getElementById('editFeedbackModal'));
-        editModal.hide();
-
-        // Reload or update UI to reflect changes
-        location.reload(); // simple reload, or update the displayed feedback dynamically
-      } else {
-        const errorData = await response.json();
-        alert('Update failed: ' + (errorData.error || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Error updating feedback:', error);
-      alert('Server error while updating feedback.');
-    }
-  });
-
-
-
-document.getElementById('replyForm').addEventListener('submit', function (e) {
-  e.preventDefault();
-
-  const email = document.getElementById('replyEmail').value.trim();
-  const subject = document.getElementById('replySubject').value.trim();
-  const message = document.getElementById('replyMessage').value.trim();
-  const feedbackID = document.getElementById('replyFeedbackID').value;
-
-  if (!message) {
-    alert('Please enter a reply message.');
-    return;
-  }
-
-  // Open mail client
-  const mailtoLink = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-  window.open(mailtoLink, '_blank');
-
-  // Show "Confirm Sent" section
-  document.getElementById('confirmSentSection').style.display = 'block';
-
-  // Disable the send reply button to avoid re-click
-  e.submitter.disabled = true;
-});
-
-
-document.getElementById('confirmSentBtn').addEventListener('click', async function () {
-  const feedbackID = document.getElementById('replyFeedbackID').value;
-  const message = document.getElementById('replyMessage').value;
-
-  try {
-    const res = await fetch('/feedback/reply', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feedbackID, message })
     });
 
-    const data = await res.json();
+    // Send reply
+    document.getElementById('sendReply').addEventListener('click', function() {
+      const feedbackId = document.getElementById('replyFeedbackId').value;
+      const email = document.getElementById('replyEmail').value;
+      const subject = document.getElementById('replySubject').value;
+      const message = document.getElementById('replyMessage').value;
 
-    if (res.ok && data.success) {
-      alert("Reply saved successfully.");
-      const replyModal = bootstrap.Modal.getInstance(document.getElementById("replyModal"));
-      replyModal.hide();
-      location.reload();
-    } else {
-      alert("Failed to save reply: " + (data.error || "Unknown error"));
-    }
-  } catch (err) {
-    console.error("Error submitting reply:", err);
-    alert("Server error while saving reply.");
-  }
-});
-
-
-document.getElementById('replyModal').addEventListener('hidden.bs.modal', () => {
-  document.getElementById('confirmSentSection').style.display = 'none';
-  document.querySelector('#replyForm button[type="submit"]').disabled = false;
-});
-
-function setupReplyButtons() {
-  document.querySelectorAll('.btn-reply').forEach(button => {
-    button.addEventListener('click', () => {
-      const email = button.getAttribute('data-email');
-      const subject = button.getAttribute('data-subject');
-      const feedbackID = button.getAttribute('data-id');
-
-      // Fill modal input fields
-      document.getElementById('replyEmail').value = email;
-      document.getElementById('replySubject').value = subject;
-      document.getElementById('replyFeedbackID').value = feedbackID;
-      document.getElementById('replyMessage').value = '';
-    });
-  });
-}
-
-// Initialize buttons on DOM load
-window.addEventListener('DOMContentLoaded', () => {
-  setupUpdateButtons();
-  setupReplyButtons();
-});
-
-function filterFeedbacks() {
-  const filter = document.getElementById('feedbackFilter').value;
-  const feedbackCards = document.querySelectorAll('.feedback-card');
-
-  feedbackCards.forEach(card => {
-    const repliedLabel = card.querySelector('.replied-label');
-    const isReplied = repliedLabel !== null;
-
-    if (filter === 'all') {
-      card.style.display = '';
-    } else if (filter === 'replied') {
-      card.style.display = isReplied ? '' : 'none';
-    } else if (filter === 'not_replied') {
-      card.style.display = !isReplied ? '' : 'none';
-    }
-  });
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-  setupUpdateButtons();
-  setupReplyButtons();
-
-  // Add event listener for filtering
-  const filterSelect = document.getElementById('feedbackFilter');
-  filterSelect.addEventListener('change', () => {
-    filterFeedbacks();
-  });
-
-  // Run filter on page load to default to 'all'
-  filterFeedbacks();
-});
-
-  window.addEventListener('DOMContentLoaded', () => {
-    const allFeedbackCards = document.querySelectorAll('.feedback-card');
-    let repliedCount = 0;
-
-    allFeedbackCards.forEach(card => {
-      const repliedLabel = card.querySelector('.replied-label');
-      if (repliedLabel) {
-        repliedCount++;
-      }
+      fetch('/staff/feedback_management/reply', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          feedbackId: feedbackId,
+          email: email,
+          subject: subject,
+          message: message
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert('Error sending reply: ' + data.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error sending reply');
+      });
     });
 
-    const totalCount = allFeedbackCards.length;
-    const unrepliedCount = totalCount - repliedCount;
+    // Delete feedback functionality
+    document.querySelectorAll('.btn-delete').forEach(button => {
+      button.addEventListener('click', function() {
+        const feedbackId = this.getAttribute('data-id');
+        document.getElementById('deleteFeedbackId').value = feedbackId;
+        new bootstrap.Modal(document.getElementById('deleteFeedbackModal')).show();
+      });
+    });
 
-    document.getElementById('totalFeedback').textContent = totalCount;
-    document.getElementById('repliedFeedback').textContent = repliedCount;
-    document.getElementById('unrepliedFeedback').textContent = unrepliedCount;
+    // Confirm delete
+    document.getElementById('confirmDeleteFeedback').addEventListener('click', function() {
+      const feedbackId = document.getElementById('deleteFeedbackId').value;
+
+      fetch(`/staff/feedback_management/${feedbackId}`, {
+        method: 'DELETE'
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert('Error deleting feedback: ' + data.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error deleting feedback');
+      });
+    });
   });
 </script>
-
-</html>

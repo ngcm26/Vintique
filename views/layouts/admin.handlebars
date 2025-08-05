@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/assets/css/staff/user_management.css" />
   <link rel="stylesheet" href="/assets/css/staff/staff_management.css" />
   <link rel="stylesheet" href="/assets/css/staff/qa_management.css" />
+  <link rel="stylesheet" href="/assets/css/staff/feedback_management.css" />
 </head>
 <body>
   <!-- Admin Navbar -->
@@ -26,8 +27,8 @@
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'dashboard')}}active{{/if}}" href="/admin/dashboard">Dashboard</a></li>
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'user_management')}}active{{/if}}" href="/admin/user_management">Manage Users</a></li>
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'staff_management')}}active{{/if}}" href="/admin/staff_management">Manage Staff</a></li>
-            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'feedback_management')}}active{{/if}}" href="/staff/feedback_management">Manage Feedback</a></li>
-            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'voucher_management')}}active{{/if}}" href="/staff/vouchers/">Manage Vouchers</a></li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'feedback_management')}}active{{/if}}" href="/admin/feedback_management">Manage Feedback</a></li>
+            <li class="nav-item"><a class="nav-link {{#if (eq activePage 'voucher_management')}}active{{/if}}" href="/admin/vouchers">Manage Vouchers</a></li>
             <li class="nav-item"><a class="nav-link {{#if (eq activePage 'qa')}}active{{/if}}" href="/admin/qa">Q&A Management</a></li>
             <li class="nav-item"><a class="nav-link btn-logout" href="/logout">Logout</a></li>
           </ul>

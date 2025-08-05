@@ -89,7 +89,8 @@ body {
 
 .nav-link.active {
     color: #000 !important;
-    font-weight: 600;
+    font-weight: normal;
+    text-decoration: underline;
 }
 
 .logo-img {

@@ -97,6 +97,15 @@ const hbs = exphbs.create({
     },
     capitalize: (str) => typeof str === 'string'
       ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '',
+    formatDate: (dateString) => {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    },
     isExpired: (expiryDate) => {
       if (!expiryDate) return false;
       const now = new Date();

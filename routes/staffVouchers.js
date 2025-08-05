@@ -8,7 +8,14 @@ router.get('/', requireStaff, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
-    const [vouchers] = await connection.execute('SELECT * FROM vouchers ORDER BY created_at DESC');
+    const [vouchers] = await connection.execute(`
+      SELECT v.*, 
+             COALESCE(COUNT(uv.voucher_id), 0) as used_count
+      FROM vouchers v
+      LEFT JOIN user_vouchers uv ON v.voucher_id = uv.voucher_id
+      GROUP BY v.voucher_id
+      ORDER BY v.created_at DESC
+    `);
     const today = new Date().toISOString().split('T')[0];
 
     // Active: status = active and not expired (counted in SQL, not JS)

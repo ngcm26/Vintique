@@ -46,6 +46,7 @@ router.post('/login', async (req, res) => {
         ui.last_name,
         ui.username,
         ui.verified,
+        ui.profile_image_url,
         COALESCE(ui.status, u.status) as status
       FROM users u
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
@@ -71,6 +72,12 @@ router.post('/login', async (req, res) => {
       return res.redirect(`/verify?email=${encodeURIComponent(email)}&message=Please verify your email to continue.`);
     }
 
+    // Process profile image URL - only add prefix if it doesn't already have one
+    let profile_image_url = user.profile_image_url;
+    if (profile_image_url && !profile_image_url.startsWith('/')) {
+      profile_image_url = `/profilephoto/${profile_image_url}`;
+    }
+
     req.session.user = {
       user_id: user.user_id,
       id: user.user_id,
@@ -79,7 +86,8 @@ router.post('/login', async (req, res) => {
       status: user.status, // This now uses the COALESCE result
       first_name: user.first_name,
       last_name: user.last_name,
-      username: user.username
+      username: user.username,
+      profile_image_url: profile_image_url
     };
 
     if (user.role === 'admin') {

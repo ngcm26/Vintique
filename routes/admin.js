@@ -276,6 +276,136 @@ router.get('/admin/qa', requireAdmin, (req, res) => {
   });
 });
 
+// Feedback Management
+router.get('/admin/feedback_management', requireAdmin, (req, res) => {
+  const feedbackQuery = `
+    SELECT 
+      feedbackID,
+      fullName,
+      email,
+      subject,
+      message,
+      replied,
+      createdAt as CreatedAt
+    FROM feedback
+    ORDER BY createdAt DESC
+  `;
+
+  callbackConnection.query(feedbackQuery, (err, feedbackList) => {
+    if (err) {
+      console.error('Feedback management error:', err);
+      return res.render('staff/feedback_management', {
+        layout: 'admin',
+        activePage: 'feedback_management',
+        error: 'Failed to load feedback',
+        feedbackList: []
+      });
+    }
+
+    res.render('staff/feedback_management', {
+      layout: 'admin',
+      activePage: 'feedback_management',
+      feedbackList: feedbackList || []
+    });
+  });
+});
+
+// ========== FEEDBACK MANAGEMENT API ROUTES ==========
+
+// Admin Feedback Reply
+router.post('/admin/feedback_management/reply', requireAdmin, (req, res) => {
+  const { feedbackId, email, subject, message } = req.body;
+  const userID = req.session?.user?.user_id;
+
+  if (!feedbackId || !message || !userID) {
+    return res.status(400).json({ error: 'Missing feedback ID, message, or user ID' });
+  }
+
+  // Update the 'replied' column in the feedback table
+  const updateQuery = `
+    UPDATE feedback SET replied = 1 WHERE feedbackID = ?
+  `;
+
+  callbackConnection.query(updateQuery, [feedbackId], (updateErr, updateResult) => {
+    if (updateErr) {
+      console.error('Error updating replied column:', updateErr);
+      return res.status(500).json({ error: 'Failed to update feedback replied status.' });
+    }
+
+    res.status(200).json({
+      success: true,
+      updated: updateResult.affectedRows
+    });
+  });
+});
+
+// Admin Feedback Get by ID
+router.get('/admin/feedback_management/:id', requireAdmin, (req, res) => {
+  const id = req.params.id;
+
+  callbackConnection.query(
+    'SELECT * FROM feedback WHERE feedbackID = ?',
+    [id],
+    (err, rows) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+      }
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      res.json(rows[0]);
+    }
+  );
+});
+
+// Admin Feedback Update
+router.put('/admin/feedback_management/:id', requireAdmin, (req, res) => {
+  const feedbackId = req.params.id;
+  const { subject, message, replied } = req.body;
+
+  if (!subject || !message) {
+    return res.status(400).json({ error: 'Subject and message are required.' });
+  }
+
+  callbackConnection.query(
+    'UPDATE feedback SET subject = ?, message = ?, replied = ? WHERE feedbackID = ?',
+    [subject, message, replied || 0, feedbackId],
+    (err, result) => {
+      if (err) {
+        console.error('Feedback update error:', err);
+        return res.status(500).json({ error: 'Database error.' });
+      }
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Feedback not found.' });
+      }
+      res.json({ success: true });
+    }
+  );
+});
+
+// Admin Feedback Delete
+router.delete('/admin/feedback_management/:id', requireAdmin, (req, res) => {
+  const feedbackId = req.params.id;
+
+  callbackConnection.query(
+    'DELETE FROM feedback WHERE feedbackID = ?',
+    [feedbackId],
+    (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+      }
+
+      if (result.affectedRows === 1) {
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Feedback not found' });
+      }
+    }
+  );
+});
+
 // ========== STAFF MANAGEMENT API ROUTES ==========
 
 // Staff Management API endpoints
@@ -652,15 +782,37 @@ router.post('/admin/toggle_user_status', requireAdmin, (req, res) => {
 
 
 // Admin Manage Vouchers
-router.get('/staff/vouchers/list', requireAdmin, async (req, res) => {
+router.get('/admin/vouchers', requireAdmin, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
-    const [vouchers] = await connection.execute('SELECT * FROM vouchers ORDER BY created_at DESC');
+    const [vouchers] = await connection.execute(`
+      SELECT v.*, 
+             COALESCE(COUNT(uv.voucher_id), 0) as used_count
+      FROM vouchers v
+      LEFT JOIN user_vouchers uv ON v.voucher_id = uv.voucher_id
+      GROUP BY v.voucher_id
+      ORDER BY v.created_at DESC
+    `);
+    const today = new Date().toISOString().split('T')[0];
+
+    // Active: status = active and not expired (counted in SQL, not JS)
+    const [activeVouchers] = await connection.execute(
+      `SELECT COUNT(*) as count FROM vouchers WHERE status = 'active' AND expiry_date >= ?`,
+      [today]
+    );
+    const activeCount = activeVouchers[0].count;
+
+    // Total Claims: count from user_vouchers table
+    const [claims] = await connection.execute('SELECT COUNT(*) as total FROM user_vouchers');
+    const totalClaims = claims[0].total;
+
     res.render('staff/vouchers/list', {
       layout: 'admin',
       activePage: 'voucher_management',
       vouchers,
+      totalClaims,
+      activeCount,
       error: req.query.error
     });
   } catch (error) {
@@ -669,8 +821,121 @@ router.get('/staff/vouchers/list', requireAdmin, async (req, res) => {
       layout: 'admin',
       activePage: 'voucher_management',
       vouchers: [],
+      totalClaims: 0,
+      activeCount: 0,
       error: 'Failed to load vouchers'
     });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Admin Create Voucher Form
+router.get('/admin/vouchers/new', requireAdmin, (req, res) => {
+  res.render('staff/vouchers/new', {
+    layout: 'admin',
+    title: 'Create Voucher'
+  });
+});
+
+// Admin Create Voucher
+router.post('/admin/vouchers', requireAdmin, async (req, res) => {
+  const { code, discount_type, discount_value, min_spend, expiry_date, usage_limit, status } = req.body;
+  let connection;
+  try {
+    connection = await createConnection();
+    await connection.execute(
+      `INSERT INTO vouchers 
+        (code, discount_type, discount_value, min_spend, expiry_date, usage_limit, status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [code, discount_type, discount_value, min_spend || 0, expiry_date, usage_limit, status]
+    );
+    res.redirect('/admin/vouchers');
+  } catch (err) {
+    console.error('Create voucher error:', err);
+    res.render('staff/vouchers/new', {
+      layout: 'admin',
+      title: 'Create Voucher',
+      error: 'Failed to create voucher. Code must be unique.',
+      formData: req.body
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Admin Edit Voucher Form
+router.get('/admin/vouchers/:id/edit', requireAdmin, async (req, res) => {
+  const voucherId = req.params.id;
+  let connection;
+  try {
+    connection = await createConnection();
+    const [results] = await connection.execute('SELECT * FROM vouchers WHERE voucher_id = ?', [voucherId]);
+    if (results.length === 0) {
+      return res.status(404).render('staff/vouchers/list', {
+        layout: 'admin',
+        title: 'Manage Vouchers',
+        vouchers: [],
+        error: 'Voucher not found'
+      });
+    }
+    res.render('staff/vouchers/edit', {
+      layout: 'admin',
+      title: 'Edit Voucher',
+      voucher: results[0]
+    });
+  } catch (err) {
+    console.error('Edit voucher form error:', err);
+    res.status(500).send('Failed to load voucher for editing.');
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Admin Update Voucher
+router.post('/admin/vouchers/:id', requireAdmin, async (req, res) => {
+  const voucherId = req.params.id;
+  const { code, discount_type, discount_value, min_spend, expiry_date, usage_limit, status } = req.body;
+  let connection;
+  try {
+    connection = await createConnection();
+    await connection.execute(
+      `UPDATE vouchers 
+       SET code=?, discount_type=?, discount_value=?, min_spend=?, expiry_date=?, usage_limit=?, status=? 
+       WHERE voucher_id=?`,
+      [code, discount_type, discount_value, min_spend || 0, expiry_date, usage_limit, status, voucherId]
+    );
+    res.redirect('/admin/vouchers');
+  } catch (err) {
+    console.error('Update voucher error:', err);
+    res.render('staff/vouchers/edit', {
+      layout: 'admin',
+      title: 'Edit Voucher',
+      voucher: { ...req.body, voucher_id: voucherId },
+      error: 'Failed to update voucher. Code must be unique.'
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Admin Delete Voucher
+router.post('/admin/vouchers/:id/delete', requireAdmin, async (req, res) => {
+  const voucherId = req.params.id;
+  let connection;
+  try {
+    connection = await createConnection();
+
+    // 1. Delete all claims referencing this voucher
+    await connection.execute('DELETE FROM user_vouchers WHERE voucher_id = ?', [voucherId]);
+
+    // 2. Now it's safe to delete the voucher itself
+    await connection.execute('DELETE FROM vouchers WHERE voucher_id = ?', [voucherId]);
+
+    res.redirect('/admin/vouchers');
+  } catch (err) {
+    console.error('Delete voucher error:', err);
+    res.status(500).send('Failed to delete voucher.');
   } finally {
     if (connection) await connection.end();
   }

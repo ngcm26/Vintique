@@ -488,42 +488,34 @@ router.delete('/api/qa/:qaId', requireStaff, (req, res) => {
 
 // Staff Feedback Management
 router.get('/staff/feedback_management', requireStaff, (req, res) => {
-  callbackConnection.query(`
-    SELECT feedbackID, fullName, email, subject, message, createdAt, replied
-    FROM feedback 
+  const feedbackQuery = `
+    SELECT 
+      feedbackID,
+      fullName,
+      email,
+      subject,
+      message,
+      replied,
+      createdAt as CreatedAt
+    FROM feedback
     ORDER BY createdAt DESC
-  `, (error, feedbacks) => {
-    if (error) {
-      console.error('Error fetching feedback:', error);
+  `;
+
+  callbackConnection.query(feedbackQuery, (err, feedbackList) => {
+    if (err) {
+      console.error('Feedback management error:', err);
       return res.render('staff/feedback_management', {
         layout: 'staff',
         activePage: 'feedback_management',
-        error: 'Failed to load feedback.',
+        error: 'Failed to load feedback',
         feedbackList: []
       });
     }
 
-    const formattedFeedback = feedbacks.map(item => {
-      const createdAt = new Date(item.createdAt);
-      const now = new Date();
-      const diffTime = now - createdAt;
-      const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-      return {
-        id: item.feedbackID,
-        name: item.fullName,
-        email: item.email,
-        subject: item.subject,
-        message: item.message,
-        replied: item.replied,
-        CreatedAt: daysAgo === 0 ? 'Today' : `${daysAgo} day(s) ago`
-      };
-    });
-
     res.render('staff/feedback_management', {
       layout: 'staff',
       activePage: 'feedback_management',
-      feedbackList: formattedFeedback
+      feedbackList: feedbackList || []
     });
   });
 });
@@ -532,7 +524,7 @@ router.delete('/feedback/:id', requireStaff, (req, res) => {
   const feedbackId = req.params.id;
 
   callbackConnection.query(
-    'DELETE FROM feedback WHERE feedbackID = ?',
+    'DELETE FROM feedback WHERE id = ?',
     [feedbackId],
     (err, result) => {
       if (err) {
