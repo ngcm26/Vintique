@@ -80,17 +80,10 @@ function handleIntent(message) {
     };
   }
 
-  if (/\b(promo|voucher|discount)\b/.test(msg)) {
-    return {
-      intent: "promo",
-      reply: getActivePromo(),
-      quickReplies: [
-        'Help',
-        'Sell an Item',
-        'Track Order'
-      ]
-    };
+  if (/\b(promo|promotion|voucher|vouchers|discount|code|deal)\b/.test(msg)) {
+    return { intent: "vouchers" };
   }
+
 
   if (/\b(refund|return)\b/.test(msg)) {
     return {

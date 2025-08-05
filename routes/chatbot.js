@@ -126,6 +126,53 @@ ${itemsText}`;
         return res.json({ reply: replyText });
       }
     }
+
+
+    else if (intent === "vouchers") {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        // Fetch all active and non-expired vouchers
+        const [vouchers] = await conn.execute(
+          `SELECT code, discount_type, discount_value, expiry_date
+       FROM vouchers
+       WHERE status = 'active' AND expiry_date >= ?
+       ORDER BY expiry_date ASC
+       LIMIT 5`, [today]
+        );
+        let replyText;
+        if (vouchers.length === 0) {
+          replyText = "There are currently no active vouchers or promotions. Check back soon!";
+        } else {
+          replyText = "Here are the latest available vouchers:<br>" +
+            vouchers.map(v => {
+              const discount = v.discount_type === "percentage"
+                ? `${v.discount_value}%`
+                : `$${Number(v.discount_value).toFixed(2)}`;
+              const niceDate = new Date(v.expiry_date).toLocaleDateString('en-SG', {
+                year: 'numeric', month: 'short', day: 'numeric'
+              });
+              return `• <b>Code:</b> <span style='color:#b08c14;'>${v.code}</span> <span style='color:#1e7e34;'>(${discount} off</span>, <i>expires ${niceDate}</i>)`;
+            }).join('<br>');
+        }
+
+        await conn.execute(
+          'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
+          [userId, replyText, false]
+        );
+        await conn.end();
+        return res.json({ reply: replyText });
+      } catch (err) {
+        console.error('Voucher lookup error:', err);
+        const replyText = "Sorry, I couldn't check vouchers due to a system error.";
+        await conn.execute(
+          'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
+          [userId, replyText, false]
+        );
+        await conn.end();
+        return res.json({ reply: replyText });
+      }
+    }
+
     // --- All Other Handled Intents ---
     else if (reply && intent !== "order_tracking" && intent !== "default") {
       // For all other handled intents with a reply, store intent

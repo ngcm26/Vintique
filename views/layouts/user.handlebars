@@ -197,7 +197,12 @@
 
     function addMessage(text, fromUser) {
       const msgDiv = document.createElement('div');
-      msgDiv.textContent = text;
+      if (fromUser) {
+        msgDiv.textContent = text;
+      } else {
+        msgDiv.innerHTML = text;
+      }
+
       msgDiv.style.background = fromUser ? "#FFF176" : "#f1f1f1";
       msgDiv.style.alignSelf = fromUser ? "flex-end" : "flex-start";
       msgDiv.style.padding = "0.55rem 1rem";
