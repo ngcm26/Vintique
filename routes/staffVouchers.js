@@ -149,7 +149,13 @@ router.post('/:id/delete', requireStaff, async (req, res) => {
   let connection;
   try {
     connection = await createConnection();
+
+    // 1. Delete all claims referencing this voucher
+    await connection.execute('DELETE FROM user_vouchers WHERE voucher_id = ?', [voucherId]);
+
+    // 2. Now it's safe to delete the voucher itself
     await connection.execute('DELETE FROM vouchers WHERE voucher_id = ?', [voucherId]);
+
     res.redirect('/staff/vouchers');
   } catch (err) {
     console.error('Delete voucher error:', err);
