@@ -325,3 +325,37 @@ body {
   display: flex;
   align-items: center;
 }
+
+.dashboard {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.dashboard-box {
+  flex: 1;
+  min-width: 200px;
+  background-color: #f8f9fa; /* light gray background */
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s;
+}
+
+.dashboard-box:hover {
+  transform: translateY(-2px);
+}
+
+.dashboard-box h2 {
+  font-size: 2rem;
+  color: #f4c10f; /* golden yellow */
+  margin: 0;
+}
+
+.dashboard-box p {
+  font-size: 1rem;
+  color: #6c757d; /* muted text */
+  margin-top: 8px;
+}
