@@ -12,12 +12,18 @@
   <div class="main-content">
     <div class="content-area">
       <!-- Page Header -->
-      <div class="page-header">
-        <div class="page-title">Feedback & Inquiries</div>
-        <div class="page-subtitle">Manage customer feedback and inquiries</div>
-      </div>
-
-      <!-- Stats Section -->
+      <div class="header-bar">
+  <h3 class="mb-0">Manage customer feedback and inquiries</h3>
+  
+  <div class="filter-section" style="width: 200px;">
+    <label for="feedbackFilter" class="form-label visually-hidden">Filter Feedback:</label>
+    <select id="feedbackFilter" class="form-select">
+      <option value="all" selected>All Feedback</option>
+      <option value="replied">Replied</option>
+      <option value="not_replied">Not Replied</option>
+    </select>
+  </div>
+</div>
 
 
       <!-- Feedback Messages -->
@@ -324,6 +330,37 @@ window.addEventListener('DOMContentLoaded', () => {
   setupReplyButtons();
 });
 
+function filterFeedbacks() {
+  const filter = document.getElementById('feedbackFilter').value;
+  const feedbackCards = document.querySelectorAll('.feedback-card');
+
+  feedbackCards.forEach(card => {
+    const repliedLabel = card.querySelector('.replied-label');
+    const isReplied = repliedLabel !== null;
+
+    if (filter === 'all') {
+      card.style.display = '';
+    } else if (filter === 'replied') {
+      card.style.display = isReplied ? '' : 'none';
+    } else if (filter === 'not_replied') {
+      card.style.display = !isReplied ? '' : 'none';
+    }
+  });
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  setupUpdateButtons();
+  setupReplyButtons();
+
+  // Add event listener for filtering
+  const filterSelect = document.getElementById('feedbackFilter');
+  filterSelect.addEventListener('change', () => {
+    filterFeedbacks();
+  });
+
+  // Run filter on page load to default to 'all'
+  filterFeedbacks();
+});
 
 
 </script>

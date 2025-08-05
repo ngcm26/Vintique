@@ -307,3 +307,21 @@ body {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     pointer-events: none;
 }
+.header-bar {
+    background-color: #ffffff;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.header-bar h3 {
+  margin: 0;
+}
+
+.filter-section {
+  /* optional if you want to vertically center exactly */
+  display: flex;
+  align-items: center;
+}

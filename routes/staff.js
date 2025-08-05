@@ -5,102 +5,30 @@ const { callbackConnection, createConnection } = require('../config/database');
 const { requireAuth, requireStaff, requireAdmin } = require('../middlewares/authMiddleware');
 const mysql = require('mysql2/promise');
 
-router.get('/staff/dashboard', requireStaff, async (req, res) => {
-  const connection = await createConnection();
 
-  // 1. User Stats
-  const [userStats] = await connection.execute(`
+// Staff Dashboard
+router.get('/staff/dashboard', requireStaff, (req, res) => {
+  // Get basic stats for dashboard
+  const statsQuery = `
     SELECT 
-      COUNT(*) AS total_users,
-      SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) AS suspended_users
-    FROM users
-    WHERE role = 'user'
-  `);
-
-  // 2. Listing Stats
-  const [listingStats] = await connection.execute(`
-    SELECT
-      COUNT(*) AS total_listings,
-      SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_listings,
-      SUM(CASE WHEN status = 'sold' THEN 1 ELSE 0 END) AS sold_listings
-    FROM listings
-  `);
-
-  // 3. Q&A Stats
-  const [qaStats] = await connection.execute(`
-    SELECT
-      COUNT(*) AS total_questions,
-      SUM(CASE WHEN answer_content IS NOT NULL AND answer_content <> '' THEN 1 ELSE 0 END) AS answered_questions
-    FROM qa
-  `);
-
-  // 4. Recent Listings (with seller name)
-  const [recentListings] = await connection.execute(`
-    SELECT l.*, u.email, u.role, u.status, u.user_id, u.phone_number
-    FROM listings l
-    JOIN users u ON l.user_id = u.user_id
-    ORDER BY l.created_at DESC
-    LIMIT 5
-  `);
-
-  // 5. Recent Users
-  const [recentUsers] = await connection.execute(`
-    SELECT user_id, email, role, status, date_joined, phone_number
-    FROM users
-    WHERE role = 'user'
-    ORDER BY date_joined DESC
-    LIMIT 5
-  `);
-
-  // 6. Sales Over Time (chart, group by month)
-  const [salesChart] = await connection.execute(`
-    SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(total_amount) AS sales
-    FROM orders
-    WHERE status = 'paid'
-    GROUP BY month
-    ORDER BY month DESC
-    LIMIT 6
-  `);
-
-  // 7. Top Reported Users
-  const [reportChart] = await connection.execute(`
-    SELECT u.email, COUNT(*) AS reports
-    FROM reports r
-    JOIN users u ON r.reported_user_id = u.user_id
-    WHERE r.reported_user_id IS NOT NULL
-    GROUP BY r.reported_user_id
-    ORDER BY reports DESC
-    LIMIT 5
-  `);
-
-
-  console.log('SALES LABELS:', JSON.stringify(Array.isArray(salesChart) && salesChart.length ? salesChart.map(r => r.month).reverse() : []));
-  console.log('SALES VALUES:', JSON.stringify(Array.isArray(salesChart) && salesChart.length ? salesChart.map(r => Number(r.sales)).reverse() : []));
-  console.log('REPORT LABELS:', JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => r.email) : []));
-  console.log('REPORT VALUES:', JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => Number(r.reports)) : []));
-
-  res.render('staff/dashboard', {
-    layout: 'staff',
-    activePage: 'dashboard',
-    user: req.session.user,
-    stats: {
-      users: userStats[0] || { total_users: 0, suspended_users: 0 },
-      listings: listingStats[0] || { total_listings: 0, active_listings: 0, sold_listings: 0 },
-      qa: qaStats[0] || { total_questions: 0, answered_questions: 0 }
-    },
-    recentListings,
-    recentUsers,
-    salesLabels: JSON.stringify(Array.isArray(salesChart) && salesChart.length ? salesChart.map(r => r.month).reverse() : []),
-    salesValues: JSON.stringify(Array.isArray(salesChart) && salesChart.length ? salesChart.map(r => Number(r.sales)).reverse() : []),
-    reportLabels: JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => r.email) : []),
-    reportValues: JSON.stringify(Array.isArray(reportChart) && reportChart.length ? reportChart.map(r => Number(r.reports)) : []),
+      (SELECT COUNT(*) FROM users WHERE role = 'user') as total_users,
+      (SELECT COUNT(*) FROM listings WHERE status = 'active') as active_listings,
+      (SELECT COUNT(*) FROM orders WHERE status = 'paid') as total_orders
+  `;
+  
+  callbackConnection.query(statsQuery, (err, stats) => {
+    if (err) {
+      console.error('Dashboard stats error:', err);
+      return res.status(500).send('Database error');
+    }
+    
+    res.render('staff/dashboard', {
+      layout: 'staff',
+      activePage: 'dashboard',
+      stats: stats[0] || { total_users: 0, active_listings: 0, total_orders: 0 }
+    });
   });
-
-  await connection.end();
 });
-
-
-
 
 // Staff User Management route
 router.get('/staff/user_management', requireStaff, (req, res) => {
@@ -143,7 +71,7 @@ router.get('/staff/qa', requireStaff, (req, res) => {
     LEFT JOIN users u ON q.asker_id = u.user_id
     ORDER BY q.asked_at DESC
   `;
-
+  
   callbackConnection.query(qaQuery, (err, questions) => {
     if (err) {
       console.error('Q&A management error:', err);
@@ -215,7 +143,7 @@ router.get('/staff/qa', requireStaff, (req, res) => {
 // Get pending count for badge
 router.get('/api/qa/pending-count', requireStaff, (req, res) => {
   const query = 'SELECT COUNT(*) as pending_count FROM qa WHERE is_verified = 0';
-
+  
   callbackConnection.query(query, (err, result) => {
     if (err) {
       console.error('Error getting pending count:', err);
@@ -343,8 +271,8 @@ router.post('/api/qa/:qaId/answer', requireStaff, (req, res) => {
       return res.status(500).json({ error: 'Failed to submit answer' });
     }
 
-    res.json({
-      success: true,
+    res.json({ 
+      success: true, 
       message: 'Answer submitted successfully',
       answer_id: result.insertId
     });
@@ -359,7 +287,7 @@ router.delete('/api/qa/answers/:answerId', requireStaff, (req, res) => {
 
   // First, check if the answer exists
   const checkAnswerQuery = 'SELECT answer_id, qa_id FROM qa_answers WHERE answer_id = ?';
-
+  
   callbackConnection.query(checkAnswerQuery, [answerId], (err, answers) => {
     if (err) {
       console.error('Error checking answer existence:', err);
@@ -376,7 +304,7 @@ router.delete('/api/qa/answers/:answerId', requireStaff, (req, res) => {
 
     // Delete the answer
     const deleteAnswerQuery = 'DELETE FROM qa_answers WHERE answer_id = ?';
-
+    
     callbackConnection.query(deleteAnswerQuery, [answerId], (err, result) => {
       if (err) {
         console.error('Error deleting answer:', err);
@@ -390,8 +318,8 @@ router.delete('/api/qa/answers/:answerId', requireStaff, (req, res) => {
 
       console.log(`Answer ${answerId} deleted successfully by staff ${req.session.user.email}`);
 
-      res.json({
-        success: true,
+      res.json({ 
+        success: true, 
         message: 'Answer deleted successfully',
         answer_id: answerId,
         qa_id: qaId
@@ -415,9 +343,9 @@ router.patch('/api/qa/:qaId/verify', requireStaff, (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
 
-    res.json({
-      success: true,
-      message: 'Question verified and published successfully'
+    res.json({ 
+      success: true, 
+      message: 'Question verified and published successfully' 
     });
   });
 });
@@ -477,9 +405,9 @@ router.delete('/api/qa/:qaId', requireStaff, (req, res) => {
               });
             }
 
-            res.json({
-              success: true,
-              message: 'Question deleted successfully'
+            res.json({ 
+              success: true, 
+              message: 'Question deleted successfully' 
             });
           });
         });
@@ -721,15 +649,15 @@ router.patch('/users/:id/status', requireStaff, (req, res) => {
   const userId = req.params.id;
   const { status } = req.body;
   if (!['active', 'suspended'].includes(status)) return res.status(400).json({ error: 'Invalid status.' });
-
+  
   // Update both user_information and users tables
   const updateInfoSql = 'UPDATE user_information SET status = ? WHERE user_id = ?';
   const updateUserSql = 'UPDATE users SET status = ? WHERE user_id = ?';
-
+  
   callbackConnection.query(updateInfoSql, [status, userId], (err, result) => {
     if (err) return res.status(500).json({ error: 'Database error updating user_information status.' });
     if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found in user_information.' });
-
+    
     // Update users table
     callbackConnection.query(updateUserSql, [status, userId], (err2, result2) => {
       if (err2) return res.status(500).json({ error: 'Database error updating users status.' });
@@ -743,19 +671,19 @@ router.patch('/users/:id/status', requireStaff, (req, res) => {
 router.patch('/users/:id/ban', requireStaff, (req, res) => {
   const userId = req.params.id;
   const { banned } = req.body;
-
+  
   if (typeof banned !== 'boolean') {
     return res.status(400).json({ error: 'Banned field must be a boolean.' });
   }
-
+  
   const newStatus = banned ? 'suspended' : 'active';
   const updateInfoSql = 'UPDATE user_information SET status = ? WHERE user_id = ?';
   const updateUserSql = 'UPDATE users SET status = ? WHERE user_id = ?';
-
+  
   callbackConnection.query(updateInfoSql, [newStatus, userId], (err, result) => {
     if (err) return res.status(500).json({ error: 'Database error updating user_information status.' });
     if (result.affectedRows === 0) return res.status(404).json({ error: 'User not found in user_information.' });
-
+    
     // Update users table
     callbackConnection.query(updateUserSql, [newStatus, userId], (err2, result2) => {
       if (err2) return res.status(500).json({ error: 'Database error updating users status.' });
@@ -871,9 +799,9 @@ router.post('/staff/:staffId/reset-password', requireAdmin, async (req, res) => 
   let connection;
   try {
     const { staffId } = req.params;
-
+    
     connection = await createConnection();
-
+    
     // Get staff member details
     const [staffMembers] = await connection.execute(`
       SELECT u.user_id, u.email, ui.first_name, ui.username
@@ -881,42 +809,42 @@ router.post('/staff/:staffId/reset-password', requireAdmin, async (req, res) => 
       LEFT JOIN user_information ui ON u.user_id = ui.user_id
       WHERE u.user_id = ? AND u.role IN ('staff', 'admin')
     `, [staffId]);
-
+    
     if (staffMembers.length === 0) {
       return res.status(404).json({ error: 'Staff member not found' });
     }
-
+    
     const staffMember = staffMembers[0];
-
+    
     // Clear any existing reset tokens for this user
     await connection.execute(`
       DELETE FROM password_reset_tokens WHERE user_id = ?
     `, [staffMember.user_id]);
-
+    
     // Generate new reset token
     const { generateResetToken, sendPasswordResetEmail } = require('../utils/helpers');
     const resetToken = generateResetToken();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
+    
     // Insert new reset token
     await connection.execute(`
       INSERT INTO password_reset_tokens (user_id, email, token, expires_at) VALUES (?, ?, ?, ?)
     `, [staffMember.user_id, staffMember.email, resetToken, expiresAt]);
-
+    
     // Send password reset email
     const emailSent = await sendPasswordResetEmail(
-      staffMember.email,
-      resetToken,
+      staffMember.email, 
+      resetToken, 
       staffMember.first_name || staffMember.username || staffMember.email.split('@')[0]
     );
-
+    
     if (!emailSent) {
       throw new Error('Failed to send password reset email');
     }
-
+    
     console.log('✅ Staff password reset email sent successfully to:', staffMember.email);
     res.json({ success: true, message: 'Password reset email sent successfully' });
-
+    
   } catch (error) {
     console.error('❌ Staff password reset error:', error);
     res.status(500).json({ error: 'Failed to send password reset email' });

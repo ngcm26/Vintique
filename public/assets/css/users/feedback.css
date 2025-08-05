@@ -393,3 +393,24 @@
                 padding: 0 1rem;
             }
         }
+
+        .full-width-section {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+}
+body {
+    padding-top: 0;
+}
+
+.hero-section {
+    padding-top: 120px; /* equal to navbar height */
+    margin-top: 0 !important;
+}
+
+.main-content {
+    padding-top: 120px; /* use this for non-hero pages */
+}
