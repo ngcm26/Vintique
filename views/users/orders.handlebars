@@ -700,11 +700,41 @@
       // Update the review button to "Reviewed"
       const reviewButton = document.querySelector(`.leave-review-btn[data-order-item-id="${order_item_id}"]`);
       if (reviewButton) {
+        // Create "Reviewed" badge
         const reviewedBadge = document.createElement('span');
         reviewedBadge.className = 'badge bg-secondary ms-2';
         reviewedBadge.textContent = 'Reviewed';
-        reviewButton.replaceWith(reviewedBadge);
+
+        // Create Archive button
+        const archiveBtn = document.createElement('button');
+        archiveBtn.className = 'btn btn-outline-secondary btn-sm archive-order-btn ms-2';
+        archiveBtn.setAttribute('data-order-id', reviewButton.getAttribute('data-order-id'));
+        archiveBtn.innerHTML = `<i class="bi bi-archive"></i> Archive`;
+
+        // Insert both in place of the review button
+        reviewButton.replaceWith(reviewedBadge, archiveBtn);
+
+        // Add click handler for the new Archive button
+        archiveBtn.addEventListener('click', function () {
+          const orderId = this.getAttribute('data-order-id');
+          if (confirm('Are you sure you want to archive this order?')) {
+            fetch(`/orders/archive/${orderId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            })
+              .then(res => res.json())
+              .then(data => {
+                if (data.success) {
+                  alert('Order archived!');
+                  location.reload();
+                } else {
+                  alert(data.error || 'Something went wrong.');
+                }
+              });
+          }
+        });
       }
+
 
       // Auto-dismiss alert after 3 seconds
       setTimeout(() => alertDiv.remove(), 3000);
