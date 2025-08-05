@@ -81,7 +81,100 @@ ${itemsText}`;
         await conn.end();
         return res.json({ reply: replyText });
       }
-    } else if (reply && intent !== "order_tracking" && intent !== "default") {
+    }
+    // --- SALES SUMMARY INTENT ---
+    else if (intent === "sales_summary") {
+      try {
+        // Find all orders where user is the seller and order is NOT completed
+        const [rows] = await conn.execute(
+          `SELECT o.*, l.title, u.email AS buyer_email, oi.quantity, oi.price
+           FROM orders o
+           JOIN order_items oi ON o.order_id = oi.order_id
+           JOIN listings l ON oi.listing_id = l.listing_id
+           JOIN users u ON o.user_id = u.user_id
+           WHERE l.user_id = ? AND o.status != 'completed'
+           ORDER BY o.created_at DESC`,
+          [userId]
+        );
+        if (rows.length === 0) {
+          const replyText = "Great news! All your sales orders are completed.";
+          await conn.execute(
+            'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
+            [userId, replyText, false]
+          );
+          await conn.end();
+          return res.json({ reply: replyText });
+        } else {
+          const count = rows.length;
+          const latest = rows[0];
+          const replyText = `You have ${count} sales order(s) not completed yet. Your latest sale:\n• Order #${latest.order_id} for "${latest.title}" (Buyer: ${latest.buyer_email}, Qty: ${latest.quantity}, $${Number(latest.price).toFixed(2)}, Status: ${latest.status}).`;
+          await conn.execute(
+            'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
+            [userId, replyText, false]
+          );
+          await conn.end();
+          return res.json({ reply: replyText });
+        }
+      } catch (err) {
+        console.error('Sales summary error:', err);
+        const replyText = "Sorry, I couldn't fetch your sales information due to a system error.";
+        await conn.execute(
+          'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
+          [userId, replyText, false]
+        );
+        await conn.end();
+        return res.json({ reply: replyText });
+      }
+    }
+
+
+    else if (intent === "vouchers") {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        // Fetch all active and non-expired vouchers
+        const [vouchers] = await conn.execute(
+          `SELECT code, discount_type, discount_value, expiry_date
+       FROM vouchers
+       WHERE status = 'active' AND expiry_date >= ?
+       ORDER BY expiry_date ASC
+       LIMIT 5`, [today]
+        );
+        let replyText;
+        if (vouchers.length === 0) {
+          replyText = "There are currently no active vouchers or promotions. Check back soon!";
+        } else {
+          replyText = "Here are the latest available vouchers:<br>" +
+            vouchers.map(v => {
+              const discount = v.discount_type === "percentage"
+                ? `${v.discount_value}%`
+                : `$${Number(v.discount_value).toFixed(2)}`;
+              const niceDate = new Date(v.expiry_date).toLocaleDateString('en-SG', {
+                year: 'numeric', month: 'short', day: 'numeric'
+              });
+              return `• <b>Code:</b> <span style='color:#b08c14;'>${v.code}</span> <span style='color:#1e7e34;'>(${discount} off</span>, <i>expires ${niceDate}</i>)`;
+            }).join('<br>');
+        }
+
+        await conn.execute(
+          'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
+          [userId, replyText, false]
+        );
+        await conn.end();
+        return res.json({ reply: replyText });
+      } catch (err) {
+        console.error('Voucher lookup error:', err);
+        const replyText = "Sorry, I couldn't check vouchers due to a system error.";
+        await conn.execute(
+          'INSERT INTO ChatbotMessages (userId, message, isFromUser) VALUES (?, ?, ?)',
+          [userId, replyText, false]
+        );
+        await conn.end();
+        return res.json({ reply: replyText });
+      }
+    }
+
+    // --- All Other Handled Intents ---
+    else if (reply && intent !== "order_tracking" && intent !== "default") {
       // For all other handled intents with a reply, store intent
       await conn.execute(
         'INSERT INTO ChatbotMessages (userId, message, isFromUser, intent) VALUES (?, ?, ?, ?)',
@@ -89,8 +182,9 @@ ${itemsText}`;
       );
       await conn.end();
       return res.json({ reply, quickReplies });
-    } else {
-      // Default: OpenAI fallback
+    }
+    // --- Default: OpenAI fallback ---
+    else {
       try {
         const completion = await openai.chat.completions.create({
           model: "gpt-4-1106-preview",
@@ -125,6 +219,7 @@ ${itemsText}`;
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 router.get('/chat/history', async (req, res) => {

@@ -27,19 +27,19 @@ function getActivePromo() {
 function handleIntent(message) {
   const msg = message.toLowerCase();
 
-if (/\b(hi|hello|hey|greetings)\b/.test(msg)) {
-  return {
-    intent: "greeting",
-    reply: `Hello! How can I assist you today? If you're looking for sustainable products or have any questions about eco-friendly practices, feel free to ask!`,
-    quickReplies: [
-      'Sell an Item',
-      'Track Order',
-      'Get Eco Tip',
-      'See Promotions',
-      'Return/Refund Info'
-    ]
-  };
-}
+  if (/\b(hi|hello|hey|greetings)\b/.test(msg)) {
+    return {
+      intent: "greeting",
+      reply: `Hello! How can I assist you today? If you're looking for sustainable products or have any questions about eco-friendly practices, feel free to ask!`,
+      quickReplies: [
+        'Sell an Item',
+        'Track Order',
+        'Get Eco Tip',
+        'See Promotions',
+        'Return/Refund Info'
+      ]
+    };
+  }
 
   if (/\b(help|what can you do|can you help|assist)\b/.test(msg)) {
     return {
@@ -80,17 +80,10 @@ if (/\b(hi|hello|hey|greetings)\b/.test(msg)) {
     };
   }
 
-  if (/\b(promo|voucher|discount)\b/.test(msg)) {
-    return {
-      intent: "promo",
-      reply: getActivePromo(),
-      quickReplies: [
-        'Help',
-        'Sell an Item',
-        'Track Order'
-      ]
-    };
+  if (/\b(promo|promotion|voucher|vouchers|discount|code|deal)\b/.test(msg)) {
+    return { intent: "vouchers" };
   }
+
 
   if (/\b(refund|return)\b/.test(msg)) {
     return {
@@ -105,8 +98,13 @@ if (/\b(hi|hello|hey|greetings)\b/.test(msg)) {
   }
 
   // Order tracking handled in main route, improved regex
-  if (/\b(order|track|status|purchase)\b/.test(msg)) {
+  if (/\b(order|orders|track|status|purchase|my orders|my order)\b/.test(msg)) {
     return { intent: "order_tracking" };
+  }
+
+
+  if (/\b(my sales|pending sales|open sales|uncompleted sales|sales not completed|latest sale)\b/.test(msg)) {
+    return { intent: "sales_summary" };
   }
 
   return { intent: "default" };

@@ -299,6 +299,49 @@ const sendOrderNotificationEmail = async (sellerEmail, sellerName, orderData) =>
   }
 };
 
+
+const sendFeedbackConfirmationEmail = async (email, fullName, message) => {
+  try {
+    const transporter = await createTransporter();
+    if (!transporter) {
+      console.error('❌ Could not create email transporter');
+      return false;
+    }
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Vintique: Feedback Received',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #FFD700, #FFA500); padding: 20px; border-radius: 10px; text-align: center;">
+            <h1 style="color: #333; margin: 0;">Vintique</h1>
+            <p style="color: #333; margin: 10px 0;">Feedback Received</p>
+          </div>
+          <div style="padding: 20px; background: #f9f9f9; border-radius: 10px; margin-top: 20px;">
+            <h2 style="color: #333;">Hi ${fullName},</h2>
+            <p style="color: #555; line-height: 1.6;">Thank you for sharing your feedback with Vintique.</p>
+            <p style="color: #555; line-height: 1.6;">We appreciate your input and will use it to improve our services.</p>
+            <hr>
+            <p><strong>Your Message:</strong></p>
+            <blockquote style="background: #fff; padding: 15px; border-radius: 5px;">${message}</blockquote>
+            <br>
+            <p style="color: #555; line-height: 1.6;">Best regards,<br>The Vintique Team</p>
+          </div>
+        </div>
+      `
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log('✅ Feedback confirmation email sent:', result.messageId);
+    return true;
+  } catch (error) {
+    console.error('❌ Feedback confirmation email error:', error.message);
+    return false;
+  }
+};
+
+
 module.exports = {
   generateOTP,
   generateResetToken,
@@ -307,5 +350,6 @@ module.exports = {
   sendOrderConfirmationEmail,
   sendOrderNotificationEmail,
   formatDate,
+  sendFeedbackConfirmationEmail,
   timeAgo
 };

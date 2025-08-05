@@ -12,18 +12,33 @@
   <div class="main-content">
     <div class="content-area">
       <!-- Page Header -->
-      <div class="header-bar">
-  <h3 class="mb-0">Manage customer feedback and inquiries</h3>
+      <div class="header-bar" style="margin-top: 65px; margin-left: -25px;">
+        <h3 class="mb-0" style="margin-left: -25px;">Manage customer feedback and inquiries</h3>
   
-  <div class="filter-section" style="width: 200px;">
-    <label for="feedbackFilter" class="form-label visually-hidden">Filter Feedback:</label>
-    <select id="feedbackFilter" class="form-select">
-      <option value="all" selected>All Feedback</option>
-      <option value="replied">Replied</option>
-      <option value="not_replied">Not Replied</option>
-    </select>
-  </div>
-</div>
+        <div class="filter-section" style="width: 200px;">
+          <label for="feedbackFilter" class="form-label visually-hidden">Filter Feedback:</label>
+          <select id="feedbackFilter" class="form-select">
+            <option value="all" selected>All Feedback</option>
+            <option value="replied">Replied</option>
+            <option value="not_replied">Not Replied</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dashboard">
+        <div class="dashboard-box">
+          <h2 id="totalFeedback">0</h2>
+          <p>Total Messages</p>
+        </div>
+        <div class="dashboard-box">
+          <h2 id="unrepliedFeedback">0</h2>
+          <p>Unread</p>
+        </div>
+        <div class="dashboard-box">
+          <h2 id="repliedFeedback">0</h2>
+          <p>Replied</p>
+        </div>
+      </div>
 
 
       <!-- Feedback Messages -->
@@ -362,7 +377,24 @@ window.addEventListener('DOMContentLoaded', () => {
   filterFeedbacks();
 });
 
+  window.addEventListener('DOMContentLoaded', () => {
+    const allFeedbackCards = document.querySelectorAll('.feedback-card');
+    let repliedCount = 0;
 
+    allFeedbackCards.forEach(card => {
+      const repliedLabel = card.querySelector('.replied-label');
+      if (repliedLabel) {
+        repliedCount++;
+      }
+    });
+
+    const totalCount = allFeedbackCards.length;
+    const unrepliedCount = totalCount - repliedCount;
+
+    document.getElementById('totalFeedback').textContent = totalCount;
+    document.getElementById('repliedFeedback').textContent = repliedCount;
+    document.getElementById('unrepliedFeedback').textContent = unrepliedCount;
+  });
 </script>
 
 </html>
