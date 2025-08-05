@@ -1197,6 +1197,17 @@ router.post('/account-settings/api', upload.single('profile_image'), async (req,
 
     await connection.execute(sql, params);
 
+    // Update the session with the new profile image URL
+    if (profile_image_url) {
+      req.session.user.profile_image_url = profile_image_url;
+    }
+    
+    // Also update other session fields if they were changed
+    if (first_name) req.session.user.first_name = first_name;
+    if (last_name) req.session.user.last_name = last_name;
+    if (username) req.session.user.username = username;
+    if (email) req.session.user.email = email;
+
     res.json({ success: true, profile_image_url });
   } catch (error) {
     console.error('Account settings update error:', error);

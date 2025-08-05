@@ -297,6 +297,15 @@ document.addEventListener('DOMContentLoaded', function () {
           
           document.getElementById('currentProfileImageUrl').value = data.profile_image_url;
           
+          // Update the profile picture in the navigation bar
+          const navProfileImg = document.querySelector('#accountDropdown img');
+          if (navProfileImg) {
+            navProfileImg.src = data.profile_image_url;
+            navProfileImg.onerror = function() {
+              this.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(firstNameInput.value + ' ' + lastNameInput.value)}&background=random&size=32`;
+            };
+          }
+          
           // Show success message
           const successMsg = document.createElement('div');
           successMsg.className = 'alert alert-success mt-2';
@@ -432,6 +441,21 @@ document.addEventListener('DOMContentLoaded', function () {
         if (data.success) {
           msgDiv.textContent = 'Personal information updated successfully!';
           msgDiv.style.color = 'green';
+          
+          // Update the navigation bar with new name
+          const navNameSpan = document.querySelector('#accountDropdown .d-none.d-md-inline');
+          if (navNameSpan) {
+            navNameSpan.textContent = `${currentValues.firstName} ${currentValues.lastName}`;
+          }
+          
+          // Update the fallback initials in the navigation bar profile picture
+          const navProfileImg = document.querySelector('#accountDropdown img');
+          if (navProfileImg) {
+            navProfileImg.onerror = function() {
+              this.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentValues.firstName + ' ' + currentValues.lastName)}&background=random&size=32`;
+            };
+          }
+          
           // Update original values to current values after successful save
           originalPersonalInfo = { ...currentValues };
           togglePersonalInfoEditing(); // Exit edit mode
