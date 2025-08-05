@@ -6,22 +6,9 @@
     overflow-x: hidden;
   }
 
-  /* Admin Hero Section */
-  .staff-vouchers-hero-section {
-    width: 100vw;
-    left: 50%;
-    right: 50%;
-    margin-left: -50vw;
-    margin-right: -50vw;
-    position: relative;
-    background: linear-gradient(135deg, #ffeaa7 0%, #ffd700 50%, #fabd3b 100%);
-    padding: 160px 0 80px;
-    margin-top: 20px;
-    margin-bottom: 3rem;
-    overflow: hidden;
-    min-height: 300px;
-    display: flex;
-    align-items: center;
+  .push-down {
+    margin-top: 70px;
+    /* match navbar height */
   }
 
   .staff-vouchers-hero-section::before {
@@ -90,25 +77,6 @@
     }
   }
 
-  .staff-vouchers-hero-content {
-    text-align: center;
-    color: white;
-    position: relative;
-    z-index: 2;
-    max-width: none;
-    margin: 0 auto;
-    width: 100%;
-    padding: 0 2rem;
-  }
-
-  .staff-vouchers-hero-title {
-    font-size: 3rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    color: white;
-    position: relative;
-  }
 
   .staff-vouchers-hero-title::before {
     content: '🎫';
@@ -535,13 +503,14 @@
   }
 </style>
 
-<!-- Hero Section -->
-<section class="staff-vouchers-hero-section">
-  <div class="staff-vouchers-hero-content">
-    <h1 class="staff-vouchers-hero-title">Voucher Management</h1>
-    <p class="staff-vouchers-hero-subtitle">Create, manage, and track promotional vouchers for your customers</p>
+<div class="push-down"
+  style="background: #fafbfc; border-bottom: 1px solid #eee; padding: 2rem 0 1.5rem 0; margin-bottom: 1.5rem;">
+  <div class="staff-vouchers-container">
+    <h1 style="font-size: 2rem; font-weight: 600; color: #23272f; margin: 0;">Voucher Management</h1>
   </div>
-</section>
+</div>
+
+
 
 <!-- Main Content -->
 <div class="staff-vouchers-container">
