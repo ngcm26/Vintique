@@ -420,14 +420,17 @@ window.addEventListener('DOMContentLoaded', () => {
     const allFeedbackCards = document.querySelectorAll('.feedback-card');
     let repliedCount = 0;
 
-    allFeedbackCards.forEach(card => {
+    const visibleCards = Array.from(allFeedbackCards).filter(card => card.getAttribute('data-archived') !== '1');
+
+
+    visibleCards.forEach(card => {
       const repliedLabel = card.querySelector('.replied-label');
       if (repliedLabel) {
         repliedCount++;
       }
     });
 
-    const totalCount = allFeedbackCards.length;
+    const totalCount = visibleCards.length;
     const unrepliedCount = totalCount - repliedCount;
 
     document.getElementById('totalFeedback').textContent = totalCount;
